@@ -86,7 +86,7 @@ export async function recibosDelDia(dia) {
     id: s(o.comprobante) + '|' + s(o.dispositivo), numero: s(o.comprobante), dia, emitido: s(o.fechaHora), cosecha: s(o.cosecha),
     beneficio: s(o.beneficio), receptora: s(o.receptora), sociedad: s(o.sociedad), compra: o.compra ? s(o.compra) : 'Interno',
     finca: s(o.finca), lote: s(o.lote), muestraTotal: n(o.muestraTotal), verdes: n(o.verdes), maduros: n(o.maduros), secos: n(o.secos),
-    broca: n(o.broca), medidas: n(o.medidas), cajuelas: n(o.cajuelas), cuartillos: n(o.cuartillos), dispositivo: s(o.dispositivo),
+    broca: n(o.broca), medidas: n(o.medidas), cajuelas: n(o.cajuelas), cuartillos: n(o.cuartillos), dispositivo: s(o.dispositivo), usuario: s(o.usuario),
     anulado: false, motivo: '', anuladoFecha: ''
   }));
   return { error: null, lista };
@@ -99,7 +99,7 @@ export async function movimientosBoletos(cosecha, hasta, normMedida) {
   if (!r.ok) return { error: r.message, lista: [] };
   const lista = (r.json.movimientos || []).map((o) => ({
     id: s(o.comprobante) + '|' + s(o.dispositivo) + '|' + s(o.dia), numero: s(o.comprobante), dia: s(o.dia), emitido: s(o.fechaHora),
-    cosecha: s(o.cosecha), sociedad: s(o.sociedad), oficina: s(o.oficina), dispositivo: s(o.dispositivo), tipo: s(o.tipo),
+    cosecha: s(o.cosecha), sociedad: s(o.sociedad), oficina: s(o.oficina), dispositivo: s(o.dispositivo), usuario: s(o.usuario), tipo: s(o.tipo),
     lineas: (o.lineas || []).map((l) => ({ color: s(l.ficha), medida: normMedida(s(l.medida)), cantidad: parseInt(l.cantidad, 10) || 0 })),
     nota: s(o.motivo), anulado: false, motivoAnul: '', anuladoFecha: ''
   }));

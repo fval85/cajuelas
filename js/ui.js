@@ -1,6 +1,8 @@
 // Piezas de interfaz compartidas: tarjetas, selectores, botones, buscador y visor de documentos.
-import { h, clear, dialogo, toast, normalizar } from './util.js';
+import { h, clear, dialogo, toast, normalizar, confirmar } from './util.js';
 import { pdfDePaginas, compartir, descargar } from './files.js';
+import { esComputadora, imprimirTiquetes } from './imprimir.js';
+import { hayControl, sesion, salir } from './users.js';
 
 export const ICONOS = {
   emitir: 'M12 2a10 10 0 100 20 10 10 0 000-20zm-2 15l-5-5 1.4-1.4L10 14.2l7.6-7.6L19 8l-9 9z',
@@ -26,7 +28,18 @@ export function icono(nombre, tam = 22) {
 
 export const tarjeta = (...hijos) => h('section', { class: 'tarjeta' }, ...hijos);
 export const etiqueta = (t) => h('label', { class: 'etiqueta' }, t);
-export const banda = (titulo) => h('header', { class: 'banda' }, h('h1', null, titulo));
+export function banda(titulo) {
+  const el = h('header', { class: 'banda' });
+  const chip = h('button', { type: 'button', class: 'user-chip', hidden: true, onclick: async () => {
+    const s = sesion(); if (!s) return;
+    if (await confirmar('Cerrar sesión', `Sesión de ${s.nombre} (${s.rol}).\n\n¿Cerrar la sesión?`, { si: 'Cerrar sesión' })) salir();
+  } });
+  el.pintarUsuario = () => { const s = hayControl() ? sesion() : null; chip.hidden = !s; const t = s ? '👤 ' + s.nombre : ''; if (chip.textContent !== t) chip.textContent = t; };
+  el.append(chip, h('h1', null, titulo));
+  el.classList.add('con-usuario');
+  el.pintarUsuario();
+  return el;
+}
 
 /** Campo de solo lectura que abre una lista al tocarlo. */
 export function selector(placeholder, onClick) {
@@ -39,8 +52,8 @@ export function selector(placeholder, onClick) {
   return el;
 }
 
-export function boton(texto, icon, clase, onClick) {
-  return h('button', { type: 'button', class: 'btn ' + clase, onclick: onClick }, icon ? icono(icon, 22) : null,
+export function boton(texto, icon, clase, onClick, permiso) {
+  return h('button', { type: 'button', class: 'btn ' + clase, onclick: onClick, 'data-permiso': permiso || null }, icon ? icono(icon, 22) : null,
     h('span', null, texto.split('\n').flatMap((t, i) => (i ? [h('br'), t] : [t]))));
 }
 
@@ -80,7 +93,7 @@ export function campoBusqueda({ placeholder, fuente, alElegir, mayus = true, val
  * Ventana con la vista previa de un documento (páginas ya dibujadas) y el botón para compartir el PDF
  * (y archivos adicionales, como el Excel). El PDF se prepara al abrir para que el botón responda al instante.
  */
-export function verDocumento({ titulo, paginas, nombrePdf, intro, adicionales = [], textoBoton = 'Compartir PDF', maxPaginas = 6, ancho = false, textoCompartir = '' }) {
+export function verDocumento({ titulo, paginas, nombrePdf, intro, adicionales = [], textoBoton = 'Compartir PDF', maxPaginas = 6, ancho = false, textoCompartir = '', tiquete = false }) {
   const zona = h('div', { class: ancho ? 'visor ancho' : 'visor' });
   paginas.slice(0, maxPaginas).forEach((p) => { p.canvas.classList.add('hoja'); zona.append(p.canvas); });
   if (paginas.length > maxPaginas) zona.append(h('p', { class: 'nota' }, `… y ${paginas.length - maxPaginas} páginas más (todas van en el PDF).`));
@@ -93,6 +106,9 @@ export function verDocumento({ titulo, paginas, nombrePdf, intro, adicionales = 
   });
   const barra = dlg.caja.querySelector('.dialogo-botones');
   barra.prepend(btn);
+  if (tiquete && esComputadora()) {
+    barra.prepend(h('button', { type: 'button', class: 'btn-texto primario', onclick: () => imprimirTiquetes(paginas) }, '🖨 Imprimir (80 mm)'));
+  }
   btn.addEventListener('click', async () => {
     if (!archivos) return;
     const r = await compartir(archivos, titulo, textoCompartir || titulo);

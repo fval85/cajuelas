@@ -1,6 +1,7 @@
 // Pestaña «Registro»: comprobantes de cambio de fichas por persona.
 import { h, clear, toast, aviso, confirmar, elegir, normalizar, parseQty, canonQty, fmtQty, fmtMoney, diaHoy, ahoraTxt, diaLegible, fechaLarga, plainNumber, stampCorto } from './util.js';
 import { db, cat, findCosecha, findSociedad, findPersona, cosechaActiva, siguienteNumero, confirmarNumero } from './store.js';
+import { nombreUsuario } from './users.js';
 import { lineas, montoLinea, aGrupo, todosLosComprobantes, payloadRegistro, idReporte } from './data.js';
 import { cargarFuentes, paginasTexto, lineasComprobante, lineasAnulacion, paginasResumenRegistro } from './draw.js';
 import { xlsx } from './files.js';
@@ -146,7 +147,7 @@ export function crearRegistro(nav) {
     const todas = lineas.todas();
     valid.forEach((v, i) => todas.push({
       date: dia, sociedad: soc, finca, personName: nombre, quantity: v[0], price: v[1], comprobante: numero, anulado: false, motivo: '', anuladoFecha: '',
-      emitido: texto, cosecha: co, codigo, tarjeta: tarj, deduccion: i === 0 ? ded : 0
+      emitido: texto, cosecha: co, codigo, tarjeta: tarj, deduccion: i === 0 ? ded : 0, usuario: nombreUsuario()
     }));
     lineas.guardar(todas);
     confirmarNumero('next_comprobante');
@@ -160,7 +161,7 @@ export function crearRegistro(nav) {
   async function mostrarTiquetes(lineasPorDoc, titulo, nombre, intro) {
     await cargarFuentes();
     const paginas = paginasTexto(lineasPorDoc);
-    verDocumento({ titulo, paginas, nombrePdf: nombre, intro, maxPaginas: 6, textoBoton: lineasPorDoc.length > 1 ? 'Compartir PDF (un tiquete por página)' : 'Compartir PDF' });
+    verDocumento({ titulo, paginas, nombrePdf: nombre, intro, maxPaginas: 6, tiquete: true, textoBoton: lineasPorDoc.length > 1 ? 'Compartir PDF (un tiquete por página)' : 'Compartir PDF' });
   }
 
   // ---------- Reimprimir ----------
@@ -203,7 +204,7 @@ export function crearRegistro(nav) {
   }
   async function anularComprobante(numero, dia, motivo) {
     const ahora = new Date(), sello = ahoraTxt(ahora);
-    const todas = lineas.todas().map((l) => (l.comprobante === numero && l.date === dia && !l.anulado ? { ...l, anulado: true, motivo, anuladoFecha: sello } : l));
+    const todas = lineas.todas().map((l) => (l.comprobante === numero && l.date === dia && !l.anulado ? { ...l, anulado: true, motivo, anuladoFecha: sello, anuladoPor: nombreUsuario() } : l));
     lineas.guardar(todas);
     const anuladas = todas.filter((l) => l.comprobante === numero && l.date === dia);
     if (!anuladas.length) return;
@@ -310,8 +311,8 @@ export function crearRegistro(nav) {
     ),
     boton('+  Agregar línea', null, 'c-agregar ancho-total', () => agregarFila()),
     resumen,
-    h('div', { class: 'fila-botones' }, boton('Emitir', 'emitir', 'c-verde', emitir), boton('Reimprimir', 'imprimir', 'c-teal', reimprimir), boton('Anular', 'anular', 'c-rojo', anular)),
-    h('div', { class: 'fila-botones dos' }, boton('Resumen', 'resumen', 'c-azul', resumen_), boton('Tiquetes del día', 'enviar', 'c-ambar', tiquetesDelDia))
+    h('div', { class: 'fila-botones' }, boton('Emitir', 'emitir', 'c-verde', emitir), boton('Reimprimir', 'imprimir', 'c-teal', reimprimir, 'reimprimir'), boton('Anular', 'anular', 'c-rojo', anular, 'anular')),
+    h('div', { class: 'fila-botones dos' }, boton('Resumen', 'resumen', 'c-azul', resumen_, 'resumenes'), boton('Tiquetes del día', 'enviar', 'c-ambar', tiquetesDelDia, 'resumenes'))
   );
 
   function pintar() {

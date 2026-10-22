@@ -1,6 +1,7 @@
 // Pestaña «Boletos»: inventario de fichas de colores.
 import { h, clear, toast, aviso, confirmar, elegir, normalizar, fmtNum, diaHoy, diaLegible, ahoraTxt, uuid, stampCorto, dialogo } from './util.js';
 import { db, bol, bolCosecha, bolSociedad, cosechaActiva, deviceName, configurado, valorCajuelas, fichaKey } from './store.js';
+import { nombreUsuario } from './users.js';
 import { boletos, payloadBoleto, tipoBoletoEtiqueta, totalFichas, totalCajuelasMov, filasSaldo, saldoInicial, disponible, inventario, claveLinea, etiquetaFicha,
   BOL_ENTREGA, BOL_REFUERZO, BOL_SALDO, BOL_PERDIDA, BOL_CONTEO } from './data.js';
 import { cargarFuentes, paginasBoletos, paginasTablas, MODO } from './draw.js';
@@ -89,7 +90,7 @@ export function crearBoletos(nav) {
 
   async function mostrar(items, titulo, nombre, intro) {
     await cargarFuentes();
-    verDocumento({ titulo, paginas: paginasBoletos(items), nombrePdf: nombre, intro, maxPaginas: 1, textoBoton: 'Compartir PDF' });
+    verDocumento({ titulo, paginas: paginasBoletos(items), nombrePdf: nombre, intro, maxPaginas: 1, textoBoton: 'Compartir PDF', tiquete: true });
   }
 
   async function emitir(tipo) {
@@ -120,7 +121,7 @@ export function crearBoletos(nav) {
   }
   function guardar(tipo, ls, nota) {
     const m = { id: uuid(), numero: boletos.siguiente(), dia: fecha, emitido: ahoraTxt(), cosecha: cosechaNombre(), sociedad: selSociedad, oficina: selOficina,
-      dispositivo: deviceName(), tipo, lineas: ls, nota, anulado: false, motivoAnul: '', anuladoFecha: '' };
+      dispositivo: deviceName(), usuario: nombreUsuario(), tipo, lineas: ls, nota, anulado: false, motivoAnul: '', anuladoFecha: '' };
     boletos.agregar(m);
     encolar(payloadBoleto(m, 'BOL_' + m.id, m.emitido, 'ACTIVO', '', false));
     nav.pendientes();
@@ -233,8 +234,8 @@ export function crearBoletos(nav) {
       boton('Entrega', 'emitir', 'c-verde', () => emitir(BOL_ENTREGA)), boton('Refuerzo', 'emitir', 'c-ambar', () => emitir(BOL_REFUERZO)),
       boton('Saldo', 'enviar', 'c-azul', () => emitir(BOL_SALDO)), boton('Fichas\ndañadas', 'anular', 'c-rojo', () => emitir(BOL_PERDIDA))),
     h('div', { class: 'fila-botones tres' },
-      boton('Reimprimir', 'imprimir', 'c-teal', reimprimir), boton('Anular', 'anular', 'c-rojo', anular), boton('Conteo\ngeneral', 'enviar', 'c-ambar', () => emitir(BOL_CONTEO))),
-    boton('Reportes', 'resumen', 'c-azul ancho-total', reportes)
+      boton('Reimprimir', 'imprimir', 'c-teal', reimprimir, 'reimprimir'), boton('Anular', 'anular', 'c-rojo', anular, 'anular'), boton('Conteo\ngeneral', 'enviar', 'c-ambar', () => emitir(BOL_CONTEO))),
+    boton('Reportes', 'resumen', 'c-azul ancho-total', reportes, 'resumenes')
   );
   refrescar();
   return { el: raiz, refrescar };

@@ -5,6 +5,11 @@ import { db, cat, bol, syncCfg, guardarSyncCfg, configurado, deviceName, todasLa
 import { cuantosPendientes, enviarPendientes, descartarPendientes, probar, descargarCatalogo, alCambiarPendientes } from './sync.js';
 import { compartir, descargar } from './files.js';
 import { tarjeta, etiqueta, banda, selector, boton } from './ui.js';
+import { hayControl, sesion, salir, actualizarUsuarios } from './users.js';
+import { esComputadora, anchoMm, setAnchoMm, imprimirTiquetes } from './imprimir.js';
+import { crearPagina } from './draw.js';
+
+const cp = (el, permiso) => { el.dataset.permiso = permiso; return el; };
 
 // ---------- Clave de administrador ----------
 const enc = new TextEncoder();
@@ -92,8 +97,31 @@ export function crearAjustes(nav) {
     const estado = h('p', { class: 'nota' }, configurado() ? `Dispositivo: ${deviceName()}` : 'Sincronización sin configurar.');
     const ult = cat.actualizado ? `Último catálogo recibido: ${new Date(cat.actualizado).toLocaleString('es-CR')}` : 'Aún no se ha recibido el catálogo.';
 
+    const sUs = hayControl() ? sesion() : null;
+    const tarjetaUsuario = sUs ? tarjeta(h('h2', null, 'Usuario'), h('p', null, `${sUs.nombre} · ${sUs.rol}`),
+      h('div', { class: 'pila' },
+        boton('Actualizar lista de usuarios', 'enviar', 'c-azul ancho-total', async () => { const r = await actualizarUsuarios(true); toast(r.ok ? 'Lista de usuarios actualizada.' : r.message, 5000); pintar(); }),
+        boton('Cerrar sesión', 'anular', 'c-rojo ancho-total', () => salir()))) : document.createComment('');
+    const anchoIn = h('input', { class: 'campo', type: 'number', inputmode: 'decimal', min: '50', max: '82', step: '1', value: String(anchoMm()) });
+    const tarjetaImpresion = esComputadora() ? tarjeta(h('h2', null, 'Impresión en esta computadora'),
+      h('p', { class: 'nota' }, 'En los comprobantes aparece el botón «Imprimir (80 mm)». En el cuadro de impresión elija su impresora térmica (por ejemplo la Xprinter XP-N160II) con papel de 80 mm y márgenes en «Ninguno».'),
+      etiqueta('Ancho de la imagen impresa (mm)'), anchoIn,
+      h('p', { class: 'nota' }, 'Normalmente 80. Si la impresora corta los bordes del tiquete, baje a 72–76.'),
+      h('div', { class: 'pila' },
+        boton('Guardar ancho', 'emitir', 'c-verde ancho-total', () => { setAnchoMm(anchoIn.value); toast('Guardado.'); }),
+        boton('Imprimir prueba', 'imprimir', 'c-teal ancho-total', () => {
+          setAnchoMm(anchoIn.value);
+          const pg = crearPagina(227, 120, 3.2);
+          pg.c.fillStyle = '#000'; pg.c.font = 'bold 14px sans-serif';
+          pg.c.fillText('PRUEBA DE IMPRESIÓN', 10, 30); pg.c.font = '10px sans-serif';
+          pg.c.fillText('|<-- 10 pt -->|  Registro de Cajuelas', 10, 52);
+          pg.c.strokeRect(10, 62, 207, 40);
+          imprimirTiquetes([pg]);
+        }))) : document.createComment('');
     raiz.append(
       banda('Ajustes'),
+      tarjetaUsuario,
+      tarjetaImpresion,
       tarjeta(etiqueta('Cosecha activa'), cos, h('p', { class: 'nota' }, 'La usan Registro, Diario y Boletos.')),
       tarjeta(h('h2', null, 'Google Sheets'), estado, pend, h('p', { class: 'nota' }, ult),
         h('div', { class: 'pila' },
@@ -106,14 +134,14 @@ export function crearAjustes(nav) {
             pintarPend();
             toast(r.error ? `Se enviaron ${r.enviados}. Quedan ${r.restantes}. ${r.error}` : `Enviados: ${r.enviados}. No quedan pendientes.`, 6000);
           }),
-          boton('Configuración de sincronización', 'ajustes', 'c-teal ancho-total', () => { vista = 'sync'; desbloqueado = false; pintar(); }))),
-      tarjeta(h('h2', null, 'Precios (₡)'), h('p', { class: 'nota' }, 'Los precios se manejan en este dispositivo. Con precios guardados, la pantalla de Registro los ofrece en una lista.'),
-        boton(`Administrar precios (${cat.precios.length})`, 'registro', 'c-ambar ancho-total', administrarPrecios)),
+          boton('Configuración de sincronización', 'ajustes', 'c-teal ancho-total', () => { vista = 'sync'; desbloqueado = false; pintar(); }, 'config'))),
+      cp(tarjeta(h('h2', null, 'Precios (₡)'), h('p', { class: 'nota' }, 'Los precios se manejan en este dispositivo. Con precios guardados, la pantalla de Registro los ofrece en una lista.'),
+        boton(`Administrar precios (${cat.precios.length})`, 'registro', 'c-ambar ancho-total', administrarPrecios)), 'precios'),
       tarjeta(h('h2', null, 'Catálogo'), h('p', { class: 'nota' }, 'El catálogo (cosechas, sociedades, fincas, lotes, personas, beneficios y fichas) se administra en Google Sheets; aquí solo se consulta.'),
         boton('Ver catálogo', 'resumen', 'c-azul ancho-total', () => { vista = 'catalogo'; pintar(); })),
-      tarjeta(h('h2', null, 'Copia de seguridad'),
+      cp(tarjeta(h('h2', null, 'Copia de seguridad'),
         h('p', { class: 'nota' }, 'Los datos de este dispositivo (comprobantes, recibos, movimientos y pendientes) se guardan solo en este navegador. Haga una copia de vez en cuando y guárdela en un lugar seguro. Contiene el token de la hoja.'),
-        h('div', { class: 'pila' }, boton('Guardar copia de seguridad', 'compartir', 'c-verde ancho-total', exportar), boton('Restaurar una copia', 'enviar', 'c-rojo ancho-total', importar))),
+        h('div', { class: 'pila' }, boton('Guardar copia de seguridad', 'compartir', 'c-verde ancho-total', exportar), boton('Restaurar una copia', 'enviar', 'c-rojo ancho-total', importar))), 'config'),
       tarjeta(h('h2', null, 'Aplicación'), h('p', { class: 'nota' }, `Versión ${VERSION}`), h('p', { class: 'nota', id: 'info-almacen' }, ''),
         boton('Buscar actualización', 'enviar', 'c-azul ancho-total', () => window.__buscarActualizacion && window.__buscarActualizacion()))
     );

@@ -1,5 +1,6 @@
 // Datos de Registro, Diario y Boletos: almacenes locales, cálculos y registros para Google Sheets.
 import { db, siguienteNumero, confirmarNumero, valorCajuelas, fichaKey, cat, findCosecha, findSociedad, findPersona, cosechaDeSociedad, deviceName } from './store.js';
+import { nombreUsuario } from './users.js';
 import { normalizar, parseQty, soloDigitos, plainNumber, stampCorto, diaHoy, ahoraTxt } from './util.js';
 
 // ====================== REGISTRO (comprobantes de cambio de fichas) ======================
@@ -23,7 +24,7 @@ export function aGrupo(ls) {
   return {
     numero: f.comprobante, date: f.date, emitido: f.emitido, cosecha, sociedad: f.sociedad, finca: f.finca,
     persona: f.personName, tarjeta: tarjeta || '', lines: ls, anulado: ls.every((l) => l.anulado), motivo: f.motivo || '',
-    anuladoFecha: f.anuladoFecha || '', total, deduccion, neto: total - deduccion
+    anuladoFecha: f.anuladoFecha || '', usuario: f.usuario || '', anuladoPor: f.anuladoPor || '', total, deduccion, neto: total - deduccion
   };
 }
 export function todosLosComprobantes() {
@@ -36,12 +37,12 @@ export function todosLosComprobantes() {
   return [...mapa.values()].map(aGrupo).reverse();
 }
 
-export function payloadRegistro({ reportId, dateText, cosecha, sociedad, finca, personName, codigo, tarjeta, deduccion, valid, comprobante, estado = 'ACTIVO', motivo = '' }) {
+export function payloadRegistro({ reportId, dateText, cosecha, sociedad, finca, personName, codigo, tarjeta, deduccion, valid, comprobante, estado = 'ACTIVO', motivo = '', usuario = nombreUsuario() }) {
   const sumNumbers = valid.reduce((t, v) => t + parseQty(v[0]), 0);
   const sumPrices = valid.reduce((t, v) => t + v[1], 0);
   const total = valid.reduce((t, v) => t + parseQty(v[0]) * v[1], 0);
   return {
-    reportId, dia: diaHoy(), fechaHora: dateText, dispositivo: deviceName(), cosecha, sociedad, finca, comprobante, estado, motivo,
+    reportId, dia: diaHoy(), fechaHora: dateText, dispositivo: deviceName(), cosecha, sociedad, finca, comprobante, estado, motivo, usuario,
     codigo, nombreCompleto: personName, tarjeta: soloDigitos(tarjeta), deduccion, cantidadLineas: valid.length, sumaNumeros: sumNumbers,
     sumaPrecios: sumPrices, totalMultiplicado: total, totalPagar: total - deduccion,
     lineas: valid.map((v) => ({ cantidad: v[0], precio: v[1], resultado: parseQty(v[0]) * v[1] }))
@@ -82,17 +83,18 @@ export const recibos = {
     const a = recibos.items();
     const i = a.findIndex((r) => r.numero === numero && r.dia === dia && !r.anulado);
     if (i < 0) return null;
-    a[i] = { ...a[i], anulado: true, motivo, anuladoFecha: fecha };
+    a[i] = { ...a[i], anulado: true, motivo, anuladoFecha: fecha, anuladoPor: nombreUsuario() };
     recibos.guardar(a);
     return a[i];
   }
 };
 export function payloadRecibo(r, reportId, fechaHora, estado, motivo, negativo) {
+  const usuario = negativo ? nombreUsuario() : (r.usuario || nombreUsuario());
   const s = negativo ? -1 : 1;
   const c = rc(r);
   return {
     formato: 'recibo', reportId, dia: r.dia, fechaHora, dispositivo: r.dispositivo, cosecha: r.cosecha, beneficio: r.beneficio,
-    receptora: r.receptora, compra: r.compra, sociedad: r.sociedad, finca: r.finca, lote: r.lote, comprobante: r.numero, estado, motivo,
+    receptora: r.receptora, compra: r.compra, sociedad: r.sociedad, finca: r.finca, lote: r.lote, comprobante: r.numero, estado, motivo, usuario,
     medidas: r.medidas * s, cajuelas: r.cajuelas * s, cuartillos: r.cuartillos * s, recibidoCajuelas: c.recibidoCajuelas * s,
     fanegas: c.fanegas * s, muestraTotal: r.muestraTotal * s, verdes: r.verdes * s, maduros: r.maduros * s, secos: r.secos * s,
     broca: r.broca * s, totalFlotes: c.totalFlotes * s
@@ -118,16 +120,17 @@ export const boletos = {
     const a = boletos.items();
     const i = a.findIndex((m) => m.id === id && !m.anulado);
     if (i < 0) return null;
-    a[i] = { ...a[i], anulado: true, motivoAnul: motivo, anuladoFecha: fecha };
+    a[i] = { ...a[i], anulado: true, motivoAnul: motivo, anuladoFecha: fecha, anuladoPor: nombreUsuario() };
     boletos.guardar(a);
     return a[i];
   }
 };
 export function payloadBoleto(m, reportId, fechaHora, estado, motivo, negativo) {
+  const usuario = negativo ? nombreUsuario() : (m.usuario || nombreUsuario());
   const s = negativo ? -1 : 1;
   return {
     formato: 'boleto', reportId, dia: m.dia, fechaHora, dispositivo: m.dispositivo, oficina: m.oficina, cosecha: m.cosecha, sociedad: m.sociedad,
-    comprobante: m.numero, tipo: m.tipo, estado, motivo: estado === 'ACTIVO' ? m.nota : motivo,
+    comprobante: m.numero, tipo: m.tipo, usuario, estado, motivo: estado === 'ACTIVO' ? m.nota : motivo,
     lineas: m.lineas.map((l) => ({ ficha: l.color, medida: l.medida, cantidad: l.cantidad * s, cajuelas: l.cantidad * s * valorCajuelas(l.medida) }))
   };
 }

@@ -1,6 +1,7 @@
 // Pestaña «Diario»: recibo de café en el beneficio.
 import { h, toast, aviso, elegir, normalizar, fmtNum, fmtCant, diaHoy, ahoraTxt, uuid, stampCorto, diaLegible } from './util.js';
 import { db, findCosecha, cosechaActiva, deviceName, configurado, findDiarioSociedad } from './store.js';
+import { nombreUsuario } from './users.js';
 import { recibos, rc, payloadRecibo } from './data.js';
 import { cargarFuentes, paginasRecibos, paginasResumenDiario, MODO } from './draw.js';
 import { encolar, recibosDelDia } from './sync.js';
@@ -94,7 +95,7 @@ export function crearDiario(nav) {
   async function mostrar(items, titulo, nombre, intro) {
     await cargarFuentes();
     const paginas = paginasRecibos(items);
-    verDocumento({ titulo, paginas, nombrePdf: nombre, intro: intro || (items.length > 1 ? `${items.length} recibos en un solo PDF (una página por recibo).` : null), maxPaginas: 2, textoBoton: 'Compartir PDF' });
+    verDocumento({ titulo, paginas, nombrePdf: nombre, intro: intro || (items.length > 1 ? `${items.length} recibos en un solo PDF (una página por recibo).` : null), maxPaginas: 2, textoBoton: 'Compartir PDF', tiquete: true });
   }
 
   async function emitir() {
@@ -114,7 +115,7 @@ export function crearDiario(nav) {
     const r = {
       id: uuid(), numero: recibos.siguiente(), dia: diaHoy(), emitido: ahoraTxt(), cosecha: co.nombre, beneficio: selBeneficio, receptora: co.diarioReceptora,
       sociedad: soc.nombre, compra: soc.tipo, finca: f, lote: l, muestraTotal: muestra, verdes: num(1), maduros: num(2), secos: num(3), broca: num(4),
-      medidas: num(5), cajuelas: num(6), cuartillos: cuart, dispositivo: deviceName(), anulado: false, motivo: '', anuladoFecha: ''
+      medidas: num(5), cajuelas: num(6), cuartillos: cuart, dispositivo: deviceName(), usuario: nombreUsuario(), anulado: false, motivo: '', anuladoFecha: ''
     };
     if (rc(r).recibidoCajuelas <= 0) return toast('Escriba la cantidad recibida (medidas, cajuelas o cuartillos).');
     recibos.agregar(r);
@@ -192,9 +193,9 @@ export function crearDiario(nav) {
       h('div', { class: 'dos-col' }, h('div', null, etiqueta('Finca'), finca), h('div', null, etiqueta('Corte/Lote'), lote))),
     tarjeta(cuadroMuestra, h('div', { class: 'titulo-cuadro' }, 'CANTIDAD'), h('div', { class: 'cuadro-centro' }, cuadroCant)),
     h('div', { class: 'fila-botones cuatro' },
-      boton('Emitir', 'emitir', 'c-verde', emitir), boton('Reimprimir', 'imprimir', 'c-teal', reimprimir),
-      boton('Envío\nmasivo', 'enviar', 'c-ambar', masivo), boton('Anular', 'anular', 'c-rojo', anular)),
-    boton('Resumen del día', 'resumen', 'c-azul ancho-total', resumenDelDia)
+      boton('Emitir', 'emitir', 'c-verde', emitir), boton('Reimprimir', 'imprimir', 'c-teal', reimprimir, 'reimprimir'),
+      boton('Envío\nmasivo', 'enviar', 'c-ambar', masivo, 'resumenes'), boton('Anular', 'anular', 'c-rojo', anular, 'anular')),
+    boton('Resumen del día', 'resumen', 'c-azul ancho-total', resumenDelDia, 'resumenes')
   );
   refrescar();
   return { el: raiz, refrescar };

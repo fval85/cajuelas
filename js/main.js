@@ -7,6 +7,7 @@ import { crearDiario } from './ui_diario.js';
 import { crearBoletos } from './ui_boletos.js';
 import { crearAjustes, actualizarCatalogo } from './ui_ajustes.js';
 import { icono } from './ui.js';
+import { hayControl, puede, necesitaLogin, pantallaLogin, cerrarLogin, alCambiarSesion, actualizarUsuarios, sesion } from './users.js';
 
 cargarCatalogo();
 cargarBoletosCat();
@@ -24,20 +25,59 @@ const nav = {
 };
 const paginas = [crearRegistro(nav), crearDiario(nav), crearBoletos(nav), crearAjustes(nav)];
 const nombres = [['Registro', 'registro'], ['Diario', 'diario'], ['Boletos', 'boletos'], ['Ajustes', 'ajustes']];
+const permisoTab = ['registro', 'diario', 'boletos', null];
 let actual = 0;
 function ir(i) {
+  if (permisoTab[i] && !puede(permisoTab[i])) i = primeraPermitida();
   actual = i;
   paginas.forEach((p, k) => { p.el.hidden = k !== i; });
   [...tabs.children].forEach((b, k) => { b.classList.toggle('on', k === i); b.setAttribute('aria-selected', k === i); });
   if (paginas[i].refrescar) paginas[i].refrescar();
   window.scrollTo(0, 0);
-  try { localStorage.setItem('cajuelas.tab', String(i)); } catch { /* nada */ }
+  aplicarPermisos();
+  if (!hayControl() || sesion()) { try { localStorage.setItem('cajuelas.tab', String(i)); } catch { /* nada */ } }
 }
 nombres.forEach(([t, ic], i) => tabs.append(h('button', { type: 'button', role: 'tab', class: 'tab', onclick: () => ir(i) }, icono(ic, 24), h('span', null, t))));
 paginas.forEach((p) => contenido.append(p.el));
+function primeraPermitida() { const k = permisoTab.findIndex((p) => !p || puede(p)); return k < 0 ? 3 : k; }
+/** Muestra u oculta pestañas y botones según los permisos del usuario que entró. */
+function aplicarPermisos() {
+  [...tabs.children].forEach((b, k) => { b.hidden = !!permisoTab[k] && !puede(permisoTab[k]); });
+  document.querySelectorAll('[data-permiso]').forEach((el) => { el.hidden = !puede(el.dataset.permiso); });
+  document.querySelectorAll('.fila-botones').forEach((f) => {
+    const vis = [...f.children].filter((x) => !x.hidden).length;
+    f.hidden = vis === 0;
+    if (vis) f.style.gridTemplateColumns = `repeat(${vis}, 1fr)`;
+  });
+  document.querySelectorAll('.banda').forEach((b) => b.pintarUsuario && b.pintarUsuario());
+  if (permisoTab[actual] && !puede(permisoTab[actual])) ir(primeraPermitida());
+}
+function revisarAcceso() {
+  if (necesitaLogin()) pantallaLogin(); else cerrarLogin();
+  aplicarPermisos();
+  paginas.forEach((p) => p.refrescar && p.refrescar());
+  aplicarPermisos();
+}
+let programado = false;
+new MutationObserver(() => {
+  if (programado) return;
+  programado = true;
+  requestAnimationFrame(() => { programado = false; aplicarPermisos(); });
+}).observe(contenido, { childList: true, subtree: true });
 let inicial = 0;
 try { inicial = Number(localStorage.getItem('cajuelas.tab')) || 0; } catch { /* nada */ }
 ir(inicial >= 0 && inicial < 4 ? inicial : 0);
+alCambiarSesion(() => {
+  revisarAcceso();
+  let t = 0;
+  try { t = Number(localStorage.getItem('cajuelas.tab')) || 0; } catch { /* nada */ }
+  const ok = t >= 0 && t < 4 && !(permisoTab[t] && !puede(permisoTab[t])) && sesion();
+  if (sesion()) ir(ok ? t : primeraPermitida());
+});
+revisarAcceso();
+actualizarUsuarios(true).then(() => revisarAcceso());
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') actualizarUsuarios().then(() => revisarAcceso()); });
+setInterval(() => actualizarUsuarios().then(() => revisarAcceso()), 5 * 60000);
 
 // ----- Barra de estado: envíos pendientes -----
 function pintarBarra() {

@@ -149,6 +149,8 @@ function dibujarRecibo(c, r, modo) {
     if (r.motivo) envolver(`Motivo: ${r.motivo}`, normal, cw).forEach((t) => ln(t, normal));
   }
   blank();
+  if (r.usuario) envolver(`Usuario: ${r.usuario}`, small, cw).forEach((t) => ln(t, small));
+  if (modo === MODO.ANULACION && r.anuladoPor) envolver(`Anuló: ${r.anuladoPor}`, small, cw).forEach((t) => ln(t, small));
   envolver(`Dispositivo: ${r.dispositivo}`, small, cw).forEach((t) => ln(t, small));
   y += MARG;
   return Math.ceil(y);
@@ -205,6 +207,8 @@ function dibujarBoleto(c, m, modo) {
     if (m.motivoAnul) envolver(`Motivo anulación: ${m.motivoAnul}`, normal, cw).forEach((t) => ln(t, normal));
   }
   blank();
+  if (m.usuario) envolver(`Usuario: ${m.usuario}`, small, cw).forEach((t) => ln(t, small));
+  if (modo === MODO.ANULACION && m.anuladoPor) envolver(`Anuló: ${m.anuladoPor}`, small, cw).forEach((t) => ln(t, small));
   envolver(`Dispositivo: ${m.dispositivo}`, small, cw).forEach((t) => ln(t, small));
   y += MARG;
   return Math.ceil(y);
@@ -280,6 +284,7 @@ export function lineasComprobante(g, reimpresion) {
   campo(out, 'Finca', g.finca, cols);
   campoAjustado(out, 'Nombre', g.persona, cols);
   if (g.tarjeta) campo(out, 'Tarjeta', tarjetaEnmascarada(g.tarjeta), cols);
+  if (g.usuario) campoAjustado(out, 'Usuario', g.usuario, cols);
   out.push(TL(regla));
   tabla(out, g, cols);
   out.push(TL(regla));
@@ -301,6 +306,7 @@ export function lineasAnulacion(g) {
   campo(out, 'Anula comprobante', g.numero, cols, true);
   campo(out, 'Fecha original', g.emitido || diaLegible(g.date), cols);
   campo(out, 'Anulado', g.anuladoFecha, cols);
+  if (g.anuladoPor) campoAjustado(out, 'Anuló', g.anuladoPor, cols);
   campo(out, 'Sociedad', g.sociedad, cols);
   campo(out, 'Finca', g.finca, cols);
   campoAjustado(out, 'Nombre', g.persona, cols);
