@@ -1,0 +1,51 @@
+GUIA: PUBLICAR LA VERSION WEB EN GITHUB PAGES Y USARLA EN EL IPHONE
+====================================================================
+
+PARTE 1. Crear el repositorio (una sola vez)
+1. Entre a https://github.com e inicie sesion.
+2. Arriba a la derecha toque el boton "+" y elija "New repository".
+3. Repository name: escriba un nombre corto, sin espacios ni tildes (ej: cajuelas).
+   IMPORTANTE: este nombre forma parte de la direccion de la app y NO debe cambiarse nunca.
+4. Marque "Public" (con cuenta gratis, GitHub Pages solo funciona con repositorios publicos).
+   Es seguro: el repositorio solo contiene el programa. La URL del Web App, el token y todos
+   los datos se escriben en cada dispositivo y nunca se suben a GitHub.
+5. Marque "Add a README file" y toque "Create repository".
+
+PARTE 2. Subir los archivos
+1. Descomprima el ZIP de la version web en su computadora.
+2. En la pagina del repositorio toque "Add file" > "Upload files".
+3. Abra la carpeta descomprimida, seleccione TODO lo que hay dentro (index.html, sw.js,
+   manifest.webmanifest y las carpetas css, js, fonts, icons) y arrastrelo a la ventana de GitHub.
+   Espere a que termine de subir (deben aparecer tambien las carpetas con sus archivos).
+4. Abajo toque "Commit changes".
+   (Si el navegador no deja arrastrar carpetas, use Chrome o Edge; o suba los archivos de cada
+   carpeta entrando a ella con "Add file" > "Upload files" y escribiendo la carpeta en el nombre.)
+
+PARTE 3. Activar GitHub Pages
+1. En el repositorio: "Settings" (Configuracion) > "Pages" (menu izquierdo).
+2. En "Build and deployment", Source: "Deploy from a branch".
+3. Branch: "main" y carpeta "/ (root)". Toque "Save".
+4. Espere 1 a 3 minutos y recargue. Arriba aparecera: "Your site is live at https://SUUSUARIO.github.io/cajuelas/"
+   Esa es la direccion de la app. Abrala en el navegador para comprobar que carga.
+
+PARTE 4. Instalar en el iPhone
+1. Abra esa direccion en SAFARI (no en Chrome).
+2. Toque Compartir (cuadro con flecha) > "Anadir a pantalla de inicio" > "Anadir".
+3. Abra siempre la app desde ese icono. Los datos quedan guardados en esa instalacion.
+4. En Ajustes > Configuracion de sincronizacion escriba la URL del Web App, el token y el nombre del
+   dispositivo (el mismo de la columna "Dispositivo" de la hoja); luego "Recibir catalogo".
+Tambien funciona en Android: abra la direccion en Chrome > menu > "Instalar aplicacion".
+
+PARTE 5. Actualizar la app cuando haya una version nueva
+1. Descomprima el ZIP nuevo, entre al repositorio > "Add file" > "Upload files", arrastre todo
+   (se reemplazan los archivos con el mismo nombre) y "Commit changes".
+2. En 1 a 3 minutos GitHub publica los cambios. En el iPhone, al abrir la app aparece el aviso
+   "Hay una version nueva" > "Actualizar ahora". No hay que volver a instalar nada ni se pierde nada.
+   (Tambien: Ajustes > Buscar actualizacion.)
+
+REGLAS PARA NO PERDER DATOS
+- Nunca cambie el nombre del repositorio ni su usuario: cambiaria la direccion y cada iPhone
+  empezaria "de cero" (los datos viven en el almacenamiento de esa direccion).
+- No borre los datos de Safari / sitios web, ni desinstale el icono sin haber hecho antes
+  Ajustes > "Guardar copia de seguridad".
+- Los envios pendientes se mandan a la hoja cuando la app esta abierta y hay Internet.

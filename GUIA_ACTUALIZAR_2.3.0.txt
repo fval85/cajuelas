@@ -1,0 +1,65 @@
+ACTUALIZAR A LA VERSIÓN 2.3.0  (y preparar el libro de PRODUCCIÓN)
+===================================================================
+Novedades
+- Registro: «Tiquetes del día» ahora se llama «Envío masivo».
+- Diario: botones en dos filas (Emitir · Reimprimir · Anular / Resumen · Envío masivo). «Resumen» pregunta
+  Hoy, Ayer o Rango de fechas (el administrador además puede filtrar por usuario).
+- Ajustes simplificado: usuario, catálogo (con la cosecha en uso), envíos pendientes y versión. Todo lo demás
+  quedó en «Administración» (solo administradores).
+- La cosecha activa y los precios ya NO se eligen en la app: se escriben en la pestaña «Configuración» del
+  Google Sheet y llegan con «Actualizar catálogo».
+- Modo de pruebas (datos, números y hoja de Google separados de los reales; tiquetes marcados «PRUEBA»).
+- «Borrar datos y reiniciar números» (por dispositivo) y, en la hoja, menú Café > «Borrar datos de prueba».
+
+RECOMENDACIÓN DE ORDEN
+  1) Subir la app 2.3.0 a GitHub.            3) Crear el libro NUEVO de producción.
+  2) Dejar la hoja actual como «PRUEBAS».    4) Pasar los dispositivos al libro nuevo (una sola vez).
+
+PARTE 1 - GITHUB
+1. Descomprima RegistroCajuelas_Web_v2.3.0.zip y entre a la carpeta «pwa».
+2. Repositorio > Add file > Upload files > arrastre el CONTENIDO de la carpeta (no la carpeta «pwa»).
+3. Commit changes («Versión 2.3.0»). Espere 1 a 3 minutos.
+4. En cada dispositivo: abrir la app con Internet > «Actualizar ahora». Ajustes debe decir 2.3.0.
+
+PARTE 2 - LA HOJA ACTUAL (se convierte en PRUEBAS)
+1. Extensiones > Apps Script: borre todo y pegue el GoogleAppsScript.gs nuevo (con su token). Guardar.
+2. Implementar > Administrar implementaciones > lápiz > Versión «Nueva versión» > Implementar (la URL no cambia).
+3. Ejecute la función prepararLibro (una vez). Crea la pestaña «Configuración», ordena y colorea las pestañas.
+4. Pestaña «Configuración»: «Cosecha activa» = su cosecha (ej. 2026-2027) y una fila «Precio» por cada precio.
+5. En la app: Ajustes > Actualizar catálogo. Verá «Cosecha 2026-2027» y los precios en Registro.
+Mientras no cree el libro nuevo, los dispositivos siguen trabajando con esta hoja.
+
+PARTE 3 - LIBRO NUEVO DE PRODUCCIÓN (ordenado y vacío)
+1. Cree una hoja de Google nueva. Nómbrela «Cajuelas - PRODUCCIÓN».
+2. Archivo > Importar > Subir > Catalogo_Google_Sheets.xlsx > «Insertar hojas nuevas».
+   Trae: Instrucciones, Configuración, Usuarios, Estructura, Personas, Beneficios, Diario Sociedades,
+   Boletos Fichas, Boletos Oficinas (con filas de ejemplo: bórrelas o cámbielas).
+3. Copie su catálogo REAL (Estructura, Personas, etc.) desde la hoja anterior pegando sobre las pestañas nuevas.
+4. Extensiones > Apps Script: pegue el GoogleAppsScript.gs nuevo y ponga un TOKEN NUEVO distinto al de pruebas.
+5. Ejecute prepararLibro (acepte permisos).
+6. Pestaña «Usuarios»: sus usuarios y PIN reales (cambie los de ejemplo). Rol «Administrador» para usted.
+7. Pestaña «Configuración»: cosecha activa y precios.
+8. Implementar > Nueva implementación > Aplicación web: ejecutar como «Yo», acceso «Cualquier persona».
+   Copie la URL que termina en /exec.
+9. Comparta este libro SOLO con administradores.
+
+PARTE 4 - PASAR CADA DISPOSITIVO A PRODUCCIÓN (una sola vez por dispositivo)
+1. Ajustes > Administración > Configurar sincronización: pegue la URL y el token NUEVOS. Guardar y Probar conexión.
+2. Administración > «Borrar datos y reiniciar números» (escriba BORRAR). Deja todo en cero: C-0001, R-0001, B-0001.
+   (Envíe antes los pendientes que quiera conservar; los pendientes se borran.)
+3. Ajustes > Actualizar catálogo. Inicie sesión con su usuario.
+4. Verifique con un comprobante de prueba y anúlelo, o mejor hágalo en modo de pruebas (Parte 5).
+
+PARTE 5 - MODO DE PRUEBAS (para practicar o capacitar sin tocar producción)
+1. Una sola vez, en el dispositivo: Ajustes > Administración > «Entrar al modo de pruebas».
+   La app se reinicia con una franja naranja «MODO DE PRUEBAS».
+2. En ese modo: Administración > Configurar sincronización: URL y token de la hoja de PRUEBAS (la hoja anterior).
+   Actualizar catálogo. Todo lo que emita queda separado: números propios y tiquetes marcados «PRUEBA».
+3. Para volver: Administración > «Volver al modo REAL». Sus datos reales no se tocaron.
+4. Limpiar las pruebas: en el modo de pruebas, «Borrar datos y reiniciar números»; en la hoja de pruebas,
+   menú Café > «Borrar datos de prueba (empezar de cero)…».
+
+NOTAS
+- La URL de la aplicación (GitHub) NO cambia. Cambia solo la URL/token de Google Sheets en cada dispositivo.
+- La clave de administrador de la app se comparte entre el modo real y el de pruebas.
+- Los PDF de reportes no llevan marca de «PRUEBA»; los tiquetes sí.

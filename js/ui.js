@@ -1,8 +1,8 @@
 // Piezas de interfaz compartidas: tarjetas, selectores, botones, buscador y visor de documentos.
-import { h, clear, dialogo, toast, normalizar, confirmar } from './util.js';
+import { h, clear, dialogo, toast, normalizar, confirmar, elegir, diaHoy } from './util.js';
 import { pdfDePaginas, compartir, descargar } from './files.js';
 import { esComputadora, imprimirTiquetes } from './imprimir.js';
-import { hayControl, sesion, salir } from './users.js';
+import { hayControl, sesion, salir, lista as listaUsuarios } from './users.js';
 
 export const ICONOS = {
   emitir: 'M12 2a10 10 0 100 20 10 10 0 000-20zm-2 15l-5-5 1.4-1.4L10 14.2l7.6-7.6L19 8l-9 9z',
@@ -166,3 +166,79 @@ export function pedirMotivo({ titulo, detalle, etiquetaCampo = 'Motivo de la anu
 }
 
 export { descargar };
+
+/** ¿El usuario del documento coincide con el filtro? (filtro vacío = todos; '(sin usuario)' = los que no tienen). */
+export function usuarioCoincide(usuarioDoc, filtro) {
+  if (!filtro) return true;
+  if (filtro === '(sin usuario)') return !String(usuarioDoc || '').trim();
+  return normalizar(usuarioDoc) === normalizar(filtro);
+}
+export function opcionesUsuarios() { return ['Todos los usuarios', ...(listaUsuarios() || []).map((u) => u.nombre), '(sin usuario)']; }
+/** Para administradores: elegir fecha, sociedad y usuario antes de generar un reporte. Devuelve {dia, sociedad, usuario} o null. */
+export function filtrosAdmin({ titulo, sociedades = null, sociedad = '', usuarios = true, nota = '' }) {
+  return new Promise((res) => {
+    let dia = diaHoy(), usuario = '', soc = sociedad, hecho = false;
+    const iDia = h('input', { class: 'campo', type: 'date', value: dia });
+    iDia.addEventListener('change', () => { if (iDia.value) dia = iDia.value; });
+    const pSoc = sociedades ? selector('Seleccione la sociedad', async () => {
+      const v = await elegir('Sociedad', sociedades.map((n) => ({ etiqueta: n, valor: n })), { buscar: false });
+      if (v !== undefined) { soc = v; pSoc.poner(v); }
+    }) : null;
+    if (pSoc) pSoc.poner(soc);
+    const nombres = opcionesUsuarios();
+    const pUs = selector('Todos los usuarios', async () => {
+      const v = await elegir('Usuario', nombres.map((n, i) => ({ etiqueta: n, valor: i })), { buscar: false });
+      if (v === undefined) return;
+      usuario = v === 0 ? '' : nombres[v]; pUs.poner(nombres[v]);
+    });
+    pUs.poner('Todos los usuarios');
+    const d = dialogo({
+      titulo,
+      cuerpo: [etiqueta('Fecha'), iDia, pSoc ? etiqueta('Sociedad') : null, pSoc, usuarios ? etiqueta('Usuario que emitió') : null, usuarios ? pUs : null,
+        nota ? h('p', { class: 'nota' }, nota) : null],
+      botones: [{ texto: 'Cancelar' }, { texto: 'Generar', clase: 'primario', onclick: () => {
+        if (sociedades && !soc) { toast('Seleccione la sociedad.'); return false; }
+        hecho = true; res({ dia, sociedad: soc, usuario }); } }]
+    });
+    d.alCerrar = () => { if (!hecho) res(null); };
+  });
+}
+
+function sumarDias(dia, n) {
+  const d = new Date(dia + 'T12:00:00'); d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+/** Elegir el período de un reporte: hoy, ayer o un rango de fechas (y, si se pide, el usuario). Devuelve {desde, hasta, usuario} o null. */
+export function pedirPeriodo({ titulo, usuarios = false, textoBoton = 'Generar', nota = '' }) {
+  return new Promise((res) => {
+    const hoy = diaHoy(), ayer = sumarDias(hoy, -1);
+    let desde = hoy, hasta = hoy, usuario = '', hecho = false;
+    const gr = 'per-' + Math.random().toString(36).slice(2);
+    const rHoy = h('input', { type: 'radio', name: gr, checked: true }), rAyer = h('input', { type: 'radio', name: gr }), rRango = h('input', { type: 'radio', name: gr });
+    const iDesde = h('input', { class: 'campo', type: 'date', value: hoy }), iHasta = h('input', { class: 'campo', type: 'date', value: hoy });
+    const cajaRango = h('div', null, etiqueta('Desde'), iDesde, etiqueta('Hasta'), iHasta);
+    const pintar = () => { cajaRango.hidden = !rRango.checked; };
+    [rHoy, rAyer, rRango].forEach((r) => r.addEventListener('change', pintar));
+    pintar();
+    iDesde.addEventListener('change', () => { if (iDesde.value) { desde = iDesde.value; if (hasta < desde) { hasta = desde; iHasta.value = hasta; } } });
+    iHasta.addEventListener('change', () => { if (iHasta.value) { hasta = iHasta.value; if (desde > hasta) { desde = hasta; iDesde.value = desde; } } });
+    const nombres = opcionesUsuarios();
+    const pUs = selector('Todos los usuarios', async () => {
+      const v = await elegir('Usuario', nombres.map((n, i) => ({ etiqueta: n, valor: i })), { buscar: false });
+      if (v === undefined) return;
+      usuario = v === 0 ? '' : nombres[v]; pUs.poner(nombres[v]);
+    });
+    pUs.poner('Todos los usuarios');
+    const d = dialogo({
+      titulo,
+      cuerpo: [h('label', { class: 'radio' }, rHoy, ' Hoy'), h('label', { class: 'radio' }, rAyer, ' Ayer'), h('label', { class: 'radio' }, rRango, ' Rango de fechas'), cajaRango,
+        usuarios ? etiqueta('Usuario que emitió') : null, usuarios ? pUs : null, nota ? h('p', { class: 'nota' }, nota) : null],
+      botones: [{ texto: 'Cancelar' }, { texto: textoBoton, clase: 'primario', onclick: () => {
+        let a = hoy, b = hoy;
+        if (rAyer.checked) { a = ayer; b = ayer; } else if (rRango.checked) { a = desde; b = hasta; if (!a || !b) { toast('Elija las dos fechas.'); return false; } }
+        if ((new Date(b) - new Date(a)) / 86400000 > 366) { toast('El rango máximo es de un año.'); return false; }
+        hecho = true; res({ desde: a, hasta: b, usuario }); } }]
+    });
+    d.alCerrar = () => { if (!hecho) res(null); };
+  });
+}

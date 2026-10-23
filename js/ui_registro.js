@@ -1,12 +1,12 @@
 // Pestaña «Registro»: comprobantes de cambio de fichas por persona.
 import { h, clear, toast, aviso, confirmar, elegir, normalizar, parseQty, canonQty, fmtQty, fmtMoney, diaHoy, ahoraTxt, diaLegible, fechaLarga, plainNumber, stampCorto } from './util.js';
-import { db, cat, findCosecha, findSociedad, findPersona, cosechaActiva, siguienteNumero, confirmarNumero } from './store.js';
-import { nombreUsuario } from './users.js';
+import { db, cat, deviceName, configurado, findCosecha, findSociedad, findPersona, cosechaActiva, siguienteNumero, confirmarNumero } from './store.js';
+import { nombreUsuario, puede } from './users.js';
 import { lineas, montoLinea, aGrupo, todosLosComprobantes, payloadRegistro, idReporte } from './data.js';
 import { cargarFuentes, paginasTexto, lineasComprobante, lineasAnulacion, paginasResumenRegistro } from './draw.js';
 import { xlsx } from './files.js';
-import { encolar } from './sync.js';
-import { tarjeta, etiqueta, banda, selector, boton, campoBusqueda, verDocumento, listaBuscable, pedirMotivo, icono } from './ui.js';
+import { encolar, registroDelDia } from './sync.js';
+import { tarjeta, etiqueta, banda, selector, boton, campoBusqueda, verDocumento, listaBuscable, pedirMotivo, icono, filtrosAdmin, usuarioCoincide } from './ui.js';
 
 export function crearRegistro(nav) {
   const raiz = h('div', { class: 'pagina' });
@@ -73,7 +73,7 @@ export function crearRegistro(nav) {
     selFinca = v; validarSeleccion(); pintar();
   }
   function sinCatalogo(texto) {
-    aviso('Sin datos', texto + '\n\nEn Ajustes > Sincronización use «Recibir catálogo de Google Sheets».');
+    aviso('Sin datos', texto + '\n\nEn Ajustes > Administración use «Recibir catálogo de Google Sheets».');
   }
 
   async function elegirPrecio(fila, btn) {
@@ -237,16 +237,42 @@ export function crearRegistro(nav) {
   // ---------- Resumen del día ----------
   async function resumen_() {
     const co = cosechaActiva();
+    if (puede('todos')) return resumenAdmin(co);
     if (!co || !selSociedad) return toast('Elija la cosecha activa en Ajustes y la sociedad para generar su resumen.');
     const hoy = diaHoy();
     const deSoc = lineas.todas().filter((l) => l.date === hoy && normalizar(l.sociedad) === normalizar(selSociedad) && (!l.cosecha || normalizar(l.cosecha) === normalizar(co)));
+    return armarResumen(co, hoy, selSociedad, deSoc, '');
+  }
+  /** Administrador: cualquier fecha, sociedad y usuario, con los comprobantes de todos los dispositivos. */
+  async function resumenAdmin(co) {
+    const cs = cosecha();
+    if (!co || !cs || !cs.sociedades.length) return toast('Elija la cosecha activa en Ajustes y reciba el catálogo.');
+    const f = await filtrosAdmin({ titulo: 'Resumen de Registro', sociedades: cs.sociedades.map((x) => x.nombre), sociedad: selSociedad });
+    if (!f) return;
+    toast('Preparando el resumen…', 2500);
+    const n = normalizar;
+    const disp = deviceName();
+    const locales = lineas.todas().filter((l) => l.date === f.dia && l.comprobante && (!l.cosecha || n(l.cosecha) === n(co))).map((l) => ({ ...l, dispositivo: disp }));
+    let todas = locales, nota = 'Solo comprobantes de este dispositivo.';
+    if (configurado()) {
+      const r = await registroDelDia(f.dia);
+      if (!r.error) {
+        const propios = new Set(locales.map((l) => l.comprobante));
+        todas = [...r.lista.filter((l) => (!l.cosecha || n(l.cosecha) === n(co)) && !(n(l.dispositivo) === n(disp) && propios.has(l.comprobante))), ...locales];
+        nota = 'Datos de todos los dispositivos (Google Sheets).';
+      } else nota = `Sin conexión con la hoja (${r.error}). Solo comprobantes de este dispositivo.`;
+    }
+    const deSoc = todas.filter((l) => n(l.sociedad) === n(f.sociedad) && usuarioCoincide(l.usuario, f.usuario));
+    return armarResumen(co, f.dia, f.sociedad, deSoc, `${nota} Usuario: ${f.usuario || 'todos'}.`);
+  }
+  async function armarResumen(co, dia, socNombre, deSoc, extra) {
     const hoyLineas = deSoc.filter((l) => !l.anulado);
-    if (!hoyLineas.length) return toast(!deSoc.length ? `Todavía no hay comprobantes registrados hoy para ${selSociedad}. Emita primero un comprobante.` : `Todos los comprobantes de hoy para ${selSociedad} están anulados.`, 6000);
+    if (!hoyLineas.length) return toast(!deSoc.length ? `No hay comprobantes registrados el ${diaLegible(dia)} para ${socNombre}.` : `Todos los comprobantes del ${diaLegible(dia)} para ${socNombre} están anulados.`, 6000);
     const anulados = [...deSoc.filter((l) => l.anulado).reduce((m, l) => { if (!m.has(l.comprobante)) m.set(l.comprobante, []); m.get(l.comprobante).push(l); return m; }, new Map()).entries()]
       .map(([num, ls]) => ({ numero: num, nombre: ls[0].personName, monto: ls.reduce((t, l) => t + montoLinea(l) - l.deduccion, 0), motivo: ls[0].motivo, fecha: ls[0].anuladoFecha }));
     const fincas = [...new Set(hoyLineas.map((l) => l.finca).filter(Boolean))].sort((a, b) => normalizar(a).localeCompare(normalizar(b)));
     const precios = [...new Set(hoyLineas.map((l) => l.price))].sort((a, b) => a - b);
-    const soc = sociedad();
+    const soc = findSociedad(findCosecha(co), socNombre);
     const porNombre = new Map();
     hoyLineas.forEach((l) => { const k = l.personName.trim(); if (!porNombre.has(k)) porNombre.set(k, []); porNombre.get(k).push(l); });
     const personas = [...porNombre.entries()].sort((a, b) => a[0].toLowerCase().localeCompare(b[0].toLowerCase(), 'es')).map(([name, ls]) => {
@@ -264,7 +290,7 @@ export function crearRegistro(nav) {
     const cantidadPorPrecio = {};
     precios.forEach((p) => { cantidadPorPrecio[p] = hoyLineas.filter((l) => l.price === p).reduce((t, l) => t + parseQty(l.quantity), 0); });
     const d = {
-      fecha: fechaLarga(), cosecha: co, sociedad: selSociedad, fincaTitulo: fincas.length === 1 ? 'Finca' : 'Fincas', fincasTxt: fincas.join(', '),
+      fecha: fechaLarga(new Date(dia + 'T12:00:00')), cosecha: co, sociedad: socNombre, fincaTitulo: fincas.length === 1 ? 'Finca' : 'Fincas', fincasTxt: fincas.join(', '),
       precios, personas, lineasOriginales: hoyLineas.length, cantidadPorPrecio, totalBruto, totalDed, total: totalBruto - totalDed, anulados
     };
     await cargarFuentes();
@@ -272,7 +298,7 @@ export function crearRegistro(nav) {
     // Excel
     const nf = (v) => String(new Intl.NumberFormat('es-CR', { maximumFractionDigits: 4, useGrouping: false }).format(v));
     const dec = (v) => (Math.abs(v - Math.round(v)) < 1e-9 ? v : { n: v });
-    const f = [['Resumen General de Cajuelas'], ['Fecha', d.fecha], ['Cosecha', co], ['Sociedad', selSociedad], [d.fincaTitulo, d.fincasTxt], []];
+    const f = [['Resumen General de Cajuelas'], ['Fecha', d.fecha], ['Cosecha', co], ['Sociedad', socNombre], [d.fincaTitulo, d.fincasTxt], []];
     const enc = ['Código', 'Tarjeta', 'Nombre del cogedor'];
     precios.forEach((p) => { enc.push(`Cantidad ¢${nf(p)}`, `Monto ¢${nf(p)}`); });
     enc.push('Deducción', 'Total a pagar');
@@ -292,12 +318,12 @@ export function crearRegistro(nav) {
       f.push([], ['COMPROBANTES ANULADOS (no incluidos en los totales)'], ['Comprobante', 'Nombre', 'Monto anulado', 'Fecha de anulación', 'Motivo']);
       anulados.forEach((a) => f.push([a.numero, a.nombre, a.monto, a.fecha, a.motivo]));
     }
-    const sello = hoy.replace(/-/g, '');
+    const sello = dia.replace(/-/g, '');
     const libro = new Blob([xlsx('Resumen', f)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     verDocumento({
       titulo: 'Resumen general', paginas, nombrePdf: `Resumen_General_de_Cajuelas_${sello}.pdf`, ancho: true,
       adicionales: [{ blob: libro, nombre: `Resumen_General_de_Cajuelas_${sello}.xlsx` }], textoBoton: 'Compartir PDF y Excel',
-      intro: `${selSociedad} · ${personas.length} personas · Total a pagar ${fmtMoney(d.total)}`
+      intro: `${socNombre} · ${personas.length} personas · Total a pagar ${fmtMoney(d.total)}${extra ? '\n' + extra : ''}`
     });
   }
 
@@ -312,7 +338,7 @@ export function crearRegistro(nav) {
     boton('+  Agregar línea', null, 'c-agregar ancho-total', () => agregarFila()),
     resumen,
     h('div', { class: 'fila-botones' }, boton('Emitir', 'emitir', 'c-verde', emitir), boton('Reimprimir', 'imprimir', 'c-teal', reimprimir, 'reimprimir'), boton('Anular', 'anular', 'c-rojo', anular, 'anular')),
-    h('div', { class: 'fila-botones dos' }, boton('Resumen', 'resumen', 'c-azul', resumen_, 'resumenes'), boton('Tiquetes del día', 'enviar', 'c-ambar', tiquetesDelDia, 'resumenes'))
+    h('div', { class: 'fila-botones dos' }, boton('Resumen', 'resumen', 'c-azul', resumen_, 'resumenes'), boton('Envío masivo', 'enviar', 'c-ambar', tiquetesDelDia, 'resumenes'))
   );
 
   function pintar() {

@@ -1,12 +1,12 @@
 // Pestaña «Boletos»: inventario de fichas de colores.
 import { h, clear, toast, aviso, confirmar, elegir, normalizar, fmtNum, diaHoy, diaLegible, ahoraTxt, uuid, stampCorto, dialogo } from './util.js';
 import { db, bol, bolCosecha, bolSociedad, cosechaActiva, deviceName, configurado, valorCajuelas, fichaKey } from './store.js';
-import { nombreUsuario } from './users.js';
+import { nombreUsuario, puede } from './users.js';
 import { boletos, payloadBoleto, tipoBoletoEtiqueta, totalFichas, totalCajuelasMov, filasSaldo, saldoInicial, disponible, inventario, claveLinea, etiquetaFicha,
   BOL_ENTREGA, BOL_REFUERZO, BOL_SALDO, BOL_PERDIDA, BOL_CONTEO } from './data.js';
 import { cargarFuentes, paginasBoletos, paginasTablas, MODO } from './draw.js';
 import { encolar, movimientosBoletos } from './sync.js';
-import { tarjeta, etiqueta, banda, selector, boton, verDocumento, listaBuscable, pedirMotivo } from './ui.js';
+import { tarjeta, etiqueta, banda, selector, boton, verDocumento, listaBuscable, pedirMotivo, usuarioCoincide, opcionesUsuarios } from './ui.js';
 import { normalizarMedida } from './store.js';
 
 export function crearBoletos(nav) {
@@ -33,7 +33,7 @@ export function crearBoletos(nav) {
     selOficina = ofs.find((o) => normalizar(o) === normalizar(selOficina)) || (ofs.length === 1 ? ofs[0] : '');
     const socs = c ? c.sociedades : [];
     const s = socs.find((x) => normalizar(x.nombre) === normalizar(selSociedad));
-    selSociedad = s ? s.nombre : socs.length === 1 ? socs[0].nombre : '';
+    selSociedad = s ? s.nombre : '';
     pickOf.poner(selOficina); pickSoc.poner(selSociedad);
     inFecha.value = fecha;
     db.set('bol_oficina', selOficina); db.set('bol_sociedad', selSociedad);
@@ -54,11 +54,15 @@ export function crearBoletos(nav) {
     const previo = db.get('bol_draft', { sociedad: '', vals: {} });
     clear(cajaFichas); inputs = [];
     if (!soc || !soc.fichas.length) {
-      cajaFichas.append(h('p', { class: 'nota' }, !cosechaNombre() ? 'Primero elija la cosecha activa en Ajustes.' : `No hay sociedades o fichas para la cosecha «${cosechaNombre()}». Reciba el catálogo de Google Sheets en Ajustes.`));
-      infoSaldo.textContent = 'Sin fichas configuradas';
+      const hay = bc() && bc().sociedades.length;
+      cajaFichas.append(h('p', { class: 'nota' }, !cosechaNombre() ? 'Primero elija la cosecha activa en Ajustes.'
+        : !hay ? `No hay sociedades o fichas para la cosecha «${cosechaNombre()}». Reciba el catálogo de Google Sheets en Ajustes.`
+        : soc ? `La sociedad «${soc.nombre}» no tiene fichas en la hoja «Boletos Fichas».` : 'Seleccione la sociedad: aquí aparecerán solo las fichas (colores) de esa sociedad.'));
+      infoSaldo.textContent = soc ? 'Sin fichas configuradas' : 'Seleccione la sociedad';
       return;
     }
     let totalIni = 0, cajIni = 0;
+    cajaFichas.append(h('p', { class: 'nota' }, `Fichas de ${soc.nombre}`));
     soc.fichas.forEach((fi) => {
       const key = fichaKey(fi.color, fi.medida);
       const ini = saldo[key] || 0;
@@ -168,9 +172,9 @@ export function crearBoletos(nav) {
   function reportes() {
     const cosecha = cosechaNombre(), c = bc();
     if (!cosecha || !c) return toast('Primero elija la cosecha activa y reciba las fichas de Boletos.');
-    let desde = fecha, hasta = fecha, sociedadFiltro = '';
+    let desde = fecha, hasta = fecha, sociedadFiltro = '', usuarioFiltro = '';
     const gr = 'tipo-rep';
-    const rMov = h('input', { type: 'radio', name: gr, checked: true }), rInv = h('input', { type: 'radio', name: gr });
+    const rMov = h('input', { type: 'radio', name: gr, checked: true }), rInv = h('input', { type: 'radio', name: gr }), rDet = h('input', { type: 'radio', name: gr });
     const iDesde = h('input', { class: 'campo', type: 'date', value: desde }), iHasta = h('input', { class: 'campo', type: 'date', value: hasta });
     iDesde.addEventListener('change', () => { if (iDesde.value) { desde = iDesde.value; if (hasta < desde) { hasta = desde; iHasta.value = hasta; } } });
     iHasta.addEventListener('change', () => { if (iHasta.value) { hasta = iHasta.value; if (desde > hasta) { desde = hasta; iDesde.value = desde; } } });
@@ -182,19 +186,30 @@ export function crearBoletos(nav) {
     });
     pSoc.poner('Todas las sociedades');
     const solo = h('input', { type: 'checkbox' });
+    const admin = puede('todos');
+    const nombresUs = opcionesUsuarios();
+    const pUs = selector('Todos los usuarios', async () => {
+      const v = await elegir('Usuario', nombresUs.map((n, i) => ({ etiqueta: n, valor: i })), { buscar: false });
+      if (v === undefined) return;
+      usuarioFiltro = v === 0 ? '' : nombresUs[v]; pUs.poner(nombresUs[v]);
+    });
+    pUs.poner('Todos los usuarios');
     const cuerpo = [
       h('label', { class: 'radio' }, rMov, ' Movimientos y saldos por día'),
       h('label', { class: 'radio' }, rInv, ' Inventario general (por sociedad)'),
+      h('label', { class: 'radio' }, rDet, ' Comprobantes emitidos (detalle, con usuario)'),
       etiqueta('Desde'), iDesde, etiqueta('Hasta'), iHasta, etiqueta('Sociedad'), pSoc,
+      admin ? etiqueta('Usuario (solo para «Comprobantes emitidos»)') : null, admin ? pUs : null,
       h('label', { class: 'radio' }, solo, ' Solo movimientos de este dispositivo'),
       h('p', { class: 'nota' }, 'Con Internet usa los datos de Google Sheets (todos los dispositivos); sin conexión, solo los de este dispositivo.')
     ];
     dialogo({
       titulo: 'Reportes de Boletos', cuerpo,
-      botones: [{ texto: 'Cerrar' }, { texto: 'Generar PDF', clase: 'primario', onclick: () => { generar(rInv.checked, cosecha, desde, hasta, sociedadFiltro, solo.checked); return false; } }]
+      botones: [{ texto: 'Cerrar' }, { texto: 'Generar PDF', clase: 'primario', onclick: () => { generar(rDet.checked ? 'det' : rInv.checked ? 'inv' : 'mov', cosecha, desde, hasta, sociedadFiltro, solo.checked, usuarioFiltro); return false; } }]
     });
   }
-  async function generar(esInventario, cosecha, desde, hasta, sociedad, soloMio) {
+  async function generar(modo, cosecha, desde, hasta, sociedad, soloMio, usuarioFiltro = '') {
+    const esInventario = modo === 'inv';
     toast('Preparando el reporte…', 2500);
     const disp = deviceName();
     const remoto = configurado() ? await movimientosBoletos(cosecha, hasta, normalizarMedida) : null;
@@ -210,7 +225,12 @@ export function crearBoletos(nav) {
     } else todos = locales;
     await cargarFuentes();
     let paginas, nombre;
-    if (esInventario) {
+    if (modo === 'det') {
+      const docs = todos.filter((m) => m.dia >= desde && m.dia <= hasta && (!sociedad || normalizar(m.sociedad) === normalizar(sociedad)) &&
+        (!soloMio || normalizar(m.dispositivo) === normalizar(disp)) && usuarioCoincide(m.usuario, usuarioFiltro));
+      paginas = reporteDetalle(docs, cosecha, desde, hasta, `Sociedad: ${sociedad || 'todas'} · Usuario: ${usuarioFiltro || 'todos'}`);
+      nombre = 'boletos_comprobantes.pdf';
+    } else if (esInventario) {
       const socs = (bc() ? bc().sociedades : []).filter((s) => !sociedad || normalizar(s.nombre) === normalizar(sociedad));
       if (!socs.length) return toast('No hay sociedades con fichas para el inventario.');
       paginas = reporteInventario(cosecha, socs.map((s) => [s.nombre, inventario(todos, cosecha, s, hasta)]), hasta);
@@ -222,7 +242,7 @@ export function crearBoletos(nav) {
       nombre = 'boletos_movimientos.pdf';
     }
     const nota = usarRemoto ? 'Datos de todos los dispositivos (Google Sheets).' : remoto ? `Sin conexión con la hoja (${remoto.error}). Solo movimientos de este dispositivo.` : 'Sin sincronización configurada. Solo movimientos de este dispositivo.';
-    verDocumento({ titulo: esInventario ? 'Inventario de Boletos' : 'Movimientos y saldos', paginas, nombrePdf: nombre, ancho: true, intro: nota, textoCompartir: 'Reporte de Boletos. ' + nota });
+    verDocumento({ titulo: modo === 'det' ? 'Comprobantes de Boletos' : esInventario ? 'Inventario de Boletos' : 'Movimientos y saldos', paginas, nombrePdf: nombre, ancho: true, intro: nota, textoCompartir: 'Reporte de Boletos. ' + nota });
   }
 
   raiz.append(
@@ -242,6 +262,17 @@ export function crearBoletos(nav) {
 }
 
 // ---------- Reportes en PDF ----------
+function reporteDetalle(docs, cosecha, desde, hasta, filtro) {
+  const cols = [['Fecha', 60], ['Hora', 40], ['Comprobante', 70], ['Tipo', 110], ['Sociedad', 160], ['Oficina', 100], ['Usuario', 100], ['Dispositivo', 100], ['Fichas', 48], ['Cajuelas', 56]]
+    .map(([titulo, ancho], i) => ({ titulo, ancho, derecha: i >= 8 }));
+  const ord = docs.slice().sort((a, b) => (a.dia + (a.emitido || '')) < (b.dia + (b.emitido || '')) ? -1 : 1);
+  const rows = ord.map((m) => ({ celdas: [diaLegible(m.dia), (m.emitido || '').split(' ')[1] || '', m.numero, tipoBoletoEtiqueta(m.tipo), m.sociedad, m.oficina, m.usuario || '—', m.dispositivo, String(totalFichas(m)), fmtNum(totalCajuelasMov(m), 2)] }));
+  const periodo = desde === hasta ? `FECHA: ${diaLegible(desde)}` : `DEL ${diaLegible(desde)} AL ${diaLegible(hasta)}`;
+  const titulos = [['BOLETOS · COMPROBANTES EMITIDOS', 15], [`COSECHA ${cosecha} · ${periodo}`, 10], [filtro, 9]];
+  const ancho = Math.max(842, Math.ceil(cols.reduce((t, c) => t + c.ancho, 0) + 48) + 1);
+  return paginasTablas([{ titulos, columnas: cols, filas: rows.length ? rows : [{ celdas: ['Sin comprobantes con ese filtro.'] }], nota: 'No incluye los comprobantes anulados.' }], ancho, 595);
+}
+
 function reporteMovimientos(filas, cosecha, desde, hasta, filtro) {
   const cols = [['Fecha', 56], ['Dispositivo', 108], ['Sociedad', 150], ['Ficha', 96], ['Medida', 40], ['Saldo inicial', 52], ['Entregas', 52], ['Refuerzos', 54],
     ['Fichas dañadas', 54], ['Saldo final', 52], ['Usadas', 48], ['Cajuelas usadas', 54]].map(([titulo, ancho], i) => ({ titulo, ancho, derecha: i >= 5 }));

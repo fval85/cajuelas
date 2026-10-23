@@ -5,7 +5,7 @@ import { db, syncCfg, configurado } from './store.js';
 import { postJson } from './sync.js';
 
 export const ROLES = {
-  'Administrador': ['registro', 'diario', 'boletos', 'anular', 'reimprimir', 'resumenes', 'precios', 'config'],
+  'Administrador': ['registro', 'diario', 'boletos', 'anular', 'reimprimir', 'resumenes', 'precios', 'config', 'todos'],
   'Recibidor de Café': ['diario', 'reimprimir', 'resumenes'],
   'Encargado de boletos': ['boletos', 'reimprimir', 'resumenes'],
   'Digitador de registro': ['registro', 'reimprimir']
@@ -62,7 +62,7 @@ export async function entrar(nombre, pin) {
   avisar();
   return { ok: true };
 }
-export function salir() { db.del('sesion'); avisar(); }
+export function salir() { db.del('sesion'); try { sessionStorage.removeItem('cajuelas.conservar'); } catch { /* nada */ } avisar(); location.reload(); }
 
 let ultima = 0;
 export async function actualizarUsuarios(forzar = false) {
@@ -103,7 +103,7 @@ export function pantallaLogin() {
       return;
     }
     clear(selUsuario);
-    selUsuario.append(h('option', { value: '' }, 'Seleccione su usuario'), ...l.map((u) => h('option', { value: u.nombre }, `${u.nombre} · ${u.rol}`)));
+    selUsuario.append(h('option', { value: '' }, 'Seleccione su usuario'), ...l.map((u) => h('option', { value: u.nombre }, u.nombre)));
     pin.value = '';
     cuerpo.append(h('p', { class: 'nota' }, 'Elija su usuario e ingrese su PIN.'), selUsuario, pin, lblEstado,
       h('button', { type: 'button', class: 'btn-texto primario', onclick: ingresar }, 'Entrar'),

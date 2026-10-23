@@ -1,32 +1,58 @@
 // Almacenamiento local (localStorage) y catálogos. Todo vive en el navegador de este dispositivo.
 import { normalizar, soloDigitos, toast } from './util.js';
 
-const P = 'cajuelas.';
+// Ambiente de pruebas: usa su propio espacio de datos (números, comprobantes, catálogo, URL de la hoja…),
+// totalmente separado del real. Solo se comparten la clave de administrador, el nombre del dispositivo y la impresión.
+const P = 'cajuelas.', PT = 'cajuelas.t.';
+const COMPARTIDAS = new Set(['admin_salt', 'admin_hash', 'admin_recovery_hash', 'device_name', 'device_auto', 'print_mm']);
+export const modoPruebas = (() => { try { return localStorage.getItem('cajuelas_modo') === 'pruebas'; } catch { return false; } })();
+export function cambiarModo(pruebas) {
+  try { if (pruebas) localStorage.setItem('cajuelas_modo', 'pruebas'); else localStorage.removeItem('cajuelas_modo'); } catch { /* nada */ }
+  try { sessionStorage.removeItem('cajuelas.conservar'); } catch { /* nada */ }
+  location.reload();
+}
+const llave = (k) => (modoPruebas && !COMPARTIDAS.has(k) ? PT : P) + k;
+/** Nombre de la clave si pertenece al ambiente actual; null si es de otro ambiente. */
+function nombreDe(full) {
+  if (!full.startsWith(P)) return null;
+  if (full.startsWith(PT)) { const k = full.slice(PT.length); return modoPruebas ? k : null; }
+  const k = full.slice(P.length);
+  return !modoPruebas || COMPARTIDAS.has(k) ? k : null;
+}
 export const db = {
   get(k, d) {
-    try { const v = localStorage.getItem(P + k); return v === null ? d : JSON.parse(v); } catch { return d; }
+    try { const v = localStorage.getItem(llave(k)); return v === null ? d : JSON.parse(v); } catch { return d; }
   },
   set(k, v) {
-    try { localStorage.setItem(P + k, JSON.stringify(v)); return true; }
+    try { localStorage.setItem(llave(k), JSON.stringify(v)); return true; }
     catch { toast('⚠ No se pudo guardar en este dispositivo (almacenamiento lleno o bloqueado).', 6000); return false; }
   },
-  del(k) { try { localStorage.removeItem(P + k); } catch { /* nada */ } },
+  del(k) { try { localStorage.removeItem(llave(k)); } catch { /* nada */ } },
   todo() {
     const o = {};
-    try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith(P)) o[k.slice(P.length)] = JSON.parse(localStorage.getItem(k)); } } catch { /* nada */ }
+    try { for (let i = 0; i < localStorage.length; i++) { const f = localStorage.key(i); const k = nombreDe(f); if (k) o[k] = JSON.parse(localStorage.getItem(f)); } } catch { /* nada */ }
     return o;
   },
   reemplazarTodo(o) {
     try {
       const claves = [];
-      for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith(P)) claves.push(k); }
+      for (let i = 0; i < localStorage.length; i++) { const f = localStorage.key(i); if (nombreDe(f)) claves.push(f); }
       claves.forEach((k) => localStorage.removeItem(k));
-      Object.entries(o).forEach(([k, v]) => localStorage.setItem(P + k, JSON.stringify(v)));
+      Object.entries(o).forEach(([k, v]) => localStorage.setItem(llave(k), JSON.stringify(v)));
       return true;
     } catch { return false; }
   }
 };
+/** Empezar de cero en este dispositivo: borra comprobantes, recibos, movimientos, pendientes y reinicia los números. Conserva la configuración. */
+export function borrarDatosOperativos() {
+  ['daily_lines', 'diario_recibos', 'boletos_movs', 'pending_sends', 'next_comprobante', 'next_recibo', 'next_boleto'].forEach((k) => db.del(k));
+  limpiarPantallas();
+}
 
+/** Borra lo que quedó escrito en las pantallas (borradores y selecciones) para que cada vez abran vacías. */
+export function limpiarPantallas() {
+  ['reg_draft', 'reg_sociedad', 'reg_finca', 'dia_draft', 'dia_sociedad', 'dia_beneficio', 'dia_finca', 'dia_lote', 'bol_draft', 'bol_oficina', 'bol_sociedad'].forEach((k) => db.del(k));
+}
 export async function pedirAlmacenamientoPersistente() {
   try { if (navigator.storage && navigator.storage.persist) return await navigator.storage.persist(); } catch { /* nada */ }
   return false;
@@ -263,14 +289,25 @@ export function todasLasCosechas() {
   bol.cosechas.forEach((c) => add(c.nombre));
   return nombres.sort((a, b) => normalizar(a).localeCompare(normalizar(b)));
 }
+/** La cosecha activa la define la hoja («Configuración»). Sin ese dato se usa la más reciente del catálogo. */
 export function cosechaActiva() {
   const todas = todasLasCosechas();
-  let n = db.get('sel_cosecha', '');
+  const n = db.get('cfg_cosecha', '');
   const ok = todas.find((x) => normalizar(x) === normalizar(n));
-  if (ok) return ok;
-  return todas.length === 1 ? todas[0] : '';
+  return ok || todas[todas.length - 1] || '';
 }
-export function setCosechaActiva(n) { db.set('sel_cosecha', n); }
+/** Aplica la configuración que viene de la hoja (cosecha activa y precios). Devuelve true si algo cambió. */
+export function aplicarConfigHoja(cfg) {
+  if (!cfg || typeof cfg !== 'object') return false;
+  let cambio = false;
+  const co = String(cfg.cosechaActiva || '').trim();
+  if (co && co !== db.get('cfg_cosecha', '')) { db.set('cfg_cosecha', co); cambio = true; }
+  if (Array.isArray(cfg.precios)) {
+    const nuevos = [...new Set(cfg.precios.map((x) => Number(String(x).replace(',', '.'))).filter((x) => Number.isFinite(x) && x > 0))].sort((a, b) => a - b);
+    if (JSON.stringify(nuevos) !== JSON.stringify(cat.precios)) { cat.precios = nuevos; guardarPrecios(); cambio = true; }
+  }
+  return cambio;
+}
 
 // ---------- Contadores ----------
 export function siguienteNumero(clave, prefijo) {

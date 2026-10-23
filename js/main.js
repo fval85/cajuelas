@@ -1,5 +1,5 @@
 import { h, VERSION, toast } from './util.js';
-import { cargarCatalogo, cargarBoletosCat, pedirAlmacenamientoPersistente, configurado } from './store.js';
+import { cargarCatalogo, cargarBoletosCat, pedirAlmacenamientoPersistente, configurado, limpiarPantallas, modoPruebas } from './store.js';
 import { cargarFuentes } from './draw.js';
 import { cuantosPendientes, enviarPendientes, alCambiarPendientes, iniciarReintentos } from './sync.js';
 import { crearRegistro } from './ui_registro.js';
@@ -9,6 +9,16 @@ import { crearAjustes, actualizarCatalogo } from './ui_ajustes.js';
 import { icono } from './ui.js';
 import { hayControl, puede, necesitaLogin, pantallaLogin, cerrarLogin, alCambiarSesion, actualizarUsuarios, sesion } from './users.js';
 
+// Cada vez que se abre la app las pantallas empiezan limpias (salvo al actualizar o restaurar una copia).
+let conservar = false;
+try { conservar = sessionStorage.getItem('cajuelas.conservar') === '1'; sessionStorage.removeItem('cajuelas.conservar'); } catch { /* nada */ }
+if (!conservar) limpiarPantallas();
+const LIMPIAR_TRAS_MIN = 5; // minutos fuera de la app para empezar de cero al volver
+let salioA = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') salioA = Date.now();
+  else if (salioA && Date.now() - salioA > LIMPIAR_TRAS_MIN * 60000) { salioA = 0; location.reload(); }
+});
 cargarCatalogo();
 cargarBoletosCat();
 pedirAlmacenamientoPersistente();
@@ -18,6 +28,7 @@ const barra = h('div', { id: 'barra-estado', hidden: true });
 const contenido = h('main', { id: 'contenido' });
 const tabs = h('nav', { id: 'tabs', role: 'tablist' });
 app.append(barra, contenido, tabs);
+if (modoPruebas) app.prepend(h('div', { id: 'banner-pruebas' }, '🧪 MODO DE PRUEBAS · los datos no son reales'));
 
 const nav = {
   pendientes() { pintarBarra(); },
@@ -28,11 +39,12 @@ const nombres = [['Registro', 'registro'], ['Diario', 'diario'], ['Boletos', 'bo
 const permisoTab = ['registro', 'diario', 'boletos', null];
 let actual = 0;
 function ir(i) {
+  const actualAntes = actual;
   if (permisoTab[i] && !puede(permisoTab[i])) i = primeraPermitida();
   actual = i;
   paginas.forEach((p, k) => { p.el.hidden = k !== i; });
   [...tabs.children].forEach((b, k) => { b.classList.toggle('on', k === i); b.setAttribute('aria-selected', k === i); });
-  if (paginas[i].refrescar) paginas[i].refrescar();
+  if (paginas[i].reiniciar && i !== actualAntes) paginas[i].reiniciar(); else if (paginas[i].refrescar) paginas[i].refrescar();
   window.scrollTo(0, 0);
   aplicarPermisos();
   if (!hayControl() || sesion()) { try { localStorage.setItem('cajuelas.tab', String(i)); } catch { /* nada */ } }
@@ -64,15 +76,10 @@ new MutationObserver(() => {
   programado = true;
   requestAnimationFrame(() => { programado = false; aplicarPermisos(); });
 }).observe(contenido, { childList: true, subtree: true });
-let inicial = 0;
-try { inicial = Number(localStorage.getItem('cajuelas.tab')) || 0; } catch { /* nada */ }
-ir(inicial >= 0 && inicial < 4 ? inicial : 0);
+ir(0);
 alCambiarSesion(() => {
   revisarAcceso();
-  let t = 0;
-  try { t = Number(localStorage.getItem('cajuelas.tab')) || 0; } catch { /* nada */ }
-  const ok = t >= 0 && t < 4 && !(permisoTab[t] && !puede(permisoTab[t])) && sesion();
-  if (sesion()) ir(ok ? t : primeraPermitida());
+  if (sesion()) ir(primeraPermitida());
 });
 revisarAcceso();
 actualizarUsuarios(true).then(() => revisarAcceso());
@@ -86,7 +93,7 @@ function pintarBarra() {
   barra.textContent = n ? `⏳ ${n} ${n === 1 ? 'registro pendiente' : 'registros pendientes'} de enviar a Google Sheets. Toque para enviar ahora.` : '';
 }
 barra.addEventListener('click', async () => {
-  if (!configurado()) return toast('Configure la URL y el token en Ajustes > Sincronización.', 5000);
+  if (!configurado()) return toast('Configure la URL y el token en Ajustes > Administración.', 5000);
   const r = await enviarPendientes();
   if (r.error) toast(`Quedan ${r.restantes} pendientes. ${r.error}`, 6000); else toast('Todo enviado a Google Sheets.');
 });
@@ -114,7 +121,7 @@ if (esIOS && !instalada && !visto) {
 function avisoActualizacion() {
   if (document.getElementById('aviso-act')) return;
   app.prepend(h('div', { id: 'aviso-act', class: 'tip' }, h('p', null, 'Hay una versión nueva de la aplicación.'),
-    h('button', { type: 'button', class: 'btn-texto primario', onclick: () => location.reload() }, 'Actualizar ahora')));
+    h('button', { type: 'button', class: 'btn-texto primario', onclick: () => { try { sessionStorage.setItem('cajuelas.conservar', '1'); } catch { /* nada */ } location.reload(); } }, 'Actualizar ahora')));
 }
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', (e) => { if (e.data && e.data.tipo === 'actualizada') avisoActualizacion(); });

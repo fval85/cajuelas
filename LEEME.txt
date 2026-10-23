@@ -1,0 +1,19 @@
+REGISTRO DE CAJUELAS - VERSION WEB (2.0.0)
+Suba TODO el contenido de esta carpeta (archivos y carpetas css, js, fonts, icons) a su repositorio de GitHub.
+No cambie los nombres de archivos ni de carpetas. Guia paso a paso: GUIA_GITHUB_PAGES.txt
+
+
+VERSIÓN 2.1.0
+-------------
+- Encabezado corregido en iPhone/iPad (franja verde bajo la barra de estado).
+- Botón "Imprimir (80 mm)" en computadoras (no aparece en teléfonos).
+- Usuarios con PIN desde la hoja "Usuarios" de Google Sheets; permisos por rol; usuario registrado en
+  comprobantes, recibos y movimientos. Ver GUIA_ACTUALIZAR_2.1.0.txt.
+
+VERSIÓN 2.2.0
+-------------
+- Boletos por sociedad, pantallas limpias al reabrir, login con nombres, encabezado iPhone/iPad, reportes de administrador por usuario. Ver GUIA_ACTUALIZAR_2.2.0.txt.
+
+VERSIÓN 2.3.0
+-------------
+- Ajustes simplificado, cosecha y precios desde la hoja (pestaña Configuración), Resumen de Diario con rango de fechas, Envío masivo, modo de pruebas y borrado para empezar de cero. Ver GUIA_ACTUALIZAR_2.3.0.txt.

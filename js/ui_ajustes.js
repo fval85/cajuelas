@@ -1,6 +1,6 @@
-// Pestaña «Ajustes»: cosecha activa, precios, sincronización con Google Sheets, catálogo y copia de seguridad.
+// Pestaña «Ajustes»: pantalla simple para el usuario y una zona de administración.
 import { h, clear, toast, aviso, confirmar, elegir, dialogo, formulario, normalizar, fmtMoney, plainNumber, parseQty, stampCorto, VERSION } from './util.js';
-import { db, cat, bol, syncCfg, guardarSyncCfg, configurado, deviceName, todasLasCosechas, cosechaActiva, setCosechaActiva, guardarPrecios,
+import { db, cat, bol, syncCfg, guardarSyncCfg, configurado, deviceName, cosechaActiva, aplicarConfigHoja, modoPruebas, cambiarModo, borrarDatosOperativos,
   reemplazarDesdeHoja, reemplazarBoletosDesdeHoja } from './store.js';
 import { cuantosPendientes, enviarPendientes, descartarPendientes, probar, descargarCatalogo, alCambiarPendientes } from './sync.js';
 import { compartir, descargar } from './files.js';
@@ -47,7 +47,7 @@ const admin = {
 // ---------- Catálogo desde la hoja ----------
 let ultimaRevision = 0;
 export async function actualizarCatalogo(manual, alCambiar) {
-  if (!configurado()) { if (manual) toast('Primero configure la URL y el token en Ajustes > Sincronización.', 5000); return; }
+  if (!configurado()) { if (manual) toast('Primero configure la URL y el token en Ajustes > Administración.', 5000); return; }
   if (!manual) {
     if (Date.now() - ultimaRevision < 5 * 60000) return;
   }
@@ -61,6 +61,7 @@ export async function actualizarCatalogo(manual, alCambiar) {
     return av('La hoja no tiene datos', `No hay filas para el dispositivo «${device}» (ni filas con la columna Dispositivo vacía). El catálogo no se modificó. Revise que el nombre del dispositivo coincida con el de la hoja.`);
   }
   let { cambio, texto } = reemplazarDesdeHoja(r.estructura, r.personas, r.beneficios, r.diario);
+  if (aplicarConfigHoja(r.config)) cambio = true;
   if (r.bolFichas.length || r.bolOficinas.length) { texto += '\n\n' + reemplazarBoletosDesdeHoja(r.bolFichas, r.bolOficinas); cambio = true; }
   if (alCambiar) alCambiar();
   if (manual) aviso('Catálogo actualizado', texto);
@@ -69,6 +70,8 @@ export async function actualizarCatalogo(manual, alCambiar) {
 
 export function crearAjustes(nav) {
   const raiz = h('div', { class: 'pagina' });
+  const _ap = raiz.append.bind(raiz);
+  raiz.append = (...x) => _ap(...x.filter((v) => v !== null && v !== undefined && v !== false));
   let vista = 'inicio';
   let desbloqueado = false;
 
@@ -78,75 +81,108 @@ export function crearAjustes(nav) {
     clear(raiz);
     if (vista === 'sync') return vistaSync();
     if (vista === 'catalogo') return vistaCatalogo();
+    if (vista === 'admin') return vistaAdmin();
     vistaInicio();
   }
+  const volverAjustes = () => h('button', { type: 'button', class: 'btn-texto volver', onclick: () => { vista = 'inicio'; desbloqueado = false; pintar(); } }, '‹ Volver a Ajustes');
 
-  // ----- Inicio -----
+  // ----- Pantalla principal: lo mínimo para el usuario -----
   function vistaInicio() {
-    const cos = selector('Seleccione la cosecha', async () => {
-      const t = todasLasCosechas();
-      if (!t.length) return aviso('Sin cosechas', 'Todavía no hay cosechas. Configure la sincronización y use «Recibir catálogo de Google Sheets».');
-      const v = await elegir('Cosecha activa', t.map((n) => ({ etiqueta: n, valor: n })), { buscar: false });
-      if (v === undefined) return;
-      setCosechaActiva(v); nav.catalogoCambio(); pintar();
-    });
-    cos.poner(cosechaActiva());
-    const pend = h('p', { class: 'nota' });
-    const pintarPend = () => { const n = cuantosPendientes(); pend.textContent = n ? `Pendientes de enviar a la hoja: ${n}` : 'No hay envíos pendientes.'; };
-    pintarPend();
-    const estado = h('p', { class: 'nota' }, configurado() ? `Dispositivo: ${deviceName()}` : 'Sincronización sin configurar.');
-    const ult = cat.actualizado ? `Último catálogo recibido: ${new Date(cat.actualizado).toLocaleString('es-CR')}` : 'Aún no se ha recibido el catálogo.';
-
     const sUs = hayControl() ? sesion() : null;
-    const tarjetaUsuario = sUs ? tarjeta(h('h2', null, 'Usuario'), h('p', null, `${sUs.nombre} · ${sUs.rol}`),
-      h('div', { class: 'pila' },
-        boton('Actualizar lista de usuarios', 'enviar', 'c-azul ancho-total', async () => { const r = await actualizarUsuarios(true); toast(r.ok ? 'Lista de usuarios actualizada.' : r.message, 5000); pintar(); }),
-        boton('Cerrar sesión', 'anular', 'c-rojo ancho-total', () => salir()))) : document.createComment('');
-    const anchoIn = h('input', { class: 'campo', type: 'number', inputmode: 'decimal', min: '50', max: '82', step: '1', value: String(anchoMm()) });
-    const tarjetaImpresion = esComputadora() ? tarjeta(h('h2', null, 'Impresión en esta computadora'),
-      h('p', { class: 'nota' }, 'En los comprobantes aparece el botón «Imprimir (80 mm)». En el cuadro de impresión elija su impresora térmica (por ejemplo la Xprinter XP-N160II) con papel de 80 mm y márgenes en «Ninguno».'),
-      etiqueta('Ancho de la imagen impresa (mm)'), anchoIn,
-      h('p', { class: 'nota' }, 'Normalmente 80. Si la impresora corta los bordes del tiquete, baje a 72–76.'),
-      h('div', { class: 'pila' },
-        boton('Guardar ancho', 'emitir', 'c-verde ancho-total', () => { setAnchoMm(anchoIn.value); toast('Guardado.'); }),
-        boton('Imprimir prueba', 'imprimir', 'c-teal ancho-total', () => {
-          setAnchoMm(anchoIn.value);
-          const pg = crearPagina(227, 120, 3.2);
-          pg.c.fillStyle = '#000'; pg.c.font = 'bold 14px sans-serif';
-          pg.c.fillText('PRUEBA DE IMPRESIÓN', 10, 30); pg.c.font = '10px sans-serif';
-          pg.c.fillText('|<-- 10 pt -->|  Registro de Cajuelas', 10, 52);
-          pg.c.strokeRect(10, 62, 207, 40);
-          imprimirTiquetes([pg]);
-        }))) : document.createComment('');
+    const co = cosechaActiva();
+    const nPend = cuantosPendientes();
+    const estPend = h('p', { class: nPend ? 'estado aviso' : 'estado bien' }, nPend ? `⏳ ${nPend} ${nPend === 1 ? 'registro pendiente' : 'registros pendientes'} de enviar` : '✔ Todo enviado a Google Sheets');
+    const ult = cat.actualizado ? `Última actualización: ${new Date(cat.actualizado).toLocaleString('es-CR', { dateStyle: 'short', timeStyle: 'short' })}` : 'Aún no se ha recibido el catálogo.';
     raiz.append(
       banda('Ajustes'),
-      tarjetaUsuario,
-      tarjetaImpresion,
-      tarjeta(etiqueta('Cosecha activa'), cos, h('p', { class: 'nota' }, 'La usan Registro, Diario y Boletos.')),
-      tarjeta(h('h2', null, 'Google Sheets'), estado, pend, h('p', { class: 'nota' }, ult),
-        h('div', { class: 'pila' },
-          boton('Recibir catálogo de Google Sheets', 'resumen', 'c-azul ancho-total', async () => { await actualizarCatalogo(true, alCatalogo); pintar(); }),
-          boton('Enviar pendientes ahora', 'enviar', 'c-verde ancho-total', async () => {
-            if (!configurado()) return toast('Configure primero la URL y el token de sincronización.', 5000);
-            if (!cuantosPendientes()) return toast('No hay envíos pendientes.');
-            toast('Enviando…', 1500);
-            const r = await enviarPendientes();
-            pintarPend();
-            toast(r.error ? `Se enviaron ${r.enviados}. Quedan ${r.restantes}. ${r.error}` : `Enviados: ${r.enviados}. No quedan pendientes.`, 6000);
-          }),
-          boton('Configuración de sincronización', 'ajustes', 'c-teal ancho-total', () => { vista = 'sync'; desbloqueado = false; pintar(); }, 'config'))),
-      cp(tarjeta(h('h2', null, 'Precios (₡)'), h('p', { class: 'nota' }, 'Los precios se manejan en este dispositivo. Con precios guardados, la pantalla de Registro los ofrece en una lista.'),
-        boton(`Administrar precios (${cat.precios.length})`, 'registro', 'c-ambar ancho-total', administrarPrecios)), 'precios'),
-      tarjeta(h('h2', null, 'Catálogo'), h('p', { class: 'nota' }, 'El catálogo (cosechas, sociedades, fincas, lotes, personas, beneficios y fichas) se administra en Google Sheets; aquí solo se consulta.'),
-        boton('Ver catálogo', 'resumen', 'c-azul ancho-total', () => { vista = 'catalogo'; pintar(); })),
-      cp(tarjeta(h('h2', null, 'Copia de seguridad'),
-        h('p', { class: 'nota' }, 'Los datos de este dispositivo (comprobantes, recibos, movimientos y pendientes) se guardan solo en este navegador. Haga una copia de vez en cuando y guárdela en un lugar seguro. Contiene el token de la hoja.'),
-        h('div', { class: 'pila' }, boton('Guardar copia de seguridad', 'compartir', 'c-verde ancho-total', exportar), boton('Restaurar una copia', 'enviar', 'c-rojo ancho-total', importar))), 'config'),
-      tarjeta(h('h2', null, 'Aplicación'), h('p', { class: 'nota' }, `Versión ${VERSION}`), h('p', { class: 'nota', id: 'info-almacen' }, ''),
-        boton('Buscar actualización', 'enviar', 'c-azul ancho-total', () => window.__buscarActualizacion && window.__buscarActualizacion()))
+      modoPruebas ? h('p', { class: 'estado aviso' }, '🧪 Está en MODO DE PRUEBAS: los datos no son reales.') : null,
+      sUs ? tarjeta(h('h2', null, '👤 Usuario'), h('p', { class: 'grande' }, sUs.nombre),
+        boton('Cerrar sesión', 'anular', 'c-rojo ancho-total', () => salir())) : null,
+      tarjeta(h('h2', null, '📋 Catálogo'), h('p', { class: 'grande' }, co ? `Cosecha ${co}` : 'Sin cosecha todavía'), h('p', { class: 'nota' }, ult),
+        boton('Actualizar catálogo', 'resumen', 'c-azul ancho-total', async () => { await actualizarCatalogo(true, alCatalogo); pintar(); })),
+      tarjeta(h('h2', null, '☁ Envíos a Google Sheets'), estPend,
+        boton('Enviar pendientes ahora', 'enviar', 'c-verde ancho-total', async () => {
+          if (!configurado()) return toast('Falta configurar la sincronización (pida ayuda al administrador).', 5000);
+          if (!cuantosPendientes()) return toast('No hay envíos pendientes.');
+          toast('Enviando…', 1500);
+          const r = await enviarPendientes();
+          pintar();
+          toast(r.error ? `Se enviaron ${r.enviados}. Quedan ${r.restantes}. ${r.error}` : `Enviados: ${r.enviados}. No quedan pendientes.`, 6000);
+        })),
+      tarjeta(h('h2', null, 'ℹ Aplicación'), h('p', { class: 'nota' }, `Versión ${VERSION} · Dispositivo: ${deviceName()}`), h('p', { class: 'nota', id: 'info-almacen' }, ''),
+        boton('Buscar actualización de la app', 'enviar', 'c-teal ancho-total', () => window.__buscarActualizacion && window.__buscarActualizacion())),
+      cp(tarjeta(h('h2', null, '🔧 Administración'), h('p', { class: 'nota' }, 'Sincronización, catálogo, copia de seguridad, impresora, modo de pruebas y borrado de datos.'),
+        boton('Abrir administración', 'ajustes', 'c-ambar ancho-total', () => { vista = 'admin'; pintar(); })), 'config')
     );
     infoAlmacenamiento();
-    const quitar = alCambiarPendientes(() => { if (!raiz.isConnected) return quitar(); pintarPend(); });
+    const quitar = alCambiarPendientes(() => { if (!raiz.isConnected || vista !== 'inicio') return quitar(); const n = cuantosPendientes(); estPend.className = n ? 'estado aviso' : 'estado bien'; estPend.textContent = n ? `⏳ ${n} ${n === 1 ? 'registro pendiente' : 'registros pendientes'} de enviar` : '✔ Todo enviado a Google Sheets'; });
+  }
+
+  // ----- Administración (solo administradores) -----
+  function vistaAdmin() {
+    raiz.append(banda('Administración'), volverAjustes());
+    const anchoIn = h('input', { class: 'campo', type: 'number', inputmode: 'decimal', min: '50', max: '82', step: '1', value: String(anchoMm()) });
+    raiz.append(
+      tarjeta(h('h2', null, 'Sincronización con Google Sheets'), h('p', { class: 'nota' }, configurado() ? 'Configurada. Protegida con la clave de administrador.' : 'Sin configurar: falta la URL y el token.'),
+        boton('Configurar sincronización', 'ajustes', 'c-teal ancho-total', () => { vista = 'sync'; desbloqueado = false; pintar(); })),
+      tarjeta(h('h2', null, 'Catálogo'), h('p', { class: 'nota' }, 'Cosechas, sociedades, fincas, personas, fichas, precios y cosecha activa se cambian en Google Sheets. Aquí solo se consultan.'),
+        boton('Ver catálogo recibido', 'resumen', 'c-azul ancho-total', () => { vista = 'catalogo'; pintar(); }),
+        boton('Actualizar lista de usuarios', 'enviar', 'c-azul ancho-total', async () => { const r = await actualizarUsuarios(true); toast(r.ok ? 'Lista de usuarios actualizada.' : r.message, 5000); })),
+      esComputadora() ? tarjeta(h('h2', null, 'Impresora de 80 mm (esta computadora)'),
+        h('p', { class: 'nota' }, 'En los comprobantes aparece «Imprimir (80 mm)». En el cuadro de impresión elija la impresora térmica con papel de 80 mm y márgenes en «Ninguno».'),
+        etiqueta('Ancho de la imagen impresa (mm)'), anchoIn,
+        h('p', { class: 'nota' }, 'Normalmente 80. Si la impresora corta los bordes, baje a 72–76.'),
+        h('div', { class: 'pila' },
+          boton('Guardar ancho', 'emitir', 'c-verde ancho-total', () => { setAnchoMm(anchoIn.value); toast('Guardado.'); }),
+          boton('Imprimir prueba', 'imprimir', 'c-teal ancho-total', () => {
+            setAnchoMm(anchoIn.value);
+            const pg = crearPagina(227, 120, 3.2);
+            pg.c.fillStyle = '#000'; pg.c.font = 'bold 14px sans-serif';
+            pg.c.fillText('PRUEBA DE IMPRESIÓN', 10, 30); pg.c.font = '10px sans-serif';
+            pg.c.fillText('|<-- 10 pt -->|  Registro de Cajuelas', 10, 52);
+            pg.c.strokeRect(10, 62, 207, 40);
+            imprimirTiquetes([pg]);
+          }))) : null,
+      tarjeta(h('h2', null, 'Copia de seguridad'),
+        h('p', { class: 'nota' }, 'Los datos de este dispositivo (comprobantes, recibos, movimientos y pendientes) se guardan solo en este navegador. Contiene el token de la hoja.'),
+        h('div', { class: 'pila' }, boton('Guardar copia de seguridad', 'compartir', 'c-verde ancho-total', exportar), boton('Restaurar una copia', 'enviar', 'c-rojo ancho-total', importar))),
+      tarjeta(h('h2', null, '🧪 Modo de pruebas'),
+        h('p', { class: 'nota' }, modoPruebas
+          ? 'ACTIVO. Todo lo que haga en este modo queda separado de los datos reales (números, comprobantes, catálogo y hoja de Google propios). Los tiquetes salen marcados «PRUEBA».'
+          : 'Para practicar sin tocar los datos reales: usa números, comprobantes y hoja de Google propios, y los tiquetes salen marcados «PRUEBA». Puede volver al modo real cuando quiera.'),
+        boton(modoPruebas ? 'Volver al modo REAL' : 'Entrar al modo de pruebas', 'ajustes', modoPruebas ? 'c-verde ancho-total' : 'c-ambar ancho-total', cambiarDeModo)),
+      tarjeta(h('h2', null, 'Empezar de cero en este dispositivo'),
+        h('p', { class: 'nota' }, `Borra todos los comprobantes, recibos, movimientos de boletos y envíos pendientes de ${modoPruebas ? 'el modo de pruebas' : 'este dispositivo'} y reinicia la numeración (C-0001, R-0001, B-0001). No toca el catálogo, la configuración ni la hoja de Google.`),
+        boton('Borrar datos y reiniciar números', 'borrar', 'c-rojo ancho-total', empezarDeCero))
+    );
+  }
+  async function cambiarDeModo() {
+    if (admin.puesta() && !(await pedirClaveAdmin())) return;
+    const aPruebas = !modoPruebas;
+    const ok = await confirmar(aPruebas ? 'Entrar al modo de pruebas' : 'Volver al modo real',
+      aPruebas ? 'La app se reiniciará en MODO DE PRUEBAS, con datos separados de los reales. En ese modo debe configurar la hoja de pruebas (Administración > Configurar sincronización).\n\n¿Continuar?'
+        : 'La app se reiniciará en el modo REAL, con sus datos de siempre.\n\n¿Continuar?', { si: 'Continuar' });
+    if (ok) cambiarModo(aPruebas);
+  }
+  async function empezarDeCero() {
+    if (admin.puesta() && !(await pedirClaveAdmin())) return;
+    const pend = cuantosPendientes();
+    const r = await formulario('Empezar de cero', [{ etiqueta: 'Para confirmar escriba BORRAR', placeholder: 'BORRAR', autocapitalize: 'characters' }], {
+      ok: 'Borrar todo', validar: (v) => (v[0].trim().toUpperCase() !== 'BORRAR' ? 'Escriba la palabra BORRAR para confirmar.' : null),
+      detalle: `Se borrarán los comprobantes, recibos y movimientos de este dispositivo${pend ? ` y ${pend} envíos pendientes que NO han llegado a la hoja` : ''}. No se puede deshacer. Si necesita conservar algo, haga primero una copia de seguridad.`
+    });
+    if (!r) return;
+    borrarDatosOperativos();
+    try { sessionStorage.setItem('cajuelas.conservar', '1'); } catch { /* nada */ }
+    toast('Listo: datos borrados y numeración reiniciada.', 4000);
+    setTimeout(() => location.reload(), 900);
+  }
+  async function pedirClaveAdmin() {
+    const r = await formulario('Clave de administrador', [{ etiqueta: 'Clave', tipo: 'password' }], { ok: 'Verificar' });
+    if (!r) return false;
+    if (admin.espera() > 0) { toast(`Demasiados intentos. Espere ${admin.espera()} s.`); return false; }
+    if (await admin.revisar(r[0])) return true;
+    toast('Clave incorrecta.'); return false;
   }
   async function infoAlmacenamiento() {
     const el = raiz.querySelector('#info-almacen'); if (!el) return;
@@ -156,36 +192,11 @@ export function crearAjustes(nav) {
     } catch { /* nada */ }
   }
 
-  // ----- Precios -----
-  function administrarPrecios() {
-    const lista = h('div', { class: 'lista' });
-    const nuevo = h('input', { class: 'campo', type: 'text', inputmode: 'decimal', placeholder: 'Nuevo precio, ej. 1500', autocomplete: 'off' });
-    const pintarLista = () => {
-      clear(lista);
-      if (!cat.precios.length) lista.append(h('p', { class: 'vacio' }, 'Todavía no hay precios.'));
-      cat.precios.forEach((p) => lista.append(h('div', { class: 'item fila' }, h('span', null, fmtMoney(p)),
-        h('button', { type: 'button', class: 'btn-texto peligro', onclick: async () => {
-          if (await confirmar('Eliminar precio', `¿Eliminar ${fmtMoney(p)}?`, { si: 'Eliminar', peligro: true })) { cat.precios = cat.precios.filter((x) => x !== p); guardarPrecios(); pintarLista(); pintar(); }
-        } }, 'Eliminar'))));
-    };
-    pintarLista();
-    const d = dialogo({
-      titulo: 'Precios (₡)', cuerpo: [lista, nuevo],
-      botones: [{ texto: 'Cerrar' }, { texto: 'Agregar', clase: 'primario', onclick: () => {
-        const v = parseQty(nuevo.value);
-        if (!(v > 0)) { toast('Escriba un precio mayor a cero.'); return false; }
-        if (cat.precios.some((x) => Math.abs(x - v) < 1e-9)) { toast('Ese precio ya está en la lista.'); return false; }
-        cat.precios.push(v); guardarPrecios(); nuevo.value = ''; pintarLista(); pintar(); return false;
-      } }]
-    });
-    d.alCerrar = () => pintar();
-  }
-
   // ----- Sincronización -----
   function vistaSync() {
     raiz.append(banda('Sincronización'));
-    const volver = () => { vista = 'inicio'; desbloqueado = false; pintar(); };
-    raiz.append(h('button', { type: 'button', class: 'btn-texto volver', onclick: volver }, '‹ Volver a Ajustes'));
+    const volver = () => { vista = 'admin'; desbloqueado = false; pintar(); };
+    raiz.append(h('button', { type: 'button', class: 'btn-texto volver', onclick: volver }, '‹ Volver'));
     if (admin.puesta() && !desbloqueado) return vistaBloqueo(volver);
     const c = syncCfg();
     const url = h('input', { class: 'campo', type: 'url', value: c.url, placeholder: 'https://script.google.com/macros/s/…/exec', autocomplete: 'off', autocapitalize: 'none', spellcheck: 'false' });
@@ -244,7 +255,7 @@ export function crearAjustes(nav) {
 
   // ----- Catálogo (solo lectura) -----
   function vistaCatalogo() {
-    raiz.append(banda('Catálogo'), h('button', { type: 'button', class: 'btn-texto volver', onclick: () => { vista = 'inicio'; pintar(); } }, '‹ Volver a Ajustes'));
+    raiz.append(banda('Catálogo'), h('button', { type: 'button', class: 'btn-texto volver', onclick: () => { vista = 'admin'; pintar(); } }, '‹ Volver'));
     if (!cat.cosechas.length && !bol.cosechas.length) { raiz.append(tarjeta(h('p', { class: 'nota' }, 'Todavía no se ha recibido el catálogo. Use «Recibir catálogo de Google Sheets».'))); return; }
     const detalle = (resumen, ...hijos) => h('details', null, h('summary', null, resumen), ...hijos);
     const lis = (a) => h('ul', null, ...a.map((x) => h('li', null, x)));
@@ -279,6 +290,7 @@ export function crearAjustes(nav) {
         if (!o || o.app !== 'registro-cajuelas' || !o.datos) throw new Error('Este archivo no es una copia de seguridad de la aplicación.');
         if (!(await confirmar('Restaurar copia', 'Se reemplazarán TODOS los datos de este dispositivo por los de la copia. Lo que haya hecho después de la copia se perderá.\n\n¿Restaurar?', { si: 'Restaurar', peligro: true }))) return;
         if (!db.reemplazarTodo(o.datos)) throw new Error('No se pudo guardar en este dispositivo.');
+        try { sessionStorage.setItem('cajuelas.conservar', '1'); } catch { /* nada */ }
         location.reload();
       } catch (e) { aviso('No se pudo restaurar', e.message || String(e)); }
     });
@@ -286,5 +298,5 @@ export function crearAjustes(nav) {
   }
 
   pintar();
-  return { el: raiz, refrescar: pintar };
+  return { el: raiz, refrescar: pintar, reiniciar() { vista = 'inicio'; desbloqueado = false; pintar(); } };
 }

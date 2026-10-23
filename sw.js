@@ -1,5 +1,5 @@
 // Service worker: guarda la aplicación para que abra sin conexión y avisa cuando hay una versión nueva.
-const VERSION = '2.1.0';
+const VERSION = '2.3.0';
 const CACHE = 'cajuelas-' + VERSION;
 const ARCHIVOS = [
   './', './index.html', './manifest.webmanifest', './css/app.css',

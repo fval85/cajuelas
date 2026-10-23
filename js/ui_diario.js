@@ -1,11 +1,11 @@
 // Pestaña «Diario»: recibo de café en el beneficio.
 import { h, toast, aviso, elegir, normalizar, fmtNum, fmtCant, diaHoy, ahoraTxt, uuid, stampCorto, diaLegible } from './util.js';
 import { db, findCosecha, cosechaActiva, deviceName, configurado, findDiarioSociedad } from './store.js';
-import { nombreUsuario } from './users.js';
+import { nombreUsuario, puede } from './users.js';
 import { recibos, rc, payloadRecibo } from './data.js';
 import { cargarFuentes, paginasRecibos, paginasResumenDiario, MODO } from './draw.js';
-import { encolar, recibosDelDia } from './sync.js';
-import { tarjeta, etiqueta, banda, selector, boton, campoBusqueda, verDocumento, listaBuscable, pedirMotivo } from './ui.js';
+import { encolar, recibosDelDia, recibosDelRango } from './sync.js';
+import { tarjeta, etiqueta, banda, selector, boton, campoBusqueda, verDocumento, listaBuscable, pedirMotivo, pedirPeriodo, usuarioCoincide } from './ui.js';
 
 export function crearDiario(nav) {
   const raiz = h('div', { class: 'pagina' });
@@ -64,7 +64,7 @@ export function crearDiario(nav) {
     if (txt && v !== Number(txt.replace(',', '.'))) { inputs[7].value = fmtCant(v); guardarBorrador(); }
   });
 
-  function sinDatos(t) { aviso('Sin datos', t + '\n\nEn Ajustes > Sincronización use «Recibir catálogo de Google Sheets».'); }
+  function sinDatos(t) { aviso('Sin datos', t + '\n\nEn Ajustes > Administración use «Recibir catálogo de Google Sheets».'); }
   async function elegirBeneficio() {
     const co = cosecha(), lista = beneficios();
     if (!co) return sinDatos('Primero elija la cosecha activa en Ajustes.');
@@ -172,19 +172,24 @@ export function crearDiario(nav) {
   }
 
   async function resumenDelDia() {
-    const dia = diaHoy();
+    const f = await pedirPeriodo({ titulo: 'Resumen de Diario', usuarios: puede('todos') });
+    if (!f) return;
+    const { desde, hasta, usuario: usuarioFiltro } = f;
+    const unDia = desde === hasta;
     toast('Preparando el resumen…', 2000);
-    const remoto = configurado() ? await recibosDelDia(dia) : null;
-    const local = recibos.items().filter((r) => r.dia === dia && !r.anulado);
+    const remoto = configurado() ? (unDia ? await recibosDelDia(desde) : await recibosDelRango(desde, hasta)) : null;
+    const local = recibos.items().filter((r) => r.dia >= desde && r.dia <= hasta && !r.anulado);
     const usarRemoto = remoto && !remoto.error;
-    const lista = usarRemoto ? remoto.lista : local;
-    if (!lista.length) return toast(usarRemoto ? 'La hoja todavía no tiene recibos de hoy.' : 'Hoy todavía no hay recibos.');
+    const lista = (usarRemoto ? remoto.lista : local).filter((r) => usuarioCoincide(r.usuario, usuarioFiltro));
+    const cuando = unDia ? `del ${diaLegible(desde)}` : `del ${diaLegible(desde)} al ${diaLegible(hasta)}`;
+    if (!lista.length) return toast(usarRemoto ? `La hoja no tiene recibos ${cuando}${usuarioFiltro ? ' de ' + usuarioFiltro : ''}.` : `No hay recibos ${cuando} en este dispositivo.`, 5000);
     const n = (s) => normalizar(s);
-    const ord = lista.slice().sort((a, b) => n(a.sociedad).localeCompare(n(b.sociedad)) || n(a.finca).localeCompare(n(b.finca)) || n(a.lote).localeCompare(n(b.lote)) || (a.emitido < b.emitido ? -1 : 1));
+    const ord = lista.slice().sort((a, b) => n(a.sociedad).localeCompare(n(b.sociedad)) || n(a.finca).localeCompare(n(b.finca)) || n(a.lote).localeCompare(n(b.lote)) || ((a.dia + a.emitido) < (b.dia + b.emitido) ? -1 : 1));
     await cargarFuentes();
-    const paginas = paginasResumenDiario(ord, dia);
-    const nota = usarRemoto ? 'Datos de todos los teléfonos (Google Sheets).' : remoto ? `Sin conexión con la hoja (${remoto.error}). Solo recibos de este dispositivo.` : 'Sin sincronización configurada. Solo recibos de este dispositivo.';
-    verDocumento({ titulo: 'Resumen del día', paginas, nombrePdf: `resumen_diario_${dia.replace(/-/g, '')}.pdf`, ancho: true, intro: nota, textoCompartir: 'Resumen diario de café recibido. ' + nota });
+    const paginas = paginasResumenDiario(ord, desde, hasta);
+    const nota = (usarRemoto ? 'Datos de todos los teléfonos (Google Sheets).' : remoto ? `Sin conexión con la hoja (${remoto.error}). Solo recibos de este dispositivo.` : 'Sin sincronización configurada. Solo recibos de este dispositivo.') + (usuarioFiltro ? ` Usuario: ${usuarioFiltro}.` : '');
+    const sello = unDia ? desde.replace(/-/g, '') : `${desde.replace(/-/g, '')}_${hasta.replace(/-/g, '')}`;
+    verDocumento({ titulo: 'Resumen de Diario', paginas, nombrePdf: `resumen_diario_${sello}.pdf`, ancho: true, intro: nota, textoCompartir: 'Resumen de café recibido. ' + nota });
   }
 
   raiz.append(
@@ -192,10 +197,9 @@ export function crearDiario(nav) {
     tarjeta(etiqueta('Beneficio'), pickBen, etiqueta('Sociedad'), pickSoc,
       h('div', { class: 'dos-col' }, h('div', null, etiqueta('Finca'), finca), h('div', null, etiqueta('Corte/Lote'), lote))),
     tarjeta(cuadroMuestra, h('div', { class: 'titulo-cuadro' }, 'CANTIDAD'), h('div', { class: 'cuadro-centro' }, cuadroCant)),
-    h('div', { class: 'fila-botones cuatro' },
-      boton('Emitir', 'emitir', 'c-verde', emitir), boton('Reimprimir', 'imprimir', 'c-teal', reimprimir, 'reimprimir'),
-      boton('Envío\nmasivo', 'enviar', 'c-ambar', masivo, 'resumenes'), boton('Anular', 'anular', 'c-rojo', anular, 'anular')),
-    boton('Resumen del día', 'resumen', 'c-azul ancho-total', resumenDelDia, 'resumenes')
+    h('div', { class: 'fila-botones' },
+      boton('Emitir', 'emitir', 'c-verde', emitir), boton('Reimprimir', 'imprimir', 'c-teal', reimprimir, 'reimprimir'), boton('Anular', 'anular', 'c-rojo', anular, 'anular')),
+    h('div', { class: 'fila-botones dos' }, boton('Resumen', 'resumen', 'c-azul', resumenDelDia, 'resumenes'), boton('Envío masivo', 'enviar', 'c-ambar', masivo, 'resumenes'))
   );
   refrescar();
   return { el: raiz, refrescar };

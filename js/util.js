@@ -1,5 +1,5 @@
 // Utilidades comunes: DOM, formatos, fechas, diálogos.
-export const VERSION = '2.1.0';
+export const VERSION = '2.3.0';
 
 export function h(tag, attrs, ...children) {
   const el = document.createElement(tag);
@@ -176,7 +176,7 @@ export function elegir(titulo, opciones, { vacio = 'No hay opciones.', buscar = 
 }
 
 // Formulario sencillo: campos [{etiqueta, valor, tipo, placeholder, opciones}], devuelve valores o null.
-export function formulario(titulo, campos, { ok = 'Guardar', validar = null } = {}) {
+export function formulario(titulo, campos, { ok = 'Guardar', validar = null, detalle = '' } = {}) {
   return new Promise((res) => {
     let hecho = false;
     const inputs = campos.map((c) => {
@@ -195,7 +195,7 @@ export function formulario(titulo, campos, { ok = 'Guardar', validar = null } = 
       });
       return { c, el, leer: () => el.value.trim() };
     });
-    const cuerpo = inputs.flatMap(({ c, el }) => [h('label', { class: 'etiqueta' }, c.etiqueta), el]);
+    const cuerpo = [detalle ? h('p', { class: 'pre' }, detalle) : null, ...inputs.flatMap(({ c, el }) => [h('label', { class: 'etiqueta' }, c.etiqueta), el])];
     const d = dialogo({
       titulo, cuerpo,
       botones: [

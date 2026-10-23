@@ -2,6 +2,7 @@
 import { fmtNum, fmtCant, fmtPct, fmtQty, fmtMoney, fmtMoney2, parseQty, diaLegible, ahoraTxt, tarjetaEnmascarada, esEntero } from './util.js';
 import { rc, totalesRecibos, montoLinea, tipoBoletoEtiqueta, totalFichas, totalCajuelasMov } from './data.js';
 import { normalizar } from './util.js';
+import { modoPruebas } from './store.js';
 
 const MONO = '"DejaVu Sans Mono", monospace';
 const SANS = '"DejaVu Sans", sans-serif';
@@ -86,6 +87,7 @@ function dibujarRecibo(c, r, modo) {
   const blank = () => { y += normal.size * 1.4; };
 
   ln(`N° ${r.numero}`, bold, 2);
+  if (modoPruebas) ln('*** PRUEBA ***', bold, 1);
   blank();
   const titulo = (r.receptora || '').toLocaleUpperCase('es-CR');
   const tp = ajustarNegrita(titulo, cw, 12, 8.5);
@@ -165,6 +167,7 @@ function dibujarBoleto(c, m, modo) {
   const ln = (t, p, al = 0) => { const h = p.size * 1.4; y += h; txt(c, t, xPara(t, p, al), y - h * 0.25, p); };
   const blank = () => { y += normal.size * 1.4; };
   ln(`N° ${m.numero}`, bold, 2);
+  if (modoPruebas) ln('*** PRUEBA ***', bold, 1);
   blank();
   ln('COMPROBANTE DE BOLETOS', P(11, true), 1);
   envolver(tipoBoletoEtiqueta(m.tipo), bold, cw).forEach((t) => ln(t, bold, 1));
@@ -275,6 +278,7 @@ function totalGrande(out, monto, cols, etiqueta) {
 export function lineasComprobante(g, reimpresion) {
   const cols = COLS(), out = [], regla = '-'.repeat(cols);
   titulo(out, 'COMPROBANTE DE CAMBIO DE FICHAS', cols);
+  if (modoPruebas) centrar(out, '*** PRUEBA ***', cols, true);
   if (reimpresion) { centrar(out, '*** REIMPRESIÓN ***', cols); centrar(out, ahoraTxt(), cols); }
   if (g.anulado) centrar(out, '*** ANULADO ***', cols, true);
   out.push(TL(regla));
@@ -301,6 +305,7 @@ export function lineasComprobante(g, reimpresion) {
 export function lineasAnulacion(g) {
   const cols = COLS(), out = [], regla = '-'.repeat(cols);
   titulo(out, 'COMPROBANTE DE CAMBIO DE FICHAS', cols);
+  if (modoPruebas) centrar(out, '*** PRUEBA ***', cols, true);
   centrar(out, '*** ANULACIÓN ***', cols, true);
   out.push(TL(regla));
   campo(out, 'Anula comprobante', g.numero, cols, true);
@@ -429,7 +434,9 @@ function celdasTotal(etq, t) {
     fmtCant(t.broca), fmtCant(t.flotes), fmtPct(t.pVerdes), fmtPct(t.pFlotes), fmtPct(t.pSecos), fmtPct(t.pMaduros), fmtPct(t.pBroca),
     fmtNum(t.eqMaduras, 1), fmtNum(t.eqVerdes, 1), fmtNum(t.eqFlotes, 1), fmtNum(t.eqBroca, 1)];
 }
-export function paginasResumenDiario(recibos, dia) {
+export function paginasResumenDiario(recibos, dia, hasta = dia) {
+  const rango = hasta && hasta !== dia;
+  const etqPeriodo = rango ? `DEL ${diaLegible(dia)} AL ${diaLegible(hasta)}` : diaLegible(dia);
   const MG = 24, PH = 595, RH = 15, HH = 30, ROJO = '#C00000';
   const pageW = Math.ceil(ANCH_R.reduce((t, w) => t + w, 0) + 2 * MG);
   const x = [MG]; ANCH_R.forEach((w, i) => x.push(x[i] + w));
@@ -461,8 +468,8 @@ export function paginasResumenDiario(recibos, dia) {
       const t = P(16, true, false); txt(c, receptora, MG + (tablaW - medir(t, receptora)) / 2, y + 14, t); y += 22;
       const s = P(11, true, false), sub = 'REPORTE DIARIO DE CAFÉ RECIBIDO EN BENEFICIO';
       txt(c, sub, MG + (tablaW - medir(s, sub)) / 2, y + 11, s); y += 20;
-      txt(c, `FECHA: ${diaLegible(dia)}`, MG, y + 9, bold); y += 18;
-    } else { txt(c, `${receptora} · FECHA: ${diaLegible(dia)} (continuación)`, MG, y + 9, bold); y += 16; }
+      txt(c, `${rango ? 'PERÍODO' : 'FECHA'}: ${etqPeriodo}`, MG, y + 9, bold); y += 18;
+    } else { txt(c, `${receptora} · ${rango ? 'PERÍODO' : 'FECHA'}: ${etqPeriodo} (continuación)`, MG, y + 9, bold); y += 16; }
     cabecera();
   };
   const fila = (vals, esNeg, fondo, rojoIdx, soloEtiqueta) => {
@@ -487,7 +494,7 @@ export function paginasResumenDiario(recibos, dia) {
     [['SUBTOTAL INTERNO', interno], ['SUBTOTAL EXTERNO', externo]].forEach(([e, l]) => { const t = totalesRecibos(l); fila(celdasTotal(e, t), true, '#EAF1EC', t.pVerdes > 0.02 ? 15 : null, true); });
   }
   const tt = totalesRecibos(recibos);
-  fila(celdasTotal('TOTAL DEL DÍA', tt), true, '#D7E6DB', tt.pVerdes > 0.02 ? 15 : null, true);
+  fila(celdasTotal(rango ? 'TOTAL DEL PERÍODO' : 'TOTAL DEL DÍA', tt), true, '#D7E6DB', tt.pVerdes > 0.02 ? 15 : null, true);
   y += 8;
   txt(c, `Recibos incluidos: ${recibos.length} · No incluye recibos anulados · % Verdes en rojo si pasa de 2 %.`, MG, Math.min(y + 8, PH - 8), P(7, false, false, '#6B7280'));
   return paginas.map((p) => ({ ...p, ancho: pageW, alto: PH }));

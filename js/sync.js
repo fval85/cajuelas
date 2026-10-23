@@ -63,37 +63,63 @@ export async function enviarPendientes() {
 }
 
 export async function descargarCatalogo(device) {
-  if (!configurado()) return { ok: false, message: 'Falta configurar la URL y el token en Ajustes > Sincronización.' };
+  if (!configurado()) return { ok: false, message: 'Falta configurar la URL y el token en Ajustes > Administración.' };
   const { url, token } = syncCfg();
   const r = await postJson(url, { action: 'catalogo', token, dispositivo: device });
   if (!r.ok) return { ok: false, message: r.message };
   const f = (k) => (Array.isArray(r.json[k]) ? r.json[k].map((x) => (Array.isArray(x) ? x.map((y) => (y == null ? '' : String(y))) : [])) : []);
   return {
     ok: true, message: r.message, estructura: f('estructura'), personas: f('personas'), beneficios: f('beneficios'),
-    diario: f('diario'), bolFichas: f('boletosFichas'), bolOficinas: f('boletosOficinas')
+    diario: f('diario'), bolFichas: f('boletosFichas'), bolOficinas: f('boletosOficinas'), config: r.json.config || null
   };
 }
 
 const n = (v) => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
 const s = (v) => (v == null ? '' : String(v));
 
-export async function recibosDelDia(dia) {
-  if (!configurado()) return { error: 'Falta configurar la URL y el token en Ajustes > Sincronización.', lista: [] };
-  const { url, token } = syncCfg();
-  const r = await postJson(url, { action: 'recibosDia', token, dia });
-  if (!r.ok) return { error: r.message, lista: [] };
-  const lista = (r.json.recibos || []).map((o) => ({
-    id: s(o.comprobante) + '|' + s(o.dispositivo), numero: s(o.comprobante), dia, emitido: s(o.fechaHora), cosecha: s(o.cosecha),
+function mapRecibo(o, dia) {
+  return {
+    id: s(o.comprobante) + '|' + s(o.dispositivo) + '|' + dia, numero: s(o.comprobante), dia, emitido: s(o.fechaHora), cosecha: s(o.cosecha),
     beneficio: s(o.beneficio), receptora: s(o.receptora), sociedad: s(o.sociedad), compra: o.compra ? s(o.compra) : 'Interno',
     finca: s(o.finca), lote: s(o.lote), muestraTotal: n(o.muestraTotal), verdes: n(o.verdes), maduros: n(o.maduros), secos: n(o.secos),
     broca: n(o.broca), medidas: n(o.medidas), cajuelas: n(o.cajuelas), cuartillos: n(o.cuartillos), dispositivo: s(o.dispositivo), usuario: s(o.usuario),
     anulado: false, motivo: '', anuladoFecha: ''
+  };
+}
+export async function recibosDelRango(desde, hasta) {
+  if (!configurado()) return { error: 'Falta configurar la URL y el token en Ajustes > Administración.', lista: [] };
+  const { url, token } = syncCfg();
+  const r = await postJson(url, { action: 'recibosRango', token, desde, hasta });
+  if (!r.ok) return { error: r.message, lista: [] };
+  if (!Array.isArray(r.json.recibos)) return { error: 'El Apps Script no está actualizado (falta la acción recibosRango).', lista: [] };
+  return { error: null, lista: r.json.recibos.map((o) => mapRecibo(o, s(o.dia))) };
+}
+export async function recibosDelDia(dia) {
+  if (!configurado()) return { error: 'Falta configurar la URL y el token en Ajustes > Administración.', lista: [] };
+  const { url, token } = syncCfg();
+  const r = await postJson(url, { action: 'recibosDia', token, dia });
+  if (!r.ok) return { error: r.message, lista: [] };
+  const lista = (r.json.recibos || []).map((o) => mapRecibo(o, dia));
+  return { error: null, lista };
+}
+
+/** Comprobantes de Registro de un día, de todos los dispositivos (líneas con el mismo formato que las locales). */
+export async function registroDelDia(dia) {
+  if (!configurado()) return { error: 'Falta configurar la URL y el token en Ajustes > Administración.', lista: [] };
+  const { url, token } = syncCfg();
+  const r = await postJson(url, { action: 'registroDia', token, dia });
+  if (!r.ok) return { error: r.message, lista: [] };
+  if (!Array.isArray(r.json.lineas)) return { error: 'El Apps Script no está actualizado (falta la acción registroDia).', lista: [] };
+  const lista = r.json.lineas.map((o) => ({
+    date: dia, comprobante: s(o.comprobante), dispositivo: s(o.dispositivo), emitido: s(o.fechaHora), cosecha: s(o.cosecha), sociedad: s(o.sociedad),
+    finca: s(o.finca), personName: s(o.nombre), quantity: s(o.cantidad), price: n(o.precio), deduccion: n(o.deduccion), codigo: s(o.codigo),
+    tarjeta: s(o.tarjeta), usuario: s(o.usuario), anulado: !!o.anulado, motivo: s(o.motivo), anuladoFecha: s(o.anuladoFecha)
   }));
   return { error: null, lista };
 }
 
 export async function movimientosBoletos(cosecha, hasta, normMedida) {
-  if (!configurado()) return { error: 'Falta configurar la URL y el token en Ajustes > Sincronización.', lista: [] };
+  if (!configurado()) return { error: 'Falta configurar la URL y el token en Ajustes > Administración.', lista: [] };
   const { url, token } = syncCfg();
   const r = await postJson(url, { action: 'boletosMovs', token, cosecha, hasta });
   if (!r.ok) return { error: r.message, lista: [] };
