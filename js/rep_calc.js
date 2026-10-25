@@ -87,7 +87,7 @@ function agrupar(rows, kf, nf) {
 /** Cosecha elegida + hasta 3 anteriores, cada una cortada en la misma fecha. */
 export function contexto(filas, f) {
   const todas = cosechasDe(filas);
-  const lista = [f.cos, ...todas.filter((c) => inicioAnio(c) < inicioAnio(f.cos)).slice(0, ANTERIORES)];
+  const lista = [f.cos, ...(f.solo ? [] : todas.filter((c) => inicioAnio(c) < inicioAnio(f.cos)).slice(0, ANTERIORES))];
   const items = lista.map((c) => {
     const corte = desplazar(f.corte, inicioAnio(c) - inicioAnio(f.cos));
     const desde = f.desde ? desplazar(f.desde, inicioAnio(c) - inicioAnio(f.cos)) : '';
@@ -104,7 +104,7 @@ function textoFiltros(f) {
   return t.length ? t.join(' · ') : 'Sin filtros adicionales (todas las sociedades, tipos y clientes)';
 }
 function encabezado(titulo, ctx, f) {
-  const subt = [`Cosecha ${f.cos} · ${f.desde ? 'del ' + fmtFechaDMA(ctx.base.desde) + ' al ' : 'acumulado al '}${fmtFechaDMA(ctx.base.corte)}` + (ctx.prev ? ` · comparado con la misma fecha de ${ctx.items.slice(1).map((i) => i.cos).join(', ')}` : ''), textoFiltros(f)];
+  const subt = [`Cosecha ${f.cos} · ${f.desde ? 'del ' + fmtFechaDMA(ctx.base.desde) + ' al ' : 'acumulado al '}${fmtFechaDMA(ctx.base.corte)}` + (ctx.prev ? ` · comparado con la misma fecha de ${ctx.items.slice(1).map((i) => i.cos).join(', ')}` : ' · solo esta cosecha'), textoFiltros(f)];
   return { titulo, subtitulos: subt };
 }
 const pctDe = (a, tot) => (tot > 0 ? a / tot : null);

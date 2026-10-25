@@ -177,3 +177,16 @@ details { margin: 4px 0; } summary { padding: 8px 0; font-weight: 600; } details
 .tabla-rep tr.destacada td { background: #fef3c7; }
 .tabla-rep tr.clic td { cursor: pointer; }
 .tabla-rep tr.clic:active td { background: #eef2ef; }
+
+/* Reportes: ajuste a cualquier ancho de pantalla */
+.dos-col > * { min-width: 0; }
+.pagina input[type=date].campo { min-width: 0; max-width: 100%; width: 100%; font-size: 16px; padding-left: 8px; padding-right: 6px; }
+.pagina .selector { min-width: 0; }
+.sel-texto { min-width: 0; overflow-wrap: anywhere; }
+.btn-texto.ancho { width: 100%; margin-top: 12px; font-size: 16px; }
+.resumen-filtros { display: block; width: 100%; text-align: left; font: inherit; font-size: 14px; font-weight: 700; color: var(--verde); background: var(--verde-claro); border: 1.5px solid var(--linea); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; overflow-wrap: anywhere; }
+.resumen-filtros[hidden] { display: none; }
+.rep-zona { min-width: 0; }
+.rep-zona .campo[type=search] { margin-bottom: 8px; }
+@media (min-width: 700px) { #app { max-width: 760px; } .kpis { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 360px) { .kpi b { font-size: 17px; } .tabla-rep { font-size: 12px; } }

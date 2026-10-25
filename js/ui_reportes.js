@@ -15,7 +15,7 @@ function guardarCache(o) { try { localStorage.setItem(LLAVE_CACHE, JSON.stringif
 export function crearReportes(nav) {
   const raiz = h('div', { class: 'pagina' });
   let datos = null;              // {filas (objetos), cosechas, t, actualizado}
-  let f = { cos: '', desde: '', corte: '', soc: '', tipo: '', cli: '', dim: 'Mes' };
+  let f = { cos: '', desde: '', corte: '', soc: '', tipo: '', cli: '', dim: 'Mes', solo: false };
   let vista = 'comparativo';
   let cargando = false, errorCarga = '';
 
@@ -50,11 +50,18 @@ export function crearReportes(nav) {
   let temporizador = 0;
   iCli.addEventListener('input', () => { clearTimeout(temporizador); temporizador = setTimeout(() => { f.cli = iCli.value.trim(); pintar(); }, 350); });
 
+  let panelAbierto = true, busqueda = '';
+  const chkSolo = h('input', { type: 'checkbox' });
+  chkSolo.addEventListener('change', () => { f.solo = chkSolo.checked; pintar(); });
+  const resumenFiltros = h('button', { type: 'button', class: 'resumen-filtros', onclick: () => { panelAbierto = true; pintarFiltros(); window.scrollTo(0, 0); } });
+  const btnVer = h('button', { type: 'button', class: 'btn-texto primario ancho', onclick: () => { panelAbierto = false; pintarFiltros(); window.scrollTo(0, 0); } }, 'Ver reporte');
   const tarjFiltros = tarjeta(
     etiqueta('Cosecha'), pCos,
     h('div', { class: 'dos-col' }, h('div', null, etiqueta('Desde'), iDesde), h('div', null, etiqueta('Hasta'), iCorte)), bUltima,
     h('div', { class: 'dos-col' }, h('div', null, etiqueta('Sociedad'), pSoc), h('div', null, etiqueta('Tipo'), pTipo)),
-    etiqueta('Cliente'), iCli
+    etiqueta('Cliente'), iCli,
+    h('label', { class: 'radio' }, chkSolo, ' Solo esta cosecha (sin comparar con las anteriores)'),
+    btnVer
   );
   const chips = h('div', { class: 'chips' });
   const zona = h('div', { class: 'rep-zona' });
@@ -64,8 +71,11 @@ export function crearReportes(nav) {
   function pintarFiltros() {
     pCos.poner(f.cos);
     iDesde.value = f.desde || ''; iCorte.value = f.corte || '';
-    pSoc.poner(f.soc); pTipo.poner(f.tipo);
-    tarjFiltros.hidden = !datos;
+    pSoc.poner(f.soc); pTipo.poner(f.tipo); chkSolo.checked = !!f.solo;
+    tarjFiltros.hidden = !datos || !panelAbierto;
+    resumenFiltros.hidden = !datos || panelAbierto;
+    const rango = f.desde ? `${fmtFechaDMA(f.desde)} al ${fmtFechaDMA(f.corte)}` : `hasta ${fmtFechaDMA(f.corte)}`;
+    resumenFiltros.textContent = `⚙ Cosecha ${f.cos} · ${rango}${f.soc ? ' · ' + f.soc : ''}${f.tipo ? ' · ' + f.tipo : ''}${f.cli ? ' · ' + f.cli : ''}${f.solo ? ' · sin comparar' : ''}  ›  Cambiar`;
   }
   function pintarChips() {
     clear(chips);
@@ -152,7 +162,13 @@ export function crearReportes(nav) {
       cv.classList.add('grafico');
       zona.append(h('div', { class: 'tarjeta grafico-caja' }, cv));
     });
-    if (rep.filas.length) zona.append(tablaHtml(rep));
+    if (rep.filas.length > 8 && vista !== 'comparativo' && vista !== 'dia') {
+      const q = h('input', { class: 'campo', type: 'search', placeholder: 'Buscar en la tabla…', value: busqueda, autocomplete: 'off' });
+      const filtrarTabla = () => { const t = normalizar(q.value).split(' ').filter(Boolean); busqueda = q.value; zona.querySelectorAll('.tabla-rep tbody tr:not(.total)').forEach((tr) => { const x = normalizar(tr.firstChild.textContent); tr.hidden = !t.every((k) => x.includes(k)); }); };
+      q.addEventListener('input', filtrarTabla);
+      zona.append(q, tablaHtml(rep));
+      if (busqueda) filtrarTabla();
+    } else if (rep.filas.length) zona.append(tablaHtml(rep));
     if (rep.nota) zona.append(h('p', { class: 'nota' }, rep.nota));
     btnCompartir.hidden = false;
   }
@@ -176,16 +192,16 @@ export function crearReportes(nav) {
   raiz.append(
     banda('Reportes'),
     tarjeta(estado, btnAct),
-    tarjFiltros, chips, barraDim, zona, btnCompartir
+    tarjFiltros, resumenFiltros, chips, barraDim, zona, btnCompartir
   );
-  tarjFiltros.hidden = true; btnCompartir.hidden = true;
+  tarjFiltros.hidden = true; resumenFiltros.hidden = true; btnCompartir.hidden = true;
   pintarChips(); pintarEstado();
   return {
     el: raiz,
     refrescar() { /* no hace falta: los datos se leen al abrir la pestaña */ },
     // Cada vez que se entra a la pestaña empieza limpia: filtros por defecto y datos al día.
     reiniciar() {
-      f = { cos: '', desde: '', corte: '', soc: '', tipo: '', cli: '', dim: 'Mes' }; vista = 'comparativo'; iCli.value = '';
+      f = { cos: '', desde: '', corte: '', soc: '', tipo: '', cli: '', dim: 'Mes', solo: false }; vista = 'comparativo'; iCli.value = ''; panelAbierto = true; busqueda = '';
       const cache = leerCache();
       if (cache) usar(cache);
       pintarTodo();
