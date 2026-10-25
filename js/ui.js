@@ -94,7 +94,7 @@ export function campoBusqueda({ placeholder, fuente, alElegir, mayus = true, val
  * Ventana con la vista previa de un documento (páginas ya dibujadas) y el botón para compartir el PDF
  * (y archivos adicionales, como el Excel). El PDF se prepara al abrir para que el botón responda al instante.
  */
-export function verDocumento({ titulo, paginas, nombrePdf, intro, adicionales = [], textoBoton = 'Compartir PDF', maxPaginas = 6, ancho = false, textoCompartir = '', tiquete = false }) {
+export function verDocumento({ titulo, paginas, nombrePdf, intro, adicionales = [], textoBoton = 'Compartir PDF', maxPaginas = 6, ancho = false, textoCompartir = '', tiquete = false, paginasPdf = null }) {
   const zona = h('div', { class: ancho ? 'visor ancho' : 'visor' });
   paginas.slice(0, maxPaginas).forEach((p) => { p.canvas.classList.add('hoja'); zona.append(p.canvas); });
   if (paginas.length > maxPaginas) zona.append(h('p', { class: 'nota' }, `… y ${paginas.length - maxPaginas} páginas más (todas van en el PDF).`));
@@ -117,7 +117,7 @@ export function verDocumento({ titulo, paginas, nombrePdf, intro, adicionales = 
   });
   (async () => {
     try {
-      const pdf = await pdfDePaginas(paginas.map((p) => ({ canvas: p.canvas, ancho: p.ancho, alto: p.alto })));
+      const pdf = await pdfDePaginas((paginasPdf || paginas).map((p) => ({ canvas: p.canvas, ancho: p.ancho, alto: p.alto })));
       archivos = [{ blob: pdf, nombre: nombrePdf }, ...adicionales];
       btn.textContent = textoBoton; btn.disabled = false;
     } catch (e) { btn.textContent = 'No se pudo preparar'; toast('No se pudo generar el PDF: ' + (e.message || e)); }

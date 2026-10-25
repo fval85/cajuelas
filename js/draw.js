@@ -472,7 +472,7 @@ export function paginasResumenDiario(recibos, dia, hasta = dia) {
     const tablaW = x[24] - MG;
     if (primera) {
       const t = P(16, true, false); txt(c, receptora, MG + (tablaW - medir(t, receptora)) / 2, y + 14, t); y += 22;
-      const s = P(11, true, false), sub = 'REPORTE DIARIO DE CAFÉ RECIBIDO EN BENEFICIO';
+      const s = P(11, true, false), sub = 'REPORTE DIARIO DE CAFÉ RECIBIDO EN BENEFICIO (DETALLADO)';
       txt(c, sub, MG + (tablaW - medir(s, sub)) / 2, y + 11, s); y += 20;
       txt(c, `${rango ? 'PERÍODO' : 'FECHA'}: ${etqPeriodo}`, MG, y + 9, bold); y += 18;
     } else { txt(c, `${receptora} · ${rango ? 'PERÍODO' : 'FECHA'}: ${etqPeriodo} (continuación)`, MG, y + 9, bold); y += 16; }
@@ -495,15 +495,68 @@ export function paginasResumenDiario(recibos, dia, hasta = dia) {
   };
   nueva(true);
   recibos.forEach((r, i) => fila(celdasRecibo(r), false, i % 2 ? '#F4F8F5' : null, rc(r).pVerdes > 0.02 ? 15 : null, false));
-  y += 6;
+  // Un renglón de espacio antes de los subtotales, entre ellos y antes del total, para que no se vea todo pegado.
+  const espacio = () => { y += RH; if (y + RH > PH - MG) nueva(false); };
+  espacio();
   if (interno.length && externo.length) {
-    [['SUBTOTAL INTERNO', interno], ['SUBTOTAL EXTERNO', externo]].forEach(([e, l]) => { const t = totalesRecibos(l); fila(celdasTotal(e, t), true, '#EAF1EC', t.pVerdes > 0.02 ? 15 : null, true); });
+    [['SUBTOTAL INTERNO', interno], ['SUBTOTAL EXTERNO', externo]].forEach(([e, l], k) => { if (k) espacio(); const t = totalesRecibos(l); fila(celdasTotal(e, t), true, '#EAF1EC', t.pVerdes > 0.02 ? 15 : null, true); });
+    espacio();
   }
   const tt = totalesRecibos(recibos);
   fila(celdasTotal(rango ? 'TOTAL DEL PERÍODO' : 'TOTAL DEL DÍA', tt), true, '#D7E6DB', tt.pVerdes > 0.02 ? 15 : null, true);
   y += 8;
   txt(c, `Recibos incluidos: ${recibos.length} · No incluye recibos anulados · % Verdes en rojo si pasa de 2 %.`, MG, Math.min(y + 8, PH - 8), P(7, false, false, '#6B7280'));
   return paginas.map((p) => ({ ...p, ancho: pageW, alto: PH }));
+}
+
+/** Reporte simple del Diario (formato de planilla): una fila por recibo y el total general de cajuelas y fanegas. */
+export function paginasResumenSimple(recibos, dia, hasta = dia) {
+  const rango = hasta && hasta !== dia;
+  const COLS = [['FECHA', 64, 'c'], ['SOCIEDAD', 214, 'i'], ['FINCA', 112, 'i'], ['CORTE', 72, 'i'], ['MUESTRA', 60, 'd'], ['VERDE', 50, 'd'], ['FLOTES', 52, 'd'], ['SECO', 50, 'd'], ['BROCA', 50, 'd'], ['CANTIDAD', 68, 'd']];
+  const MG = 25, PW = 842, PH = 595, RH = 19, HH = 20, MINIMO = 8;
+  const x = [MG]; COLS.forEach((c, i) => x.push(x[i] + c[1]));
+  const W = x[COLS.length] - MG;
+  const receptora = ((recibos[0] || {}).receptora || '').toLocaleUpperCase('es-CR');
+  const normal = P(8.6, false, false), bold = P(8.6, true, false);
+  const filas = recibos.map((r) => {
+    const k = rc(r);
+    return [diaLegible(r.dia), r.sociedad, r.finca, r.lote, fmtNum(r.muestraTotal, 2), fmtNum(r.verdes, 2), fmtNum(k.totalFlotes, 2), fmtNum(r.secos, 2), fmtNum(r.broca, 2), fmtNum(k.recibidoCajuelas, 2)];
+  });
+  const total = totalesRecibos(recibos);
+  const paginas = []; let pg, c, y;
+  const cuadro = (yy, h) => { linea(c, MG, yy, MG + W, yy, 0.9); linea(c, MG, yy + h, MG + W, yy + h, 0.9); x.forEach((xx) => linea(c, xx, yy, xx, yy + h, 0.9)); };
+  const nueva = () => {
+    pg = crearPagina(PW, PH, 2.2); c = pg.c; paginas.push(pg); y = 34;
+    const t = P(11, true, false), s = P(11, true, false);
+    txt(c, receptora, MG + (W - medir(t, receptora)) / 2, y, t); y += 16;
+    const sub = 'REPORTE DIARIO DE CAFÉ RECIBIDO EN BENEFICIO';
+    txt(c, sub, MG + (W - medir(s, sub)) / 2, y, s); y += 22;
+    if (rango) { const p = `PERÍODO: DEL ${diaLegible(dia)} AL ${diaLegible(hasta)}`; txt(c, p, MG, y, bold); y += 14; }
+    cuadro(y, HH);
+    COLS.forEach((col, i) => txt(c, col[0], x[i] + (col[1] - medir(bold, col[0])) / 2, y + HH - 6, bold));
+    y += HH;
+  };
+  nueva();
+  const lineas = Math.max(filas.length, MINIMO);
+  for (let i = 0; i < lineas; i++) {
+    if (y + RH > PH - 90 && i < filas.length) nueva();
+    cuadro(y, RH);
+    const f = filas[i];
+    if (f) f.forEach((v, k) => {
+      if (!v) return;
+      const col = COLS[k], t = recortar(v, normal, col[1] - 8);
+      const tx = col[2] === 'c' ? x[k] + (col[1] - medir(normal, t)) / 2 : col[2] === 'd' ? x[k] + col[1] - 4 - medir(normal, t) : x[k] + 4;
+      txt(c, t, tx, y + RH - 6, normal);
+    });
+    y += RH;
+  }
+  y += 22;
+  const g = P(10, true, false);
+  [['Total Cajuelas =', total.cajuelas], ['Total Fanegas =', total.fanegas]].forEach(([e, v]) => {
+    txt(c, e, x[7] - 30 - medir(g, e) + 40, y, g); const t = fmtNum(v, 2); txt(c, t, x[9] + 6, y, g); y += 26;
+  });
+  txt(c, `Recibos incluidos: ${recibos.length} · No incluye recibos anulados.`, MG, PH - 14, P(7, false, false, '#6B7280'));
+  return paginas.map((p) => ({ ...p, ancho: PW, alto: PH }));
 }
 
 // ====================== Tablas (Boletos) ======================

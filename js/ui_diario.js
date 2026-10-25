@@ -3,7 +3,8 @@ import { h, toast, aviso, elegir, normalizar, fmtNum, fmtCant, diaHoy, ahoraTxt,
 import { db, findCosecha, cosechaActiva, deviceName, configurado, findDiarioSociedad } from './store.js';
 import { nombreUsuario, puede } from './users.js';
 import { recibos, rc, payloadRecibo } from './data.js';
-import { cargarFuentes, paginasRecibos, paginasResumenDiario, MODO } from './draw.js';
+import { cargarFuentes, paginasRecibos, paginasResumenDiario, paginasResumenSimple, MODO } from './draw.js';
+import { pdfDePaginas } from './files.js';
 import { encolar, recibosDelDia, recibosDelRango } from './sync.js';
 import { tarjeta, etiqueta, banda, selector, boton, campoBusqueda, verDocumento, listaBuscable, pedirMotivo, pedirPeriodo, usuarioCoincide } from './ui.js';
 
@@ -185,11 +186,25 @@ export function crearDiario(nav) {
     if (!lista.length) return toast(usarRemoto ? `La hoja no tiene recibos ${cuando}${usuarioFiltro ? ' de ' + usuarioFiltro : ''}.` : `No hay recibos ${cuando} en este dispositivo.`, 5000);
     const n = (s) => normalizar(s);
     const ord = lista.slice().sort((a, b) => n(a.sociedad).localeCompare(n(b.sociedad)) || n(a.finca).localeCompare(n(b.finca)) || n(a.lote).localeCompare(n(b.lote)) || ((a.dia + a.emitido) < (b.dia + b.emitido) ? -1 : 1));
+    const cual = await elegir('¿Qué reporte desea?', [
+      { etiqueta: 'Detallado (con porcentajes y equivalentes)', valor: 'det' },
+      { etiqueta: 'Simple (formato de planilla, total de cajuelas y fanegas)', valor: 'sim' },
+      { etiqueta: 'Los dos (2 PDF)', valor: 'ambos' }
+    ], { buscar: false });
+    if (!cual) return;
     await cargarFuentes();
-    const paginas = paginasResumenDiario(ord, desde, hasta);
     const nota = (usarRemoto ? 'Datos de todos los teléfonos (Google Sheets).' : remoto ? `Sin conexión con la hoja (${remoto.error}). Solo recibos de este dispositivo.` : 'Sin sincronización configurada. Solo recibos de este dispositivo.') + (usuarioFiltro ? ` Usuario: ${usuarioFiltro}.` : '');
     const sello = unDia ? desde.replace(/-/g, '') : `${desde.replace(/-/g, '')}_${hasta.replace(/-/g, '')}`;
-    verDocumento({ titulo: 'Resumen de Diario', paginas, nombrePdf: `resumen_diario_${sello}.pdf`, ancho: true, intro: nota, textoCompartir: 'Resumen de café recibido. ' + nota });
+    const det = () => paginasResumenDiario(ord, desde, hasta), sim = () => paginasResumenSimple(ord, desde, hasta);
+    const texto = 'Resumen de café recibido. ' + nota;
+    if (cual === 'det') verDocumento({ titulo: 'Resumen de Diario (detallado)', paginas: det(), nombrePdf: `resumen_diario_detallado_${sello}.pdf`, ancho: true, intro: nota, textoCompartir: texto });
+    else if (cual === 'sim') verDocumento({ titulo: 'Resumen de Diario (simple)', paginas: sim(), nombrePdf: `resumen_diario_simple_${sello}.pdf`, ancho: true, intro: nota, textoCompartir: texto });
+    else {
+      const p1 = det(), p2 = sim();
+      const blob2 = await pdfDePaginas(p2.map((p) => ({ canvas: p.canvas, ancho: p.ancho, alto: p.alto })));
+      verDocumento({ titulo: 'Resumen de Diario (2 reportes)', paginas: [...p1, ...p2], paginasPdf: p1, nombrePdf: `resumen_diario_detallado_${sello}.pdf`, ancho: true, intro: nota + ' Se comparten 2 PDF: el detallado y el simple.', maxPaginas: 8,
+        adicionales: [{ blob: blob2, nombre: `resumen_diario_simple_${sello}.pdf` }], textoBoton: 'Compartir los 2 PDF', textoCompartir: texto });
+    }
   }
 
   raiz.append(
