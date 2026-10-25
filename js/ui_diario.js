@@ -201,9 +201,11 @@ export function crearDiario(nav) {
     else if (cual === 'sim') verDocumento({ titulo: 'Resumen de Diario (simple)', paginas: sim(), nombrePdf: `resumen_diario_simple_${sello}.pdf`, ancho: true, intro: nota, textoCompartir: texto });
     else {
       const p1 = det(), p2 = sim();
-      const blob2 = await pdfDePaginas(p2.map((p) => ({ canvas: p.canvas, ancho: p.ancho, alto: p.alto })));
-      verDocumento({ titulo: 'Resumen de Diario (2 reportes)', paginas: [...p1, ...p2], paginasPdf: p1, nombrePdf: `resumen_diario_detallado_${sello}.pdf`, ancho: true, intro: nota + ' Se comparten 2 PDF: el detallado y el simple.', maxPaginas: 8,
-        adicionales: [{ blob: blob2, nombre: `resumen_diario_simple_${sello}.pdf` }], textoBoton: 'Compartir los 2 PDF', textoCompartir: texto });
+      const aBlob = (ps) => pdfDePaginas(ps.map((p) => ({ canvas: p.canvas, ancho: p.ancho, alto: p.alto })));
+      const [blob1, blob2] = await Promise.all([aBlob(p1), aBlob(p2)]);
+      const a1 = { blob: blob1, nombre: `resumen_diario_detallado_${sello}.pdf` }, a2 = { blob: blob2, nombre: `resumen_diario_simple_${sello}.pdf` };
+      verDocumento({ titulo: 'Resumen de Diario (2 reportes)', paginas: [...p1, ...p2], paginasPdf: p1, nombrePdf: `resumen_diario_detallado_${sello}.pdf`, ancho: true, intro: nota + ' Son 2 archivos PDF distintos: el detallado y el simple. También puede compartir cada uno por separado.', maxPaginas: 8,
+        adicionales: [a2], botonesAparte: [{ texto: 'Solo detallado', archivo: a1 }, { texto: 'Solo simple', archivo: a2 }], textoBoton: 'Compartir los 2 (por separado)', textoCompartir: texto });
     }
   }
 

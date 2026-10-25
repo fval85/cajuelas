@@ -94,7 +94,7 @@ export function campoBusqueda({ placeholder, fuente, alElegir, mayus = true, val
  * Ventana con la vista previa de un documento (páginas ya dibujadas) y el botón para compartir el PDF
  * (y archivos adicionales, como el Excel). El PDF se prepara al abrir para que el botón responda al instante.
  */
-export function verDocumento({ titulo, paginas, nombrePdf, intro, adicionales = [], textoBoton = 'Compartir PDF', maxPaginas = 6, ancho = false, textoCompartir = '', tiquete = false, paginasPdf = null }) {
+export function verDocumento({ titulo, paginas, nombrePdf, intro, adicionales = [], textoBoton = 'Compartir PDF', maxPaginas = 6, ancho = false, textoCompartir = '', tiquete = false, paginasPdf = null, botonesAparte = [] }) {
   const zona = h('div', { class: ancho ? 'visor ancho' : 'visor' });
   paginas.slice(0, maxPaginas).forEach((p) => { p.canvas.classList.add('hoja'); zona.append(p.canvas); });
   if (paginas.length > maxPaginas) zona.append(h('p', { class: 'nota' }, `… y ${paginas.length - maxPaginas} páginas más (todas van en el PDF).`));
@@ -107,6 +107,10 @@ export function verDocumento({ titulo, paginas, nombrePdf, intro, adicionales = 
   });
   const barra = dlg.caja.querySelector('.dialogo-botones');
   barra.prepend(btn);
+  botonesAparte.slice().reverse().forEach((b) => barra.prepend(h('button', { type: 'button', class: 'btn-texto', onclick: async () => {
+    const r = await compartir([b.archivo], titulo, textoCompartir || titulo);
+    if (r === 'descargado') toast('Se descargó el archivo (este navegador no puede abrir «Compartir»).');
+  } }, b.texto)));
   if (tiquete && esComputadora()) {
     barra.prepend(h('button', { type: 'button', class: 'btn-texto primario', onclick: () => imprimirTiquetes(paginas) }, '🖨 Imprimir (80 mm)'));
   }
