@@ -4,7 +4,6 @@ import { modoPruebas } from './store.js';
 import { historicos } from './sync.js';
 import { tarjeta, etiqueta, banda, selector, boton, verDocumento } from './ui.js';
 import { cargarFuentes, paginasReporte, lienzoGrafico } from './draw.js';
-import { xlsx } from './files.js';
 import { parseFilas, cosechasDe, ultimaFecha, armarReporte, filasExcel, celdaTxt, pctSigno, fmtFechaDMA, VISTAS, DIMENSIONES, inicioAnio } from './rep_calc.js';
 
 const LLAVE_CACHE = 'cajuelas_hist' + (modoPruebas ? '_t' : '');
@@ -66,7 +65,7 @@ export function crearReportes(nav) {
   const chips = h('div', { class: 'chips' });
   const zona = h('div', { class: 'rep-zona' });
   const barraDim = h('div', { class: 'chips chicas', hidden: true });
-  const btnCompartir = boton('Compartir PDF y Excel', 'compartir', 'c-azul ancho-total', () => compartirReporte());
+  const btnCompartir = boton('Compartir PDF', 'compartir', 'c-azul ancho-total', () => compartirReporte());
 
   function pintarFiltros() {
     pCos.poner(f.cos);
@@ -181,10 +180,9 @@ export function crearReportes(nav) {
     const pie = `Generado ${ahoraTxt()} · Fuente: Históricos${datos && datos.actualizado ? ' (' + datos.actualizado + ')' : ''}`;
     const paginas = paginasReporte(ultimo, pie);
     const sello = `${ultimo.vista}_${f.cos}_${f.desde ? f.desde.replace(/-/g, '') + '_' : ''}${(f.corte || diaHoy()).replace(/-/g, '')}`;
-    const libro = new Blob([xlsx('Reporte', filasExcel(ultimo))], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     verDocumento({
       titulo: ultimo.titulo, paginas, nombrePdf: `Reporte_${sello}.pdf`, ancho: true, maxPaginas: 4,
-      adicionales: [{ blob: libro, nombre: `Reporte_${sello}.xlsx` }], textoBoton: 'Compartir PDF y Excel',
+      textoBoton: 'Compartir PDF',
       intro: ultimo.subtitulos[0]
     });
   }
