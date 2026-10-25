@@ -28,6 +28,17 @@ export function crearRegistro(nav) {
   });
   // Buscar también por código.
   persona.input.addEventListener('input', () => {});
+  // Buscar por finca: al elegirla se llenan solas la sociedad y la finca.
+  const buscaFinca = campoBusqueda({
+    placeholder: 'Ej. Caledonia',
+    fuente: () => ((cosecha() || { sociedades: [] }).sociedades).flatMap((s) => s.fincas.map((f) => ({ etiqueta: f, valor: f, detalle: s.nombre, soc: s.nombre }))),
+    alElegir: (v, o) => {
+      if (normalizar(selSociedad) !== normalizar(o.soc)) persona.input.value = '';
+      selSociedad = o.soc; selFinca = v; buscaFinca.input.value = '';
+      validarSeleccion(); pintar(); guardarBorrador();
+      toast(`Sociedad: ${o.soc}`, 2500);
+    }
+  });
   const zonaFilas = h('div', { class: 'lineas' });
   const resumen = h('div', { class: 'resumen' });
   const pista = h('p', { class: 'nota' }, 'Toque «+ Agregar línea» para registrar cantidad y precio.');
@@ -338,7 +349,7 @@ export function crearRegistro(nav) {
   // ---------- Armado ----------
   raiz.append(
     banda('Registro de Cajuelas'),
-    tarjeta(etiqueta('Sociedad'), pickSoc, etiqueta('Finca'), pickFinca),
+    tarjeta(etiqueta('Buscar por finca (llena la sociedad)'), buscaFinca, etiqueta('Sociedad'), pickSoc, etiqueta('Finca'), pickFinca),
     tarjeta(
       h('p', { class: 'nota' }, 'Escriba unas letras del nombre o del código para buscar a la persona, y registre la cantidad y el precio en cada línea.'),
       etiqueta('Nombre y apellidos'), persona, cabeceraCols, pista, zonaFilas

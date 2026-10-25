@@ -37,6 +37,18 @@ export function crearDiario(nav) {
     alCambiar: () => { db.set('dia_lote', lote.input.value); }
   });
 
+  // Buscar por finca: al elegirla se llenan solas la sociedad y la finca.
+  const buscaFinca = campoBusqueda({
+    placeholder: 'Ej. Caledonia', mayus: true,
+    fuente: () => sociedades().flatMap((s) => s.fincas.map((f) => ({ etiqueta: f, valor: f, detalle: s.nombre, soc: s.nombre }))),
+    alElegir: (v, o) => {
+      if (normalizar(selSociedad) !== normalizar(o.soc)) { lote.input.value = ''; db.set('dia_lote', ''); }
+      selSociedad = o.soc; finca.input.value = v; db.set('dia_finca', v);
+      buscaFinca.input.value = ''; refrescar();
+      toast(`Sociedad: ${o.soc}`, 2500);
+    }
+  });
+
   const inputs = [];
   const celdaEnc = (t, extra = '') => h('div', { class: 'enc ' + extra }, t);
   const celdaIn = () => {
@@ -211,7 +223,7 @@ export function crearDiario(nav) {
 
   raiz.append(
     banda('Recibo de Café en Beneficio'),
-    tarjeta(etiqueta('Beneficio'), pickBen, etiqueta('Sociedad'), pickSoc,
+    tarjeta(etiqueta('Beneficio'), pickBen, etiqueta('Buscar por finca (llena la sociedad)'), buscaFinca, etiqueta('Sociedad'), pickSoc,
       h('div', { class: 'dos-col' }, h('div', null, etiqueta('Finca'), finca), h('div', null, etiqueta('Corte/Lote'), lote))),
     tarjeta(cuadroMuestra, h('div', { class: 'titulo-cuadro' }, 'CANTIDAD'), h('div', { class: 'cuadro-centro' }, cuadroCant)),
     h('div', { class: 'fila-botones' },
