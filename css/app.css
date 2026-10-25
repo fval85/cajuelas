@@ -150,3 +150,30 @@ details { margin: 4px 0; } summary { padding: 8px 0; font-weight: 600; } details
 .estado.aviso { background: #fef3c7; color: #92400e; }
 .grande { font-size: 19px; font-weight: 700; margin: 0 0 4px; }
 #banner-pruebas { position: sticky; top: 0; z-index: 16; background: #ea580c; color: #fff; text-align: center; font-weight: 700; font-size: 13px; padding: 6px 10px; }
+
+/* Reportes */
+.chips { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 10px; -webkit-overflow-scrolling: touch; }
+.chips[hidden] { display: none; }
+.chip { flex: none; border: 1.5px solid var(--linea); background: #fff; color: var(--verde); border-radius: 18px; padding: 8px 14px; font: inherit; font-weight: 700; font-size: 14px; min-height: 40px; }
+.chip.on { background: var(--verde); border-color: var(--verde); color: #fff; }
+.chips.chicas .chip { padding: 5px 12px; min-height: 34px; font-size: 13px; }
+.rep-titulo { font-size: 18px; margin: 4px 0 2px; }
+.kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.kpi { background: #fff; border: 1px solid var(--borde); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; min-width: 0; }
+.kpi small { color: var(--gris); font-weight: 700; font-size: 12px; }
+.kpi b { font-size: 19px; color: var(--verde); overflow-wrap: anywhere; }
+.kpi span { font-size: 12.5px; font-weight: 700; }
+.pos { color: #166534; } .neg { color: var(--rojo); }
+.grafico-caja { padding: 8px; }
+.grafico { display: block; width: 100%; height: auto; }
+.tabla-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--borde); border-radius: 12px; background: #fff; margin-bottom: 10px; }
+.tabla-rep { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13px; }
+.tabla-rep th, .tabla-rep td { padding: 8px 9px; border-bottom: 1px solid #eef2ef; white-space: nowrap; background: #fff; }
+.tabla-rep th { background: var(--verde); color: #fff; font-size: 12px; text-align: center; white-space: normal; min-width: 76px; position: sticky; top: 0; }
+.tabla-rep td.der { text-align: right; font-variant-numeric: tabular-nums; }
+.tabla-rep .fija { position: sticky; left: 0; z-index: 1; text-align: left; min-width: 118px; max-width: 170px; overflow: hidden; text-overflow: ellipsis; box-shadow: 1px 0 0 #d1dcd5; }
+.tabla-rep th.fija { z-index: 2; background: var(--verde); }
+.tabla-rep tr.total td { font-weight: 700; background: var(--verde-claro); }
+.tabla-rep tr.destacada td { background: #fef3c7; }
+.tabla-rep tr.clic td { cursor: pointer; }
+.tabla-rep tr.clic:active td { background: #eef2ef; }

@@ -1,0 +1,66 @@
+ACTUALIZAR A LA VERSIÓN 2.4.0
+Novedades: tiquete PROVISIONAL en Registro y nueva pestaña REPORTES (solo administradores).
+La dirección (URL) de la app NO cambia. Haga los pasos en este orden.
+
+PARTE 1. GOOGLE SHEET "Históricos" (una sola vez)
+1. Suba el archivo Historicos.xlsx a Google Drive.
+2. Ábralo con Google Sheets y use Archivo > Guardar como Hojas de cálculo de Google.
+   Déjelo con el nombre «Históricos». Debe tener una hoja llamada GENERAL.
+3. Cada vez que quiera actualizarlo pegue las filas nuevas debajo (mismas 12 columnas):
+   cosecha, mes, fecha, cliente, apc, sociedad, finca, tipo, cajuelas, fanegas, adelanto, intereses.
+   Las fechas deben ser fechas reales. La app calcula todo sola; no toca la base operativa.
+4. Botón Compartir del Históricos: no hace falta compartirlo con nadie más, pero la cuenta de Google
+   dueña del Apps Script debe poder abrirlo (si lo creó con esa misma cuenta, ya puede).
+5. Copie el enlace del archivo (barra de direcciones).
+
+PARTE 2. LIBRO DE GOOGLE SHEETS "Cajuelas - PRODUCCIÓN"
+1. Hoja «Configuración»: agregue una fila nueva debajo de los precios:
+      Clave: Históricos     Valor: (pegue el enlace del Históricos)
+2. Extensiones > Apps Script: borre todo, pegue el contenido del archivo GoogleAppsScript.gs nuevo
+   y cambie TOKEN_SECRETO por el MISMO token que ya usa (letra por letra). Guarde.
+3. Implementar > Administrar implementaciones > lápiz > Versión: Nueva versión > Implementar.
+   (No cree una implementación nueva: así la URL se mantiene.)
+4. Cierre y abra el Google Sheet. En el menú Café ejecute «Probar el enlace de Históricos».
+   La primera vez Google pide permisos (acceso a otras hojas de cálculo): acéptelos.
+   Debe decir «Históricos correcto» con las cosechas encontradas.
+5. La hoja «Datos» tendrá una columna nueva «Provisional» (se agrega sola con el primer envío).
+
+PARTE 3. LA APP (GitHub Pages)
+1. En GitHub abra el repositorio de la app > Add file > Upload files.
+2. Descomprima RegistroCajuelas_Web_v2.4.0.zip y suba TODO su contenido (reemplaza lo anterior).
+3. Commit changes. En 1 a 2 minutos abra la app: aparece «Hay una versión nueva» > Actualizar ahora.
+   Compruebe en Ajustes que dice versión 2.4.0.
+
+PARTE 4. PERMISOS (hoja «Usuarios»)
+- Reportes: los usuarios con rol Administrador ya lo ven. Si un administrador tiene la columna
+  «Permisos» llena, agregue la palabra  reportes  (y  provisional  si quiere).
+- Tiquete provisional: lo tiene el rol Administrador. Para que un digitador también pueda,
+  en su fila de «Permisos» escriba, por ejemplo:   registro, reimprimir, provisional
+
+CÓMO SE USA
+Tiquete provisional (Registro): escriba el nombre y apellido de la persona que no está en la lista,
+agregue las líneas y toque Emitir. La app pregunta si desea emitirlo como PROVISIONAL.
+- El tiquete dice *** PROVISIONAL *** y "Tarjeta: PROVISIONAL (sin tarjeta)"; sin deducción.
+- En Google Sheets la fila queda amarilla con «SÍ» en la columna Provisional.
+- Menú Café > «Ver tiquetes provisionales pendientes» arma la hoja «Provisionales» con la lista
+  para que agregue a esas personas a la hoja Personas.
+- Salen marcados como PROVISIONAL en el Resumen de Registro.
+
+Reportes (pestaña nueva, solo administradores):
+- Al entrar descarga los datos del Históricos (los guarda para verlos sin Internet).
+  «Actualizar datos» vuelve a leerlos cuando usted cambie el archivo.
+- Filtros: cosecha, fecha de corte, sociedad, tipo y cliente. La fecha de corte sale sola:
+  es la última fecha con datos de la cosecha elegida; cámbiela si quiere otra.
+- Se compara con la MISMA fecha de las 3 cosechas anteriores.
+- Reportes: Comparativo (barras + curva acumulada), Fincas (cajuelas y fanegas acumuladas),
+  Sociedades (comparativo; toque una sociedad para ver sus fincas), Desglose (mes, tipo,
+  cliente o APC, con adelanto e intereses) y Por día.
+- «Compartir PDF y Excel» genera el PDF apaisado y el Excel del reporte que está viendo.
+- Fanegas = cajuelas ÷ 20. Adelanto e intereses se toman tal cual del Históricos.
+
+SI ALGO FALLA
+- "No se pudo abrir el Google Sheet Históricos": revise el enlace de la hoja Configuración y que
+  la cuenta dueña del Apps Script tenga acceso al archivo; ejecute «Probar el enlace de Históricos».
+- "Falta la acción historicos": no se implementó la Nueva versión del Apps Script (Parte 2, paso 3).
+- "No encontré los encabezados Cosecha y Cajuelas": la hoja GENERAL debe tener esos encabezados
+  en la fila 1 (o hasta la fila 5).

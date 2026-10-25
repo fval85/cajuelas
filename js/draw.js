@@ -3,6 +3,7 @@ import { fmtNum, fmtCant, fmtPct, fmtQty, fmtMoney, fmtMoney2, parseQty, diaLegi
 import { rc, totalesRecibos, montoLinea, tipoBoletoEtiqueta, totalFichas, totalCajuelasMov } from './data.js';
 import { normalizar } from './util.js';
 import { modoPruebas } from './store.js';
+import { celdaTxt, miles, pctSigno } from './rep_calc.js';
 
 const MONO = '"DejaVu Sans Mono", monospace';
 const SANS = '"DejaVu Sans", sans-serif';
@@ -280,6 +281,7 @@ export function lineasComprobante(g, reimpresion) {
   titulo(out, 'COMPROBANTE DE CAMBIO DE FICHAS', cols);
   if (modoPruebas) centrar(out, '*** PRUEBA ***', cols, true);
   if (reimpresion) { centrar(out, '*** REIMPRESIÓN ***', cols); centrar(out, ahoraTxt(), cols); }
+  if (g.provisional) centrar(out, '*** PROVISIONAL ***', cols, true);
   if (g.anulado) centrar(out, '*** ANULADO ***', cols, true);
   out.push(TL(regla));
   campo(out, 'Comprobante', g.numero, cols, true);
@@ -288,6 +290,7 @@ export function lineasComprobante(g, reimpresion) {
   campo(out, 'Finca', g.finca, cols);
   campoAjustado(out, 'Nombre', g.persona, cols);
   if (g.tarjeta) campo(out, 'Tarjeta', tarjetaEnmascarada(g.tarjeta), cols);
+  else if (g.provisional) campo(out, 'Tarjeta', 'PROVISIONAL (sin tarjeta)', cols, true);
   if (g.usuario) campoAjustado(out, 'Usuario', g.usuario, cols);
   out.push(TL(regla));
   tabla(out, g, cols);
@@ -298,6 +301,7 @@ export function lineasComprobante(g, reimpresion) {
   totalGrande(out, g.neto, cols, 'TOTAL A PAGAR ₡');
   out.push(TL(regla));
   if (g.anulado) { campo(out, 'Anulado', g.anuladoFecha, cols, true); campo(out, 'Motivo', g.motivo, cols); out.push(TL(regla)); }
+  if (g.provisional) { out.push(TL('')); centrar(out, 'Persona no registrada en la base. Tiquete provisional pendiente de verificar.', cols); }
   if (g.cosecha) { out.push(TL('')); centrar(out, `Cosecha: ${g.cosecha}`, cols, true); }
   out.push(TL(''));
   return out;
@@ -307,6 +311,7 @@ export function lineasAnulacion(g) {
   titulo(out, 'COMPROBANTE DE CAMBIO DE FICHAS', cols);
   if (modoPruebas) centrar(out, '*** PRUEBA ***', cols, true);
   centrar(out, '*** ANULACIÓN ***', cols, true);
+  if (g.provisional) centrar(out, '(tiquete provisional)', cols);
   out.push(TL(regla));
   campo(out, 'Anula comprobante', g.numero, cols, true);
   campo(out, 'Fecha original', g.emitido || diaLegible(g.date), cols);
@@ -380,7 +385,7 @@ export function paginasResumenRegistro(d) {
   d.personas.forEach((p) => {
     if (y > pageH - 65) nueva(true);
     txt(c, p.codigo.length > 7 ? p.codigo.slice(0, 7) : p.codigo, margin, y, normal);
-    txt(c, p.tarjeta, xCard, y, normal);
+    txt(c, p.tarjeta || (p.provisional ? 'PROVISIONAL' : ''), xCard, y, normal);
     txt(c, recortar(p.name, normal, nameW - 6), xName, y, normal);
     let x = xPrices;
     d.precios.forEach((pr) => {
@@ -401,6 +406,7 @@ export function paginasResumenRegistro(d) {
   }
   y += 6;
   txt(c, `TOTAL GENERAL A PAGAR: ${fmtMoney(d.total)}`, margin, y, tit);
+  if (d.personas.some((p) => p.provisional)) { y += 18; txt(c, 'PROVISIONAL = persona que no está en la base al emitir el tiquete (pendiente de verificar).', margin, y, normal); }
   if (d.anulados.length) {
     y += 28;
     const sala = () => { if (y > pageH - 40) nueva(true); };
@@ -550,6 +556,149 @@ export function paginasTablas(tablas, pageW, pageH) {
       y += 8;
       ls.forEach((l) => { txt(c, l, MG, y + 8, np); y += 11; });
     }
+  }
+  return paginas;
+}
+
+
+// ====================== Gráficos y reportes (pestaña Reportes) ======================
+const SERIE_COLORES = ['#14532D', '#2563EB', '#D97706', '#7C3AED'];
+export const colorSerie = (i) => SERIE_COLORES[i % SERIE_COLORES.length];
+function escalaBonita(max) {
+  if (!(max > 0)) return { max: 4, paso: 1 };
+  const raw = max / 4, mag = Math.pow(10, Math.floor(Math.log10(raw))), r = raw / mag;
+  const paso = (r <= 1 ? 1 : r <= 2 ? 2 : r <= 2.5 ? 2.5 : r <= 5 ? 5 : 10) * mag;
+  return { paso, max: Math.ceil(max / paso - 1e-9) * paso };
+}
+const GRIS = '#E5E7EB';
+function leyenda(c, x, y, g) {
+  const peq = P(7.5, false, false, '#374151');
+  let lx = x;
+  g.series.forEach((s, i) => { rectLleno(c, lx, y, 8, 8, s.color || colorSerie(i)); txt(c, s.nombre, lx + 11, y + 7.5, peq); lx += 11 + medir(peq, s.nombre) + 14; });
+}
+function barrasV(c, x, y, w, h, g) {
+  const peq = P(7.5, false, false, '#374151'), val = P(7, true, false, '#111827');
+  const L = 44, B = 16, T = 10;
+  const px = x + L, pw = w - L - 4, py = y + T, ph = h - T - B;
+  const max = Math.max(...g.series.flatMap((s) => s.valores), 0);
+  const esc = escalaBonita(max);
+  for (let v = 0; v <= esc.max + 1e-9; v += esc.paso) {
+    const yy = py + ph - (v / esc.max) * ph;
+    linea(c, px, yy, px + pw, yy, 0.5, GRIS);
+    const t = miles(v); txt(c, t, px - 4 - medir(peq, t), yy + 2.5, peq);
+  }
+  const n = g.cats.length, slot = pw / n, grupo = slot * 0.72, bw = grupo / g.series.length;
+  const maxEt = Math.max(1, Math.floor(pw / 40));
+  const salto = Math.ceil(n / maxEt);
+  g.cats.forEach((cat, i) => {
+    const gx = px + i * slot + (slot - grupo) / 2;
+    g.series.forEach((s, k) => {
+      const bh = (s.valores[i] / esc.max) * ph;
+      const col = (g.colores && g.series.length === 1 && g.colores[i]) || s.color || colorSerie(k);
+      rectLleno(c, gx + k * bw, py + ph - bh, Math.max(bw - 1, 1), bh, col);
+      if (n <= 14 && g.series.length <= 2 && s.valores[i] > 0) {
+        const t = miles(s.valores[i]); if (medir(val, t) <= slot * 1.05) txt(c, t, gx + k * bw + bw / 2 - medir(val, t) / 2, py + ph - bh - 2.5, val);
+      }
+    });
+    if (i % salto === 0) { const t = recortar(String(cat), peq, slot * salto - 2); txt(c, t, px + i * slot + slot / 2 - medir(peq, t) / 2, py + ph + 11, peq); }
+  });
+  linea(c, px, py + ph, px + pw, py + ph, 0.8, '#6B7280');
+}
+function barrasH(c, x, y, w, h, g) {
+  const peq = P(7.5, false, false, '#374151'), val = P(7, true, false, '#111827');
+  const n = g.cats.length, ns = g.series.length;
+  const lw = Math.min(w * 0.36, Math.max(...g.cats.map((t) => medir(peq, String(t)))) + 4);
+  const px = x + lw + 4, pw = w - lw - 4 - 34;
+  const max = Math.max(...g.series.flatMap((s) => s.valores), 0);
+  const esc = escalaBonita(max);
+  const slot = h / n, grupo = Math.min(slot * 0.8, ns * 16), bh = grupo / ns;
+  for (let v = 0; v <= esc.max + 1e-9; v += esc.paso) linea(c, px + (v / esc.max) * pw, y, px + (v / esc.max) * pw, y + h, 0.5, GRIS);
+  g.cats.forEach((cat, i) => {
+    const gy = y + i * slot + (slot - grupo) / 2;
+    const t = recortar(String(cat), peq, lw); txt(c, t, px - 4 - medir(peq, t), gy + grupo / 2 + 2.5, peq);
+    g.series.forEach((s, k) => {
+      const bw = (s.valores[i] / esc.max) * pw;
+      rectLleno(c, px, gy + k * bh, Math.max(bw, 0), Math.max(bh - 1, 1), s.color || colorSerie(k));
+      if (bh >= 7 && s.valores[i] > 0) txt(c, miles(s.valores[i]), px + bw + 3, gy + k * bh + bh / 2 + 2.5, val);
+    });
+  });
+  linea(c, px, y, px, y + h, 0.8, '#6B7280');
+}
+function lineasG(c, x, y, w, h, g) {
+  const peq = P(7.5, false, false, '#374151');
+  const L = 44, B = 16, T = 8;
+  const px = x + L, pw = w - L - 10, py = y + T, ph = h - T - B;
+  const max = Math.max(...g.series.flatMap((s) => s.pts.map((p) => p[1])), 0);
+  const esc = escalaBonita(max);
+  for (let v = 0; v <= esc.max + 1e-9; v += esc.paso) {
+    const yy = py + ph - (v / esc.max) * ph;
+    linea(c, px, yy, px + pw, yy, 0.5, GRIS);
+    const t = miles(v); txt(c, t, px - 4 - medir(peq, t), yy + 2.5, peq);
+  }
+  const X = (v) => px + (v / Math.max(g.xmax, 1)) * pw, Yv = (v) => py + ph - (v / esc.max) * ph;
+  (g.xticks || []).forEach((t) => { const xx = X(t.x); linea(c, xx, py + ph, xx, py + ph + 3, 0.8, '#6B7280'); const tx = recortar(t.label, peq, 60); txt(c, tx, Math.min(xx - medir(peq, tx) / 2, px + pw - medir(peq, tx) + 6), py + ph + 12, peq); });
+  linea(c, px, py + ph, px + pw, py + ph, 0.8, '#6B7280');
+  // La cosecha elegida se dibuja al final para quedar encima.
+  [...g.series.keys()].reverse().forEach((i) => {
+    const s = g.series[i], col = s.color || colorSerie(i);
+    c.strokeStyle = col; c.lineWidth = i === 0 ? 2.2 : 1.5; c.lineJoin = 'round'; c.beginPath();
+    s.pts.forEach((p, k) => { if (k) c.lineTo(X(p[0]), Yv(p[1])); else c.moveTo(X(p[0]), Yv(p[1])); });
+    c.stroke();
+    const u = s.pts[s.pts.length - 1];
+    if (u) { c.fillStyle = col; c.beginPath(); c.arc(X(u[0]), Yv(u[1]), i === 0 ? 3 : 2.2, 0, Math.PI * 2); c.fill(); }
+  });
+}
+/** Dibuja un gráfico {tipo:'barras'|'barrasH'|'lineas', titulo, cats, series[{nombre, valores|pts, color}]} dentro del rectángulo dado. */
+export function dibujarGrafico(c, x, y, w, h, g) {
+  txt(c, g.titulo, x, y + 10, P(10, true, false));
+  let top = y + 18;
+  if (g.series.length > 1) { leyenda(c, x, top, g); top += 14; }
+  const alto = h - (top - y) - 2;
+  if (g.tipo === 'barrasH') barrasH(c, x, top, w, alto, g);
+  else if (g.tipo === 'lineas') lineasG(c, x, top, w, alto, g);
+  else barrasV(c, x, top, w, alto, g);
+}
+/** Gráfico suelto como lienzo, para mostrarlo en pantalla. */
+export function lienzoGrafico(g, ancho = 640, alto = 300) {
+  const pg = crearPagina(ancho, alto, 3);
+  dibujarGrafico(pg.c, 6, 4, ancho - 12, alto - 8, g);
+  return pg.canvas;
+}
+const COLORES_PDF_KPI = { pos: '#166534', neg: '#B91C1C' };
+/** Reporte completo para PDF: primera hoja con resumen y gráficos, luego la tabla. Apaisado. */
+export function paginasReporte(rep, pie = '') {
+  const W = 842, H = 595, MG = 24;
+  const pg = crearPagina(W, H, 2.2), c = pg.c;
+  let y = MG;
+  txt(c, rep.titulo, MG, y + 14, P(16, true, false)); y += 24;
+  rep.subtitulos.forEach((t) => { envolver(t, P(9, false, false), W - 2 * MG).forEach((l) => { txt(c, l, MG, y + 9, P(9, false, false, '#374151')); y += 12; }); });
+  y += 8;
+  if (rep.kpis && rep.kpis.length) {
+    const n = rep.kpis.length, gap = 8, bw = (W - 2 * MG - gap * (n - 1)) / n, bh = 52;
+    rep.kpis.forEach((k, i) => {
+      const bx = MG + i * (bw + gap);
+      rectLleno(c, bx, y, bw, bh, '#E8F1EB');
+      txt(c, k.t, bx + 8, y + 14, P(8, false, false, '#374151'));
+      { let sz = 14; while (sz > 8 && medir(P(sz, true, false), k.v) > bw - 16) sz -= 0.5; txt(c, k.v, bx + 8, y + 32, P(sz, true, false)); }
+      if (k.d != null) txt(c, `${pctSigno(k.d)} ${k.ref}`, bx + 8, y + 46, P(8, true, false, k.d < 0 ? COLORES_PDF_KPI.neg : COLORES_PDF_KPI.pos));
+    });
+    y += bh + 14;
+  }
+  const gs = (rep.graficos || []).slice(0, 2);
+  if (gs.length) {
+    const cols = gs.length, gw = (W - 2 * MG - 16 * (cols - 1)) / cols;
+    gs.forEach((g, i) => dibujarGrafico(c, MG + i * (gw + 16), y, gw, H - y - MG - 12, g));
+  }
+  txt(c, pie, MG, H - 10, P(7, false, false, '#6B7280'));
+  const paginas = [{ ...pg, ancho: W, alto: H }];
+  if (rep.filas && rep.filas.length) {
+    const tw = W - 2 * MG, sp = rep.cols.reduce((t, k) => t + k.peso, 0);
+    const columnas = rep.cols.map((k) => ({ titulo: k.t, ancho: tw * k.peso / sp, derecha: k.tipo !== 'txt' }));
+    const filas = rep.filas.map((f) => ({
+      celdas: rep.cols.map((k, i) => celdaTxt(k, f.v[i])), negrita: f.negrita, fondo: f.fondo,
+      rojas: rep.cols.map((k, i) => (k.tipo === 'pct' && typeof f.v[i] === 'number' && f.v[i] < -0.0005 ? i : -1)).filter((i) => i >= 0)
+    }));
+    paginasTablas([{ titulos: [[rep.titulo, 12]], columnas, filas, nota: (rep.nota || '') + (pie ? '  ' + pie : '') }], W, H).forEach((p) => paginas.push(p));
   }
   return paginas;
 }

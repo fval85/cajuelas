@@ -113,9 +113,19 @@ export async function registroDelDia(dia) {
   const lista = r.json.lineas.map((o) => ({
     date: dia, comprobante: s(o.comprobante), dispositivo: s(o.dispositivo), emitido: s(o.fechaHora), cosecha: s(o.cosecha), sociedad: s(o.sociedad),
     finca: s(o.finca), personName: s(o.nombre), quantity: s(o.cantidad), price: n(o.precio), deduccion: n(o.deduccion), codigo: s(o.codigo),
-    tarjeta: s(o.tarjeta), usuario: s(o.usuario), anulado: !!o.anulado, motivo: s(o.motivo), anuladoFecha: s(o.anuladoFecha)
+    tarjeta: s(o.tarjeta), usuario: s(o.usuario), provisional: !!o.provisional, anulado: !!o.anulado, motivo: s(o.motivo), anuladoFecha: s(o.anuladoFecha)
   }));
   return { error: null, lista };
+}
+
+/** Filas de la hoja GENERAL del Google Sheet «Históricos» (últimas cosechas), para la pestaña Reportes. */
+export async function historicos() {
+  if (!configurado()) return { error: 'Falta configurar la URL y el token en Ajustes > Administración.' };
+  const { url, token } = syncCfg();
+  const r = await postJson(url, { action: 'historicos', token, cuantas: 4 }, 60000);
+  if (!r.ok) return { error: /inv[aá]lida|desconocid/i.test(r.message) ? r.message : r.message };
+  if (!Array.isArray(r.json.filas)) return { error: 'El Apps Script no está actualizado (falta la acción historicos).' };
+  return { error: null, filas: r.json.filas, cosechas: r.json.cosechas || [], usadas: r.json.usadas || [], actualizado: s(r.json.actualizado) };
 }
 
 export async function movimientosBoletos(cosecha, hasta, normMedida) {

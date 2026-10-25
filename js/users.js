@@ -5,7 +5,7 @@ import { db, syncCfg, configurado } from './store.js';
 import { postJson } from './sync.js';
 
 export const ROLES = {
-  'Administrador': ['registro', 'diario', 'boletos', 'anular', 'reimprimir', 'resumenes', 'precios', 'config', 'todos'],
+  'Administrador': ['registro', 'diario', 'boletos', 'anular', 'reimprimir', 'resumenes', 'precios', 'config', 'provisional', 'reportes', 'todos'],
   'Recibidor de Café': ['diario', 'reimprimir', 'resumenes'],
   'Encargado de boletos': ['boletos', 'reimprimir', 'resumenes'],
   'Digitador de registro': ['registro', 'reimprimir']
@@ -46,7 +46,7 @@ export function permisosDe(u) {
 export function puede(clave) {
   if (!hayControl()) return true;
   const s = sesion();
-  return !!s && (s.permisos.has(clave) || s.permisos.has('todo'));
+  return !!s && (s.permisos.has(clave) || s.permisos.has('todo') || s.permisos.has('todos'));
 }
 export const nombreUsuario = () => { const s = sesion(); return s ? s.nombre : ''; };
 export const necesitaLogin = () => hayControl() && !sesion();

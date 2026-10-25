@@ -24,7 +24,7 @@ export function aGrupo(ls) {
   return {
     numero: f.comprobante, date: f.date, emitido: f.emitido, cosecha, sociedad: f.sociedad, finca: f.finca,
     persona: f.personName, tarjeta: tarjeta || '', lines: ls, anulado: ls.every((l) => l.anulado), motivo: f.motivo || '',
-    anuladoFecha: f.anuladoFecha || '', usuario: f.usuario || '', anuladoPor: f.anuladoPor || '', total, deduccion, neto: total - deduccion
+    anuladoFecha: f.anuladoFecha || '', usuario: f.usuario || '', anuladoPor: f.anuladoPor || '', provisional: ls.some((l) => l.provisional), total, deduccion, neto: total - deduccion
   };
 }
 export function todosLosComprobantes() {
@@ -37,12 +37,12 @@ export function todosLosComprobantes() {
   return [...mapa.values()].map(aGrupo).reverse();
 }
 
-export function payloadRegistro({ reportId, dateText, cosecha, sociedad, finca, personName, codigo, tarjeta, deduccion, valid, comprobante, estado = 'ACTIVO', motivo = '', usuario = nombreUsuario() }) {
+export function payloadRegistro({ reportId, dateText, cosecha, sociedad, finca, personName, codigo, tarjeta, deduccion, valid, comprobante, estado = 'ACTIVO', motivo = '', usuario = nombreUsuario(), provisional = false }) {
   const sumNumbers = valid.reduce((t, v) => t + parseQty(v[0]), 0);
   const sumPrices = valid.reduce((t, v) => t + v[1], 0);
   const total = valid.reduce((t, v) => t + parseQty(v[0]) * v[1], 0);
   return {
-    reportId, dia: diaHoy(), fechaHora: dateText, dispositivo: deviceName(), cosecha, sociedad, finca, comprobante, estado, motivo, usuario,
+    reportId, dia: diaHoy(), fechaHora: dateText, dispositivo: deviceName(), cosecha, sociedad, finca, comprobante, estado, motivo, usuario, provisional: !!provisional,
     codigo, nombreCompleto: personName, tarjeta: soloDigitos(tarjeta), deduccion, cantidadLineas: valid.length, sumaNumeros: sumNumbers,
     sumaPrecios: sumPrices, totalMultiplicado: total, totalPagar: total - deduccion,
     lineas: valid.map((v) => ({ cantidad: v[0], precio: v[1], resultado: parseQty(v[0]) * v[1] }))

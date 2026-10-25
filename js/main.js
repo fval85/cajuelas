@@ -5,6 +5,7 @@ import { cuantosPendientes, enviarPendientes, alCambiarPendientes, iniciarReinte
 import { crearRegistro } from './ui_registro.js';
 import { crearDiario } from './ui_diario.js';
 import { crearBoletos } from './ui_boletos.js';
+import { crearReportes } from './ui_reportes.js';
 import { crearAjustes, actualizarCatalogo } from './ui_ajustes.js';
 import { icono } from './ui.js';
 import { hayControl, puede, necesitaLogin, pantallaLogin, cerrarLogin, alCambiarSesion, actualizarUsuarios, sesion } from './users.js';
@@ -34,9 +35,10 @@ const nav = {
   pendientes() { pintarBarra(); },
   catalogoCambio() { paginas.forEach((p) => p.refrescar && p.refrescar()); }
 };
-const paginas = [crearRegistro(nav), crearDiario(nav), crearBoletos(nav), crearAjustes(nav)];
-const nombres = [['Registro', 'registro'], ['Diario', 'diario'], ['Boletos', 'boletos'], ['Ajustes', 'ajustes']];
-const permisoTab = ['registro', 'diario', 'boletos', null];
+const paginas = [crearRegistro(nav), crearDiario(nav), crearBoletos(nav), crearReportes(nav), crearAjustes(nav)];
+const nombres = [['Registro', 'registro'], ['Diario', 'diario'], ['Boletos', 'boletos'], ['Reportes', 'reportes'], ['Ajustes', 'ajustes']];
+const permisoTab = ['registro', 'diario', 'boletos', 'reportes', null];
+const TAB_AJUSTES = 4;
 let actual = 0;
 function ir(i) {
   const actualAntes = actual;
@@ -51,7 +53,7 @@ function ir(i) {
 }
 nombres.forEach(([t, ic], i) => tabs.append(h('button', { type: 'button', role: 'tab', class: 'tab', onclick: () => ir(i) }, icono(ic, 24), h('span', null, t))));
 paginas.forEach((p) => contenido.append(p.el));
-function primeraPermitida() { const k = permisoTab.findIndex((p) => !p || puede(p)); return k < 0 ? 3 : k; }
+function primeraPermitida() { const k = permisoTab.findIndex((p) => !p || puede(p)); return k < 0 ? TAB_AJUSTES : k; }
 /** Muestra u oculta pestañas y botones según los permisos del usuario que entró. */
 function aplicarPermisos() {
   [...tabs.children].forEach((b, k) => { b.hidden = !!permisoTab[k] && !puede(permisoTab[k]); });

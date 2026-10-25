@@ -127,7 +127,15 @@ export function crearRegistro(nav) {
     if (!escrito) { persona.input.focus(); return toast('Ingrese el nombre y los apellidos de la persona.'); }
     const soc = sociedad();
     const p = findPersona(soc, escrito);
-    if (soc && soc.personas.length && !p) { persona.input.focus(); return toast('Elija a la persona de la lista de esta sociedad: escriba unas letras y toque el nombre.', 6000); }
+    let provisional = false;
+    if (soc && soc.personas.length && !p) {
+      if (!puede('provisional')) { persona.input.focus(); return toast('Elija a la persona de la lista de esta sociedad: escriba unas letras y toque el nombre. Si no está en la lista, un administrador puede emitirle un tiquete provisional.', 7000); }
+      const limpio = escrito.replace(/\s+/g, ' ');
+      if (limpio.split(' ').length < 2 || limpio.length < 6) { persona.input.focus(); return toast('Para un tiquete provisional escriba el nombre y al menos un apellido.', 6000); }
+      const ok = await confirmar('Persona no registrada', `«${limpio}» no está en la lista de ${selSociedad}.\n\nSe emitirá un tiquete PROVISIONAL, sin tarjeta ni deducción. Quedará marcado en el tiquete y en Google Sheets para que se agregue a la base.\n\n¿Emitir provisional?`, { si: 'Emitir provisional' });
+      if (!ok) return;
+      provisional = true;
+    }
     const deduccion = p ? p.deduccion : 0;
     const bruto = valid.reduce((t, v) => t + parseQty(v[0]) * v[1], 0);
     if (deduccion > 0 && deduccion > bruto + 0.005) {
@@ -135,10 +143,10 @@ export function crearRegistro(nav) {
         `La deducción de ${p.nombre} (${fmtMoney(deduccion)}) es mayor que el total de este comprobante (${fmtMoney(bruto)}). El total a pagar quedaría negativo.\n\n¿Emitir de todas formas?`, { si: 'Emitir' });
       if (!ok) return;
     }
-    registrar(valid, co, selSociedad, selFinca, p ? p.nombre : escrito, p);
+    registrar(valid, co, selSociedad, selFinca, p ? p.nombre : escrito.replace(/\s+/g, ' '), p, provisional);
   }
 
-  async function registrar(valid, co, soc, finca, nombre, p) {
+  async function registrar(valid, co, soc, finca, nombre, p, provisional = false) {
     const ahora = new Date();
     const numero = siguienteNumero('next_comprobante', 'C-');
     const texto = ahoraTxt(ahora), dia = diaHoy(ahora);
@@ -147,13 +155,13 @@ export function crearRegistro(nav) {
     const todas = lineas.todas();
     valid.forEach((v, i) => todas.push({
       date: dia, sociedad: soc, finca, personName: nombre, quantity: v[0], price: v[1], comprobante: numero, anulado: false, motivo: '', anuladoFecha: '',
-      emitido: texto, cosecha: co, codigo, tarjeta: tarj, deduccion: i === 0 ? ded : 0, usuario: nombreUsuario()
+      emitido: texto, cosecha: co, codigo, tarjeta: tarj, deduccion: i === 0 ? ded : 0, usuario: nombreUsuario(), provisional
     }));
     lineas.guardar(todas);
     confirmarNumero('next_comprobante');
     const grupo = aGrupo(todas.filter((l) => l.comprobante === numero && l.date === dia));
     persona.input.value = ''; filas = []; pintarFilas(); guardarBorrador();
-    encolar(payloadRegistro({ reportId: reporte, dateText: texto, cosecha: co, sociedad: soc, finca, personName: nombre, codigo, tarjeta: tarj, deduccion: ded, valid, comprobante: numero }));
+    encolar(payloadRegistro({ reportId: reporte, dateText: texto, cosecha: co, sociedad: soc, finca, personName: nombre, codigo, tarjeta: tarj, deduccion: ded, valid, comprobante: numero, provisional }));
     nav.pendientes();
     await mostrarTiquetes([lineasComprobante(grupo, false)], `Comprobante ${numero}`, `tiquete_${numero}.pdf`);
   }
@@ -171,7 +179,7 @@ export function crearRegistro(nav) {
     const g = await listaBuscable({
       titulo: 'Reimprimir comprobante', placeholder: 'Buscar: número, nombre, finca, fecha...', texto: 'comprobantes',
       items: todos.map((x) => ({
-        titulo: `${x.numero}  ·  ${x.persona}${x.anulado ? '  ·  ANULADO' : ''}`, rojo: x.anulado,
+        titulo: `${x.numero}  ·  ${x.persona}${x.provisional ? '  ·  PROVISIONAL' : ''}${x.anulado ? '  ·  ANULADO' : ''}`, rojo: x.anulado,
         detalle: `${diaLegible(x.date)}  ·  ${x.sociedad}  ·  ${x.finca}  ·  ${fmtMoney(x.neto)}`,
         busqueda: `${x.numero} ${x.persona} ${x.cosecha} ${x.sociedad} ${x.finca} ${diaLegible(x.date)} ${x.emitido}`, valor: x
       }))
@@ -214,7 +222,7 @@ export function crearRegistro(nav) {
     encolar(payloadRegistro({
       reportId: 'ANUL_' + stampCorto(ahora) + '_' + numero, dateText: sello, cosecha: grupo.cosecha, sociedad: first.sociedad, finca: first.finca,
       personName: first.personName, codigo: first.codigo, tarjeta: grupo.tarjeta, deduccion: -anuladas.reduce((t, l) => t + l.deduccion, 0),
-      valid: negadas, comprobante: numero, estado: 'ANULACIÓN', motivo
+      valid: negadas, comprobante: numero, estado: 'ANULACIÓN', motivo, provisional: !!grupo.provisional
     }));
     nav.pendientes();
     if (!persona.input.value.trim() && filas.every((f) => !f.q.trim() && !f.p.trim())) {
@@ -283,7 +291,7 @@ export function crearRegistro(nav) {
       const tarj = ((ls.find((l) => l.tarjeta) || {}).tarjeta || (reg ? reg.tarjeta : '') || '').replace(/\D/g, '');
       const total = Object.entries(cant).reduce((t, [pr, q]) => t + Number(pr) * q, 0);
       const deduccion = ls.reduce((t, l) => t + (l.deduccion || 0), 0);
-      return { name, codigo, tarjeta: tarj, deduccion, cant, total, neto: total - deduccion };
+      return { name, codigo, tarjeta: tarj, deduccion, cant, total, neto: total - deduccion, provisional: ls.some((l) => l.provisional) };
     });
     const totalBruto = hoyLineas.reduce((t, l) => t + montoLinea(l), 0);
     const totalDed = hoyLineas.reduce((t, l) => t + (l.deduccion || 0), 0);
@@ -304,7 +312,7 @@ export function crearRegistro(nav) {
     enc.push('Deducción', 'Total a pagar');
     f.push(enc);
     personas.forEach((p) => {
-      const r = [p.codigo, p.tarjeta, p.name];
+      const r = [p.codigo, p.tarjeta || (p.provisional ? 'PROVISIONAL' : ''), p.name];
       precios.forEach((pr) => { r.push(dec(p.cant[pr] || 0), (p.cant[pr] || 0) * pr); });
       r.push(p.deduccion, p.neto); f.push(r);
     });
