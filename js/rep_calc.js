@@ -62,10 +62,10 @@ export function parseFilas(raw) {
 export const cosechasDe = (filas) => [...new Set(filas.map((r) => r.cos))].sort((a, b) => inicioAnio(b) - inicioAnio(a));
 export function ultimaFecha(filas, cos) { let m = ''; for (const r of filas) if (r.cos === cos && r.f > m) m = r.f; return m; }
 
-export function filtrar(filas, cos, corte, f) {
+export function filtrar(filas, cos, corte, f, desde = '') {
   const toks = normalizar(f.cli || '').split(' ').filter(Boolean);
   const soc = normalizar(f.soc || ''), tipo = normalizar(f.tipo || '');
-  return filas.filter((r) => r.cos === cos && r.f <= corte && (!soc || r.ns === soc) && (!tipo || r.nt === tipo) && (!toks.length || toks.every((k) => r.nc.includes(k))));
+  return filas.filter((r) => r.cos === cos && r.f <= corte && (!desde || r.f >= desde) && (!soc || r.ns === soc) && (!tipo || r.nt === tipo) && (!toks.length || toks.every((k) => r.nc.includes(k))));
 }
 export function suma(rows) {
   let caj = 0, ade = 0, int = 0;
@@ -90,8 +90,9 @@ export function contexto(filas, f) {
   const lista = [f.cos, ...todas.filter((c) => inicioAnio(c) < inicioAnio(f.cos)).slice(0, ANTERIORES)];
   const items = lista.map((c) => {
     const corte = desplazar(f.corte, inicioAnio(c) - inicioAnio(f.cos));
-    const rows = filtrar(filas, c, corte, f);
-    return { cos: c, corte, rows, s: suma(rows) };
+    const desde = f.desde ? desplazar(f.desde, inicioAnio(c) - inicioAnio(f.cos)) : '';
+    const rows = filtrar(filas, c, corte, f, desde);
+    return { cos: c, corte, desde, rows, s: suma(rows) };
   });
   return { items, base: items[0], prev: items[1] || null };
 }
@@ -103,7 +104,7 @@ function textoFiltros(f) {
   return t.length ? t.join(' · ') : 'Sin filtros adicionales (todas las sociedades, tipos y clientes)';
 }
 function encabezado(titulo, ctx, f) {
-  const subt = [`Cosecha ${f.cos} · acumulado al ${fmtFechaDMA(ctx.base.corte)}` + (ctx.prev ? ` · comparado con la misma fecha de ${ctx.items.slice(1).map((i) => i.cos).join(', ')}` : ''), textoFiltros(f)];
+  const subt = [`Cosecha ${f.cos} · ${f.desde ? 'del ' + fmtFechaDMA(ctx.base.desde) + ' al ' : 'acumulado al '}${fmtFechaDMA(ctx.base.corte)}` + (ctx.prev ? ` · comparado con la misma fecha de ${ctx.items.slice(1).map((i) => i.cos).join(', ')}` : ''), textoFiltros(f)];
   return { titulo, subtitulos: subt };
 }
 const pctDe = (a, tot) => (tot > 0 ? a / tot : null);
@@ -139,12 +140,12 @@ function comparativo(ctx, f) {
   const rep = encabezado('Comparativo por cosecha a la misma fecha', ctx, f);
   rep.kpis = kpisDe(ctx);
   rep.cols = [
-    { t: 'Cosecha', peso: 1.3, tipo: 'txt' }, { t: 'Corte', peso: 1.2, tipo: 'fecha' }, { t: 'Recibos', peso: 0.9, tipo: 'int' },
+    { t: 'Cosecha', peso: 1.3, tipo: 'txt' }, { t: f.desde ? 'Periodo' : 'Corte', peso: f.desde ? 2.1 : 1.2, tipo: f.desde ? 'txt' : 'fecha' }, { t: 'Recibos', peso: 0.9, tipo: 'int' },
     { t: 'Cajuelas', peso: 1.1, tipo: 'int' }, { t: 'Fanegas', peso: 1.1, tipo: 'dec' }, { t: 'Adelanto', peso: 1.6, tipo: 'mon' },
     { t: 'Intereses', peso: 1.4, tipo: 'mon' }, { t: 'Actual vs. ésta (cajuelas)', peso: 1.5, tipo: 'pct' }
   ];
   rep.filas = ctx.items.map((it, i) => ({
-    v: [it.cos + (i === 0 ? ' (elegida)' : ''), it.corte, it.s.n, it.s.caj, it.s.fan, it.s.ade, it.s.int, i === 0 ? null : delta(ctx.base.s.caj, it.s.caj)],
+    v: [it.cos + (i === 0 ? ' (elegida)' : ''), f.desde ? `${fmtFechaDMA(it.desde)} al ${fmtFechaDMA(it.corte)}` : it.corte, it.s.n, it.s.caj, it.s.fan, it.s.ade, it.s.int, i === 0 ? null : delta(ctx.base.s.caj, it.s.caj)],
     negrita: i === 0, fondo: i === 0 ? '#E8F1EB' : null
   }));
   if (ctx.items.length > 1) {

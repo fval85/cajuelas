@@ -15,7 +15,7 @@ function guardarCache(o) { try { localStorage.setItem(LLAVE_CACHE, JSON.stringif
 export function crearReportes(nav) {
   const raiz = h('div', { class: 'pagina' });
   let datos = null;              // {filas (objetos), cosechas, t, actualizado}
-  let f = { cos: '', corte: '', soc: '', tipo: '', cli: '', dim: 'Mes' };
+  let f = { cos: '', desde: '', corte: '', soc: '', tipo: '', cli: '', dim: 'Mes' };
   let vista = 'comparativo';
   let cargando = false, errorCarga = '';
 
@@ -25,11 +25,13 @@ export function crearReportes(nav) {
     if (!datos) return;
     const v = await elegir('Cosecha', cosechasDe(datos.filas).map((c) => ({ etiqueta: c, valor: c })), { buscar: false });
     if (v === undefined) return;
-    f.cos = v; f.corte = ultimaFecha(datos.filas, v); f.soc = ''; pintarFiltros(); pintar();
+    f.cos = v; f.desde = ''; f.corte = ultimaFecha(datos.filas, v); f.soc = ''; pintarFiltros(); pintar();
   });
+  const iDesde = h('input', { class: 'campo', type: 'date' });
+  iDesde.addEventListener('change', () => { f.desde = iDesde.value || ''; if (f.desde && f.corte && f.desde > f.corte) { f.corte = f.desde; } pintarFiltros(); pintar(); });
   const iCorte = h('input', { class: 'campo', type: 'date' });
-  iCorte.addEventListener('change', () => { if (iCorte.value) { f.corte = iCorte.value; pintar(); } });
-  const bUltima = h('button', { type: 'button', class: 'btn-texto', onclick: () => { f.corte = ultimaFecha(datos.filas, f.cos); pintarFiltros(); pintar(); } }, 'Última fecha con datos');
+  iCorte.addEventListener('change', () => { if (iCorte.value) { f.corte = iCorte.value; if (f.desde && f.desde > f.corte) f.desde = f.corte; pintarFiltros(); pintar(); } });
+  const bUltima = h('button', { type: 'button', class: 'btn-texto', onclick: () => { f.desde = ''; f.corte = ultimaFecha(datos.filas, f.cos); pintarFiltros(); pintar(); } }, 'Toda la cosecha hasta la última fecha');
   const pSoc = selector('Todas las sociedades', async () => {
     if (!datos) return;
     const nombres = [...new Set(datos.filas.filter((r) => r.cos === f.cos).map((r) => r.soc).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
@@ -50,7 +52,7 @@ export function crearReportes(nav) {
 
   const tarjFiltros = tarjeta(
     etiqueta('Cosecha'), pCos,
-    etiqueta('Fecha de corte (acumulado hasta esta fecha)'), iCorte, bUltima,
+    h('div', { class: 'dos-col' }, h('div', null, etiqueta('Desde'), iDesde), h('div', null, etiqueta('Hasta'), iCorte)), bUltima,
     h('div', { class: 'dos-col' }, h('div', null, etiqueta('Sociedad'), pSoc), h('div', null, etiqueta('Tipo'), pTipo)),
     etiqueta('Cliente'), iCli
   );
@@ -61,7 +63,7 @@ export function crearReportes(nav) {
 
   function pintarFiltros() {
     pCos.poner(f.cos);
-    iCorte.value = f.corte || '';
+    iDesde.value = f.desde || ''; iCorte.value = f.corte || '';
     pSoc.poner(f.soc); pTipo.poner(f.tipo);
     tarjFiltros.hidden = !datos;
   }
@@ -78,7 +80,7 @@ export function crearReportes(nav) {
     datos = { filas: parseFilas(o.filas), cosechas: o.cosechas || [], t: o.t, actualizado: o.actualizado || '' };
     const cs = cosechasDe(datos.filas);
     if (!cs.includes(f.cos)) { f.cos = cs[0] || ''; f.corte = ''; }
-    if (!f.corte || f.corte > '9999') f.corte = ultimaFecha(datos.filas, f.cos);
+    if (!f.corte) f.corte = ultimaFecha(datos.filas, f.cos);
     errorCarga = '';
   }
   async function cargar(forzar) {
@@ -162,7 +164,7 @@ export function crearReportes(nav) {
     await cargarFuentes();
     const pie = `Generado ${ahoraTxt()} · Fuente: Históricos${datos && datos.actualizado ? ' (' + datos.actualizado + ')' : ''}`;
     const paginas = paginasReporte(ultimo, pie);
-    const sello = `${ultimo.vista}_${f.cos}_${(f.corte || diaHoy()).replace(/-/g, '')}`;
+    const sello = `${ultimo.vista}_${f.cos}_${f.desde ? f.desde.replace(/-/g, '') + '_' : ''}${(f.corte || diaHoy()).replace(/-/g, '')}`;
     const libro = new Blob([xlsx('Reporte', filasExcel(ultimo))], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     verDocumento({
       titulo: ultimo.titulo, paginas, nombrePdf: `Reporte_${sello}.pdf`, ancho: true, maxPaginas: 4,
@@ -183,7 +185,7 @@ export function crearReportes(nav) {
     refrescar() { /* no hace falta: los datos se leen al abrir la pestaña */ },
     // Cada vez que se entra a la pestaña empieza limpia: filtros por defecto y datos al día.
     reiniciar() {
-      f = { cos: '', corte: '', soc: '', tipo: '', cli: '', dim: 'Mes' }; vista = 'comparativo'; iCli.value = '';
+      f = { cos: '', desde: '', corte: '', soc: '', tipo: '', cli: '', dim: 'Mes' }; vista = 'comparativo'; iCli.value = '';
       const cache = leerCache();
       if (cache) usar(cache);
       pintarTodo();
