@@ -128,6 +128,17 @@ export async function historicos() {
   return { error: null, filas: r.json.filas, cosechas: r.json.cosechas || [], usadas: r.json.usadas || [], actualizado: s(r.json.actualizado) };
 }
 
+/** Pasa a Históricos el total de un día de Diario (una línea por sociedad + finca). Solo administradores (lo valida el servidor). */
+export async function pasarAHistoricos({ fecha, soloVer = false, forzar = false }) {
+  if (!configurado()) return { error: 'Falta configurar la URL y el token en Ajustes > Administración.' };
+  const { url, token } = syncCfg();
+  const r = await postJson(url, { action: 'pasarHistoricos', token, fecha, soloVer, forzar, usuario: (db.get('sesion', null) || {}).nombre || '', hash: (db.get('sesion', null) || {}).hash || '' }, 90000);
+  if (!r.json && !r.ok) return { error: r.message };
+  if (r.json && r.json.success === false) return { error: r.json.message || r.message };
+  if (!r.json || typeof r.json.lineas !== 'number') return { error: 'El Apps Script no está actualizado (falta la acción pasarHistoricos).' };
+  return { error: null, ...r.json };
+}
+
 export async function movimientosBoletos(cosecha, hasta, normMedida) {
   if (!configurado()) return { error: 'Falta configurar la URL y el token en Ajustes > Administración.', lista: [] };
   const { url, token } = syncCfg();

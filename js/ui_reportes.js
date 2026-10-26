@@ -1,7 +1,8 @@
 // Pestaña «Reportes» (solo administradores): comparativos de cosechas con los datos del Google Sheet «Históricos».
-import { h, clear, toast, elegir, normalizar, diaHoy, ahoraTxt } from './util.js';
+import { h, clear, toast, elegir, normalizar, diaHoy, ahoraTxt, confirmar } from './util.js';
+import { puede } from './users.js';
 import { modoPruebas } from './store.js';
-import { historicos } from './sync.js';
+import { historicos, pasarAHistoricos } from './sync.js';
 import { tarjeta, etiqueta, banda, selector, boton, verDocumento } from './ui.js';
 import { cargarFuentes, paginasReporte, lienzoGrafico } from './draw.js';
 import { parseFilas, cosechasDe, ultimaFecha, armarReporte, filasExcel, celdaTxt, pctSigno, fmtFechaDMA, VISTAS, DIMENSIONES, inicioAnio } from './rep_calc.js';
@@ -187,9 +188,45 @@ export function crearReportes(nav) {
     });
   }
 
+  // ---------- Pasar el día a Históricos (solo administradores) ----------
+  const iPasar = h('input', { class: 'campo', type: 'date', value: diaHoy() });
+  const btnPasar = boton('Revisar y pasar a Históricos', null, 'c-azul ancho-total', async () => {
+    const fecha = iPasar.value;
+    if (!fecha) { toast('Escoja la fecha del día.'); return; }
+    btnPasar.disabled = true;
+    try {
+      toast('Revisando recibos de Diario…');
+      const v = await pasarAHistoricos({ fecha, soloVer: true });
+      if (v.error) { toast(v.error, 7000); return; }
+      const miles = (n) => Number(n).toLocaleString('es-CR', { maximumFractionDigits: 2 });
+      let texto = `${v.lineas} línea(s) · ${miles(v.cajuelas)} cajuelas (${miles(v.cajuelas / 20)} fanegas) del ${fmtFechaDMA(fecha)}.\nUna línea por sociedad y finca, sin los recibos anulados. El tipo queda en M.`;
+      if (v.reemplaza) texto += `\n\nYa se habían pasado ${v.reemplaza} línea(s) de este día: se reemplazan (se conservan el tipo y el N° de recibo que haya escrito).`;
+      if (v.sinSociedad && v.sinSociedad.length) texto += `\n\n⚠ Sociedades que no están en la hoja «Sociedades» de Históricos:\n• ${v.sinSociedad.join('\n• ')}`;
+      if (v.sinFinca && v.sinFinca.length) texto += `\n\n⚠ Fincas sin número en la hoja «Fincas»:\n• ${v.sinFinca.join('\n• ')}`;
+      if (!await confirmar('Pasar a Históricos', texto, { si: 'Pasar al Históricos' })) return;
+      let forzar = false;
+      if (v.manuales) {
+        if (!await confirmar('Ese día ya tiene líneas', `En Históricos ya hay ${v.manuales} línea(s) del ${fmtFechaDMA(fecha)} escritas a mano. Si continúa se agregan las de Diario además de esas (podrían quedar repetidas).`, { si: 'Agregar de todos modos', peligro: true })) return;
+        forzar = true;
+      }
+      toast('Pasando a Históricos…');
+      const r = await pasarAHistoricos({ fecha, forzar });
+      if (r.error) { toast(r.error, 8000); return; }
+      toast(r.message, 6000);
+      try { localStorage.removeItem(LLAVE_CACHE); } catch { /* nada */ }
+      cargar(true);
+    } finally { btnPasar.disabled = false; }
+  });
+  const tarjPasar = tarjeta(
+    etiqueta('Pasar un día de Diario a Históricos'), iPasar, btnPasar,
+    h('p', { class: 'nota' }, 'Solo administradores. Si vuelve a pasar el mismo día, las líneas se actualizan (no se duplican).')
+  );
+  tarjPasar.hidden = !puede('todos');
+
   raiz.append(
     banda('Reportes'),
     tarjeta(estado, btnAct),
+    tarjPasar,
     tarjFiltros, resumenFiltros, chips, barraDim, zona, btnCompartir
   );
   tarjFiltros.hidden = true; resumenFiltros.hidden = true; btnCompartir.hidden = true;
@@ -202,6 +239,7 @@ export function crearReportes(nav) {
       f = { cos: '', desde: '', corte: '', soc: '', tipo: '', cli: '', dim: 'Mes', solo: false }; vista = 'comparativo'; iCli.value = ''; panelAbierto = true; busqueda = '';
       const cache = leerCache();
       if (cache) usar(cache);
+      tarjPasar.hidden = !puede('todos'); iPasar.value = diaHoy();
       pintarTodo();
       cargar(false);
     }
