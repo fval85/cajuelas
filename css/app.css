@@ -190,3 +190,10 @@ details { margin: 4px 0; } summary { padding: 8px 0; font-weight: 600; } details
 .rep-zona .campo[type=search] { margin-bottom: 8px; }
 @media (min-width: 700px) { #app { max-width: 760px; } .kpis { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 360px) { .kpi b { font-size: 17px; } .tabla-rep { font-size: 12px; } }
+
+/* Reportes: acciones al final en una sola línea, chips que se acomodan en varias líneas */
+.chips.envuelve { flex-wrap: wrap; overflow: visible; padding-bottom: 6px; }
+.fila-acciones { display: flex; gap: 8px; }
+.fila-acciones > .btn, .fila-acciones > button { flex: 1 1 0; min-width: 0; margin: 0; font-size: 14px; line-height: 1.2; padding-left: 8px; padding-right: 8px; }
+.estado-datos { margin: 8px 0 0; font-size: 12px; }
+.op-pers[hidden] { display: none; }

@@ -56,8 +56,9 @@ export function parseFilas(raw) {
   return (raw || []).map((a) => ({
     cos: String(a[0] || '').trim(), mes: String(a[1] || ''), f: String(a[2] || ''), cli: String(a[3] || '').trim(), apc: String(a[4] || '').trim(),
     soc: String(a[5] || '').trim(), fin: String(a[6] || '').trim(), tipo: String(a[7] || '').trim().toUpperCase(),
-    caj: Number(a[8]) || 0, ade: Number(a[9]) || 0, int: Number(a[10]) || 0
-  })).filter((r) => r.cos && r.f).map((r) => ({ ...r, nc: normalizar(r.cli), ns: normalizar(r.soc), nf: normalizar(r.fin), nt: normalizar(r.tipo) }));
+    caj: Number(a[8]) || 0, ade: Number(a[9]) || 0, int: Number(a[10]) || 0,
+    est: String(a[11] || '').trim(), iva: Number(a[12]) || 0, dias: Number(a[13]) || 0
+  })).filter((r) => r.cos && r.f).map((r) => ({ ...r, nc: normalizar(r.cli), ns: normalizar(r.soc), nf: normalizar(r.fin), nt: normalizar(r.tipo), ne: normalizar(r.est) }));
 }
 export const cosechasDe = (filas) => [...new Set(filas.map((r) => r.cos))].sort((a, b) => inicioAnio(b) - inicioAnio(a));
 export function ultimaFecha(filas, cos) { let m = ''; for (const r of filas) if (r.cos === cos && r.f > m) m = r.f; return m; }
@@ -273,8 +274,135 @@ function porDia(ctx, f) {
   return rep;
 }
 
-export const VISTAS = [['comparativo', 'Comparativo'], ['fincas', 'Fincas'], ['sociedades', 'Sociedades'], ['desglose', 'Desglose'], ['dia', 'Por día']];
+
+// ---------- Reporte personalizado: varias medidas, 1 o 2 agrupaciones y varias cosechas ----------
+export const MEDIDAS = [
+  { k: 'caj', t: 'Cajuelas', tipo: 'int' }, { k: 'fan', t: 'Fanegas', tipo: 'dec' }, { k: 'ade', t: 'Adelanto', tipo: 'mon' },
+  { k: 'iva', t: 'IVA', tipo: 'mon' }, { k: 'adeiva', t: 'Adelanto + IVA', tipo: 'mon' }, { k: 'int', t: 'Intereses', tipo: 'mon' },
+  { k: 'adeint', t: 'Adelanto + intereses', tipo: 'mon' }, { k: 'n', t: 'Recibos', tipo: 'int' }, { k: 'dias', t: 'Días promedio', tipo: 'dec' }
+];
+export const MEDIDAS_INI = ['caj', 'fan', 'ade'];
+const mesNum = (r) => Number(r.f.slice(5, 7));
+const ordMes = (m) => ORDEN_MES.indexOf(m);
+export const AGRUPACIONES = [
+  { k: 'soc', t: 'Sociedad', clave: (r) => r.ns || '-', nombre: (r) => r.soc || '(sin sociedad)' },
+  { k: 'apc', t: 'APC', clave: (r) => normalizar(r.apc) || '-', nombre: (r) => r.apc || '(sin APC)' },
+  { k: 'cli', t: 'Cliente', clave: (r) => r.nc || '-', nombre: (r) => r.cli || '(sin cliente)' },
+  { k: 'est', t: 'Estatus', clave: (r) => r.ne || '-', nombre: (r) => r.est || '(sin estatus)' },
+  { k: 'mes', t: 'Mes', clave: (r) => mesNum(r), nombre: (r) => nombreMes(r.f), orden: (k) => ordMes(k) },
+  { k: 'tipo', t: 'Tipo (M/V)', clave: (r) => r.nt || '-', nombre: (r) => r.tipo || '(sin tipo)' },
+  { k: 'fin', t: 'Finca', clave: (r) => r.nf || '-', nombre: (r) => r.fin || '(sin finca)' },
+  { k: 'dia', t: 'Día', clave: (r) => r.f.slice(5), nombre: (r) => `${r.f.slice(8, 10)}/${r.f.slice(5, 7)}`, orden: (k) => ordMes(Number(k.slice(0, 2))) * 100 + Number(k.slice(3)) }
+];
+export function sumaTodo(rows) {
+  let caj = 0, ade = 0, iva = 0, int = 0, ds = 0;
+  for (const r of rows) { caj += r.caj; ade += r.ade; iva += r.iva; int += r.int; ds += r.dias; }
+  return { n: rows.length, caj, fan: caj / FANEGA, ade, iva, adeiva: ade + iva, int, adeint: ade + int, dias: rows.length ? ds / rows.length : 0 };
+}
+const corto = (c) => { const m = String(c).match(/(\d{4})\D+(\d{4})/); return m ? `${m[1].slice(2)}-${m[2].slice(2)}` : String(c); };
+export const cosechaCorta = corto;
+
+export function contextoPers(filas, f) {
+  const todas = cosechasDe(filas);
+  const extra = (f.comp || []).filter((c) => c !== f.cos && todas.includes(c)).sort((a, b) => inicioAnio(b) - inicioAnio(a));
+  const items = [f.cos, ...extra].map((c) => {
+    const dif = inicioAnio(c) - inicioAnio(f.cos);
+    if (f.modo === 'completa') { const rows = filtrar(filas, c, '9999-12-31', f, ''); return { cos: c, corte: ultimaFecha(rows, c), desde: '', rows, s: sumaTodo(rows) }; }
+    const corte = desplazar(f.corte, dif), desde = f.desde ? desplazar(f.desde, dif) : '';
+    const rows = filtrar(filas, c, corte, f, desde);
+    return { cos: c, corte, desde, rows, s: sumaTodo(rows) };
+  });
+  return { items, base: items[0], prev: items[1] || null };
+}
+
+function personalizado(filas, f) {
+  const ctx = contextoPers(filas, f);
+  const items = ctx.items, nC = items.length;
+  const meds = MEDIDAS.filter((m) => (f.med && f.med.length ? f.med : MEDIDAS_INI).includes(m.k));
+  const m0 = meds[0];
+  const ag1 = AGRUPACIONES.find((a) => a.k === (f.agr1 || 'soc')) || AGRUPACIONES[0];
+  const ag2 = f.agr2 && f.agr2 !== ag1.k ? AGRUPACIONES.find((a) => a.k === f.agr2) : null;
+  const subs = (rowsPorItem, ag) => {
+    const mapas = rowsPorItem.map((rows) => agrupar(rows, ag.clave, ag.nombre));
+    const claves = [...new Set(mapas.flatMap((m) => [...m.keys()]))];
+    const nodos = claves.map((k) => {
+      const filasItem = mapas.map((m) => (m.has(k) ? m.get(k).rows : []));
+      const nombre = (mapas.find((m) => m.has(k)).get(k)).nombre;
+      return { k, nombre, filasItem, vals: filasItem.map(sumaTodo) };
+    });
+    if (ag.orden) nodos.sort((a, b) => ag.orden(a.k) - ag.orden(b.k));
+    else nodos.sort((a, b) => { for (let i = 0; i < nC; i++) { const d = b.vals[i][m0.k] - a.vals[i][m0.k]; if (d) return d; } return a.nombre.localeCompare(b.nombre, 'es'); });
+    return nodos;
+  };
+  const nivel1 = subs(items.map((i) => i.rows), ag1);
+  if (ag2) nivel1.forEach((n) => { n.hijos = subs(n.filasItem, ag2); });
+
+  // Columnas: por cada medida, una por cosecha y (con 2 cosechas, o solo la primera medida con más) la variación.
+  const peso = { mon: 1.5, int: 1.1, dec: 1, pct: 0.95, pcta: 0.95 };
+  const cols = [{ t: ag1.t + (ag2 ? ' / ' + ag2.t : ''), peso: 3.4, tipo: 'txt' }];
+  const plan = [];
+  meds.forEach((m, mi) => {
+    items.forEach((it, i) => { cols.push({ t: nC > 1 ? `${m.t} ${corto(it.cos)}` : m.t, peso: peso[m.tipo], tipo: m.tipo }); plan.push({ m, i }); });
+    if (nC > 1 && (nC === 2 || mi === 0)) { cols.push({ t: `Var. ${m.t} vs ${corto(items[1].cos)}`, peso: peso.pct, tipo: 'pct' }); plan.push({ m, var: true }); }
+  });
+  if (nC === 1) { cols.push({ t: `% de ${m0.t}`, peso: peso.pcta, tipo: 'pcta' }); plan.push({ m: m0, pctDe: true }); }
+  const totales = items.map((i) => i.s);
+  const celdas = (vals) => plan.map((p) => {
+    if (p.var) return delta(vals[0][p.m.k], vals[1][p.m.k]);
+    if (p.pctDe) return pctDe(vals[0][p.m.k], totales[0][p.m.k]);
+    return vals[p.i][p.m.k];
+  });
+  const LIM = 150;
+  const filasT = [];
+  let cortado = false, total = 0;
+  const NB = '   ';
+  nivel1.forEach((n) => {
+    total += 1 + (n.hijos ? n.hijos.length : 0);
+    if (filasT.length >= LIM) { cortado = true; return; }
+    filasT.push({ v: [n.nombre, ...celdas(n.vals)], negrita: !!ag2, fondo: ag2 ? '#EEF4F0' : null });
+    if (n.hijos) n.hijos.forEach((h) => { if (filasT.length >= LIM) { cortado = true; return; } filasT.push({ v: [NB + h.nombre, ...celdas(h.vals)] }); });
+  });
+  filasT.push({ v: ['TOTAL', ...celdas(totales)], negrita: true, fondo: '#E8F1EB' });
+
+  const periodo = f.modo === 'completa' ? 'cosecha completa de cada año' : `${f.desde ? 'del ' + fmtFechaDMA(ctx.base.desde) + ' al ' : 'acumulado al '}${fmtFechaDMA(ctx.base.corte)}, misma fecha en cada cosecha`;
+  const rep = {
+    titulo: 'Reporte personalizado',
+    subtitulos: [
+      `Por ${ag1.t.toLowerCase()}${ag2 ? ' y luego por ' + ag2.t.toLowerCase() : ''} · ${meds.map((m) => m.t).join(', ')}`,
+      `${nC > 1 ? 'Cosechas ' + items.map((i) => i.cos).join(', ') : 'Cosecha ' + items[0].cos} · ${periodo}`,
+      textoFiltros(f)
+    ],
+    cols, filas: filasT, ctx
+  };
+  const p = ctx.prev ? ctx.prev.s : null;
+  rep.kpis = meds.slice(0, 5).map((m) => ({ t: m.t, v: celdaTxt({ tipo: m.tipo }, ctx.base.s[m.k]), d: p ? delta(ctx.base.s[m.k], p[m.k]) : null, ref: p ? 'vs ' + ctx.prev.cos : '' }));
+  const notas = [];
+  if (nC > 2) notas.push(`La variación se muestra solo para ${m0.t}, comparando ${items[0].cos} con ${items[1].cos}.`);
+  if (cortado) notas.push(`Se muestran las primeras ${LIM} filas de ${total}.`);
+  if (meds.some((m) => m.k === 'iva' || m.k === 'adeiva') && items.some((i) => inicioAnio(i.cos) <= 2020)) notas.push('El IVA de las cosechas 2019-2020 y 2020-2021 no está registrado y se toma como 0.');
+  rep.nota = notas.join(' ');
+  if (f.graf !== false) {
+    rep.graficos = [];
+    if (!ag2 || true) {
+      const lista = ag1.orden ? nivel1 : nivel1.slice(0, 10);
+      if (lista.length) {
+        const series = items.slice(0, 4).map((it, i) => ({ nombre: it.cos, valores: lista.map((n) => n.vals[i][m0.k]) }));
+        rep.graficos.push(ag1.orden
+          ? { tipo: 'barras', titulo: `${m0.t} por ${ag1.t.toLowerCase()}`, cats: lista.map((n) => (ag1.k === 'mes' ? n.nombre.slice(0, 3) : n.nombre)), series }
+          : { tipo: 'barrasH', titulo: `${m0.t}: ${lista.length < nivel1.length ? 'los ' + lista.length + ' principales por' : 'por'} ${ag1.t.toLowerCase()}`, cats: lista.map((n) => n.nombre), series });
+      }
+    }
+    if (nC > 1) {
+      const orden = [...items].reverse();
+      rep.graficos.push({ tipo: 'barras', titulo: `${m0.t} total por cosecha`, cats: orden.map((i) => i.cos), series: [{ nombre: m0.t, valores: orden.map((i) => i.s[m0.k]) }], colores: orden.map((i) => (i === ctx.base ? '#14532D' : '#86A894')) });
+    }
+  }
+  return rep;
+}
+
+export const VISTAS = [['comparativo', 'Comparativo'], ['fincas', 'Fincas'], ['sociedades', 'Sociedades'], ['desglose', 'Desglose'], ['dia', 'Por día'], ['personalizado', 'Personalizado']];
 export function armarReporte(vista, filas, f) {
+  if (vista === 'personalizado') { const rp = personalizado(filas, f); rp.vista = vista; return rp; }
   const ctx = contexto(filas, f);
   const fn = { comparativo, fincas, sociedades, desglose, dia: porDia }[vista] || comparativo;
   const rep = fn(ctx, f);

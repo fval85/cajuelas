@@ -726,7 +726,10 @@ export function lienzoGrafico(g, ancho = 640, alto = 300) {
 const COLORES_PDF_KPI = { pos: '#166534', neg: '#B91C1C' };
 /** Reporte completo para PDF: primera hoja con resumen y gráficos, luego la tabla. Apaisado. */
 export function paginasReporte(rep, pie = '') {
-  const W = 842, H = 595, MG = 24;
+  // Poca información (pocas columnas y filas) → hoja vertical; si hay más → horizontal, y más ancha si hace falta.
+  const nCols = (rep.cols || []).length, nFilas = (rep.filas || []).length;
+  const vertical = rep.vertical !== undefined ? rep.vertical : (nCols > 0 && nCols <= 4 && nFilas <= 26);
+  const W = vertical ? 595 : 842, H = vertical ? 842 : 595, MG = 24;
   const pg = crearPagina(W, H, 2.2), c = pg.c;
   let y = MG;
   txt(c, rep.titulo, MG, y + 14, P(16, true, false)); y += 24;
@@ -738,26 +741,35 @@ export function paginasReporte(rep, pie = '') {
       const bx = MG + i * (bw + gap);
       rectLleno(c, bx, y, bw, bh, '#E8F1EB');
       txt(c, k.t, bx + 8, y + 14, P(8, false, false, '#374151'));
-      { let sz = 14; while (sz > 8 && medir(P(sz, true, false), k.v) > bw - 16) sz -= 0.5; txt(c, k.v, bx + 8, y + 32, P(sz, true, false)); }
-      if (k.d != null) txt(c, `${pctSigno(k.d)} ${k.ref}`, bx + 8, y + 46, P(8, true, false, k.d < 0 ? COLORES_PDF_KPI.neg : COLORES_PDF_KPI.pos));
+      { let sz = 14; while (sz > 7 && medir(P(sz, true, false), k.v) > bw - 16) sz -= 0.5; txt(c, k.v, bx + 8, y + 32, P(sz, true, false)); }
+      if (k.d != null) { const tdl = recortar(`${pctSigno(k.d)} ${k.ref}`, P(8, true, false), bw - 12); txt(c, tdl, bx + 8, y + 46, P(8, true, false, k.d < 0 ? COLORES_PDF_KPI.neg : COLORES_PDF_KPI.pos)); }
     });
     y += bh + 14;
   }
   const gs = (rep.graficos || []).slice(0, 2);
   if (gs.length) {
-    const cols = gs.length, gw = (W - 2 * MG - 16 * (cols - 1)) / cols;
-    gs.forEach((g, i) => dibujarGrafico(c, MG + i * (gw + 16), y, gw, H - y - MG - 12, g));
+    if (vertical) {
+      const gh = (H - y - MG - 12 - 14 * (gs.length - 1)) / gs.length;
+      gs.forEach((g, i) => dibujarGrafico(c, MG, y + i * (gh + 14), W - 2 * MG, gh, g));
+    } else {
+      const cols = gs.length, gw = (W - 2 * MG - 16 * (cols - 1)) / cols;
+      gs.forEach((g, i) => dibujarGrafico(c, MG + i * (gw + 16), y, gw, H - y - MG - 12, g));
+    }
   }
   txt(c, pie, MG, H - 10, P(7, false, false, '#6B7280'));
   const paginas = [{ ...pg, ancho: W, alto: H }];
   if (rep.filas && rep.filas.length) {
-    const tw = W - 2 * MG, sp = rep.cols.reduce((t, k) => t + k.peso, 0);
+    const MIN = { txt: 170, mon: 74, int: 52, dec: 52, pct: 58, pcta: 58, fecha: 64 };
+    const minTotal = rep.cols.reduce((t, k) => t + (MIN[k.tipo] || 60), 0);
+    const TW = vertical ? W : Math.max(W, Math.ceil(2 * MG + minTotal));
+    const TH = vertical ? H : H;
+    const tw = TW - 2 * MG, sp = rep.cols.reduce((t, k) => t + k.peso, 0);
     const columnas = rep.cols.map((k) => ({ titulo: k.t, ancho: tw * k.peso / sp, derecha: k.tipo !== 'txt' }));
     const filas = rep.filas.map((f) => ({
       celdas: rep.cols.map((k, i) => celdaTxt(k, f.v[i])), negrita: f.negrita, fondo: f.fondo,
       rojas: rep.cols.map((k, i) => (k.tipo === 'pct' && typeof f.v[i] === 'number' && f.v[i] < -0.0005 ? i : -1)).filter((i) => i >= 0)
     }));
-    paginasTablas([{ titulos: [[rep.titulo, 12]], columnas, filas, nota: (rep.nota || '') + (pie ? '  ' + pie : '') }], W, H).forEach((p) => paginas.push(p));
+    paginasTablas([{ titulos: [[rep.titulo, 12]], columnas, filas, nota: (rep.nota || '') + (pie ? '  ' + pie : '') }], TW, TH).forEach((p) => paginas.push(p));
   }
   return paginas;
 }

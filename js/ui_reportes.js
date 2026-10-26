@@ -1,31 +1,33 @@
 // Pestaña «Reportes» (solo administradores): comparativos de cosechas con los datos del Google Sheet «Históricos».
-import { h, clear, toast, elegir, normalizar, diaHoy, ahoraTxt, confirmar } from './util.js';
+import { h, clear, toast, elegir, normalizar, diaHoy, ahoraTxt, confirmar, dialogo } from './util.js';
 import { puede } from './users.js';
 import { modoPruebas } from './store.js';
 import { historicos, pasarAHistoricos } from './sync.js';
 import { tarjeta, etiqueta, banda, selector, boton, verDocumento } from './ui.js';
 import { cargarFuentes, paginasReporte, lienzoGrafico } from './draw.js';
-import { parseFilas, cosechasDe, ultimaFecha, armarReporte, filasExcel, celdaTxt, pctSigno, fmtFechaDMA, VISTAS, DIMENSIONES, inicioAnio } from './rep_calc.js';
+import { parseFilas, cosechasDe, ultimaFecha, armarReporte, filasExcel, celdaTxt, pctSigno, fmtFechaDMA, VISTAS, DIMENSIONES, inicioAnio, MEDIDAS, MEDIDAS_INI, AGRUPACIONES } from './rep_calc.js';
 
 const LLAVE_CACHE = 'cajuelas_hist' + (modoPruebas ? '_t' : '');
 const MIN_REFRESCO = 30; // minutos antes de volver a pedir los datos al abrir la pestaña
-function leerCache() { try { return JSON.parse(localStorage.getItem(LLAVE_CACHE) || 'null'); } catch { return null; } }
+const VERSION_CACHE = 2; // 2 = trae estatus, IVA y días
+function leerCache() { try { const o = JSON.parse(localStorage.getItem(LLAVE_CACHE) || 'null'); return o && o.v === VERSION_CACHE ? o : null; } catch { return null; } }
 function guardarCache(o) { try { localStorage.setItem(LLAVE_CACHE, JSON.stringify(o)); } catch { /* sin espacio: se pedirá de nuevo */ } }
 
 export function crearReportes(nav) {
   const raiz = h('div', { class: 'pagina' });
   let datos = null;              // {filas (objetos), cosechas, t, actualizado}
-  let f = { cos: '', desde: '', corte: '', soc: '', tipo: '', cli: '', dim: 'Mes', solo: false };
+  const nuevoF = () => ({ cos: '', desde: '', corte: '', soc: '', tipo: '', cli: '', dim: 'Mes', solo: false, agr1: 'soc', agr2: '', med: [...MEDIDAS_INI], comp: [], compFor: '', modo: 'fecha', graf: true });
+  let f = nuevoF();
   let vista = 'comparativo';
   let cargando = false, errorCarga = '';
 
-  const estado = h('p', { class: 'nota' });
-  const btnAct = boton('Actualizar datos', null, 'c-agregar ancho-total', () => cargar(true));
+  const estado = h('p', { class: 'nota estado-datos' });
+  const btnAct = boton('Actualizar datos', null, 'c-agregar', () => cargar(true));
   const pCos = selector('Cosecha', async () => {
     if (!datos) return;
     const v = await elegir('Cosecha', cosechasDe(datos.filas).map((c) => ({ etiqueta: c, valor: c })), { buscar: false });
     if (v === undefined) return;
-    f.cos = v; f.desde = ''; f.corte = ultimaFecha(datos.filas, v); f.soc = ''; pintarFiltros(); pintar();
+    f.cos = v; f.desde = ''; f.corte = ultimaFecha(datos.filas, v); f.soc = ''; f.compFor = ''; ajustarComp(); pintarFiltros(); pintar();
   });
   const iDesde = h('input', { class: 'campo', type: 'date' });
   iDesde.addEventListener('change', () => { f.desde = iDesde.value || ''; if (f.desde && f.corte && f.desde > f.corte) { f.corte = f.desde; } pintarFiltros(); pintar(); });
@@ -55,12 +57,51 @@ export function crearReportes(nav) {
   chkSolo.addEventListener('change', () => { f.solo = chkSolo.checked; pintar(); });
   const resumenFiltros = h('button', { type: 'button', class: 'resumen-filtros', onclick: () => { panelAbierto = true; pintarFiltros(); window.scrollTo(0, 0); } });
   const btnVer = h('button', { type: 'button', class: 'btn-texto primario ancho', onclick: () => { panelAbierto = false; pintarFiltros(); window.scrollTo(0, 0); } }, 'Ver reporte');
+  // ---- Opciones del reporte personalizado ----
+  const pAgr1 = selector('Agrupar por', async () => {
+    const v = await elegir('Agrupar por', AGRUPACIONES.map((a) => ({ etiqueta: a.t, valor: a.k })), { buscar: false });
+    if (v === undefined) return;
+    f.agr1 = v; if (f.agr2 === v) f.agr2 = ''; pintarFiltros(); pintar();
+  });
+  const pAgr2 = selector('Luego por (opcional)', async () => {
+    const v = await elegir('Luego por', [{ etiqueta: 'Sin segundo nivel', valor: '' }, ...AGRUPACIONES.filter((a) => a.k !== f.agr1).map((a) => ({ etiqueta: a.t, valor: a.k }))], { buscar: false });
+    if (v === undefined) return;
+    f.agr2 = v; pintarFiltros(); pintar();
+  });
+  const chipsMed = h('div', { class: 'chips envuelve chicas' });
+  const chipsComp = h('div', { class: 'chips envuelve chicas' });
+  const chipsModo = h('div', { class: 'chips envuelve chicas' });
+  const chkGraf = h('input', { type: 'checkbox' });
+  chkGraf.addEventListener('change', () => { f.graf = chkGraf.checked; pintar(); });
+  const opPers = h('div', { class: 'op-pers' },
+    etiqueta('Agrupar por'), h('div', { class: 'dos-col' }, pAgr1, pAgr2),
+    etiqueta('Datos que quiere ver (marque varios)'), chipsMed,
+    etiqueta('Comparar con otras cosechas'), chipsComp, chipsModo,
+    h('label', { class: 'radio' }, chkGraf, ' Mostrar gráficos'));
+  const lblSolo = h('label', { class: 'radio' }, chkSolo, ' Solo esta cosecha (sin comparar con las anteriores)');
+  function ajustarComp() {
+    if (!datos || !f.cos || f.compFor === f.cos) return;
+    const ant = cosechasDe(datos.filas).filter((c) => inicioAnio(c) < inicioAnio(f.cos));
+    f.comp = ant.slice(0, 1); f.compFor = f.cos;
+  }
+  function pintarOpPers() {
+    clear(chipsMed); clear(chipsComp); clear(chipsModo);
+    MEDIDAS.forEach((m) => chipsMed.append(h('button', { type: 'button', class: 'chip' + (f.med.includes(m.k) ? ' on' : ''), onclick: () => {
+      f.med = f.med.includes(m.k) ? (f.med.length > 1 ? f.med.filter((x) => x !== m.k) : f.med) : [...f.med, m.k]; pintarOpPers(); pintar();
+    } }, m.t)));
+    const otras = datos ? cosechasDe(datos.filas).filter((c) => c !== f.cos) : [];
+    if (!otras.length) chipsComp.append(h('span', { class: 'nota' }, 'No hay otras cosechas cargadas.'));
+    otras.forEach((c) => chipsComp.append(h('button', { type: 'button', class: 'chip' + (f.comp.includes(c) ? ' on' : ''), onclick: () => {
+      f.comp = f.comp.includes(c) ? f.comp.filter((x) => x !== c) : [...f.comp, c]; pintarOpPers(); pintar();
+    } }, c)));
+    [['fecha', 'A la misma fecha'], ['completa', 'Cosecha completa']].forEach(([k, t]) => chipsModo.append(h('button', { type: 'button', class: 'chip' + (f.modo === k ? ' on' : ''), onclick: () => { f.modo = k; pintarOpPers(); pintar(); } }, t)));
+  }
   const tarjFiltros = tarjeta(
     etiqueta('Cosecha'), pCos,
     h('div', { class: 'dos-col' }, h('div', null, etiqueta('Desde'), iDesde), h('div', null, etiqueta('Hasta'), iCorte)), bUltima,
     h('div', { class: 'dos-col' }, h('div', null, etiqueta('Sociedad'), pSoc), h('div', null, etiqueta('Tipo'), pTipo)),
     etiqueta('Cliente'), iCli,
-    h('label', { class: 'radio' }, chkSolo, ' Solo esta cosecha (sin comparar con las anteriores)'),
+    lblSolo, opPers,
     btnVer
   );
   const chips = h('div', { class: 'chips' });
@@ -72,14 +113,21 @@ export function crearReportes(nav) {
     pCos.poner(f.cos);
     iDesde.value = f.desde || ''; iCorte.value = f.corte || '';
     pSoc.poner(f.soc); pTipo.poner(f.tipo); chkSolo.checked = !!f.solo;
+    const pers = vista === 'personalizado';
+    opPers.hidden = !pers; lblSolo.hidden = pers;
+    if (pers) {
+      pAgr1.poner((AGRUPACIONES.find((a) => a.k === f.agr1) || {}).t || '');
+      pAgr2.poner(f.agr2 ? (AGRUPACIONES.find((a) => a.k === f.agr2) || {}).t : '');
+      chkGraf.checked = f.graf !== false; pintarOpPers();
+    }
     tarjFiltros.hidden = !datos || !panelAbierto;
     resumenFiltros.hidden = !datos || panelAbierto;
     const rango = f.desde ? `${fmtFechaDMA(f.desde)} al ${fmtFechaDMA(f.corte)}` : `hasta ${fmtFechaDMA(f.corte)}`;
-    resumenFiltros.textContent = `⚙ Cosecha ${f.cos} · ${rango}${f.soc ? ' · ' + f.soc : ''}${f.tipo ? ' · ' + f.tipo : ''}${f.cli ? ' · ' + f.cli : ''}${f.solo ? ' · sin comparar' : ''}  ›  Cambiar`;
+    resumenFiltros.textContent = `⚙ Cosecha ${f.cos} · ${rango}${f.soc ? ' · ' + f.soc : ''}${f.tipo ? ' · ' + f.tipo : ''}${f.cli ? ' · ' + f.cli : ''}${f.solo && !pers ? ' · sin comparar' : ''}${pers ? ' · por ' + ((AGRUPACIONES.find((a) => a.k === f.agr1) || {}).t || '').toLowerCase() + (f.comp.length ? ' · con ' + f.comp.length + ' cosecha(s)' : '') : ''}  ›  Cambiar`;
   }
   function pintarChips() {
     clear(chips);
-    VISTAS.forEach(([k, t]) => chips.append(h('button', { type: 'button', class: 'chip' + (k === vista ? ' on' : ''), onclick: () => { vista = k; pintarChips(); pintar(); } }, t)));
+    VISTAS.forEach(([k, t]) => chips.append(h('button', { type: 'button', class: 'chip' + (k === vista ? ' on' : ''), onclick: () => { vista = k; pintarChips(); pintarFiltros(); pintar(); } }, t)));
     clear(barraDim);
     DIMENSIONES.forEach((d) => barraDim.append(h('button', { type: 'button', class: 'chip' + (d === f.dim ? ' on' : ''), onclick: () => { f.dim = d; pintarChips(); pintar(); } }, d)));
     barraDim.hidden = vista !== 'desglose';
@@ -91,6 +139,7 @@ export function crearReportes(nav) {
     const cs = cosechasDe(datos.filas);
     if (!cs.includes(f.cos)) { f.cos = cs[0] || ''; f.corte = ''; }
     if (!f.corte) f.corte = ultimaFecha(datos.filas, f.cos);
+    ajustarComp();
     errorCarga = '';
   }
   async function cargar(forzar) {
@@ -106,7 +155,7 @@ export function crearReportes(nav) {
       if (cache && !datos) usar(cache);
       if (forzar) toast(r.error + (datos ? '\nSe muestran los últimos datos guardados.' : ''), 7000);
     } else {
-      const o = { t: Date.now(), filas: r.filas, cosechas: r.cosechas, actualizado: r.actualizado };
+      const o = { v: VERSION_CACHE, t: Date.now(), filas: r.filas, cosechas: r.cosechas, actualizado: r.actualizado };
       guardarCache(o); usar(o);
       if (forzar) toast('Datos actualizados desde Históricos.');
     }
@@ -149,7 +198,7 @@ export function crearReportes(nav) {
     if (!f.cos) { zona.append(tarjeta(h('p', { class: 'nota' }, 'El archivo Históricos no tiene datos.'))); return; }
     const rep = armarReporte(vista, datos.filas, f);
     ultimo = rep;
-    zona.append(h('h2', { class: 'rep-titulo' }, rep.titulo), h('p', { class: 'nota' }, rep.subtitulos.join('\n')));
+    zona.append(h('h2', { class: 'rep-titulo' }, rep.titulo), h('p', { class: 'nota', style: 'white-space:pre-line' }, rep.subtitulos.join('\n')));
     if (!rep.ctx.base.rows.length) zona.append(h('p', { class: 'estado aviso' }, 'No hay datos con estos filtros en la fecha de corte.'));
     if (rep.kpis && rep.kpis.length) {
       zona.append(h('div', { class: 'kpis' }, ...rep.kpis.map((k) => h('div', { class: 'kpi' },
@@ -189,10 +238,7 @@ export function crearReportes(nav) {
   }
 
   // ---------- Pasar el día a Históricos (solo administradores) ----------
-  const iPasar = h('input', { class: 'campo', type: 'date', value: diaHoy() });
-  const btnPasar = boton('Revisar y pasar a Históricos', null, 'c-azul ancho-total', async () => {
-    const fecha = iPasar.value;
-    if (!fecha) { toast('Escoja la fecha del día.'); return; }
+  async function pasarDia(fecha) {
     btnPasar.disabled = true;
     try {
       toast('Revisando recibos de Diario…');
@@ -216,18 +262,22 @@ export function crearReportes(nav) {
       try { localStorage.removeItem(LLAVE_CACHE); } catch { /* nada */ }
       cargar(true);
     } finally { btnPasar.disabled = false; }
+  }
+  const btnPasar = boton('Pasar día a Históricos', null, 'c-azul', () => {
+    const iPasar = h('input', { class: 'campo', type: 'date', value: diaHoy() });
+    dialogo({
+      titulo: 'Pasar un día a Históricos',
+      cuerpo: [h('p', { class: 'nota' }, 'Solo administradores. Escoja el día de Diario que quiere pasar. Si vuelve a pasar el mismo día, las líneas se actualizan (no se duplican).'), iPasar],
+      botones: [{ texto: 'Cancelar' }, { texto: 'Revisar', clase: 'primario', onclick: () => { if (!iPasar.value) { toast('Escoja la fecha del día.'); return false; } const fch = iPasar.value; setTimeout(() => pasarDia(fch), 0); } }]
+    });
   });
-  const tarjPasar = tarjeta(
-    etiqueta('Pasar un día de Diario a Históricos'), iPasar, btnPasar,
-    h('p', { class: 'nota' }, 'Solo administradores. Si vuelve a pasar el mismo día, las líneas se actualizan (no se duplican).')
-  );
-  tarjPasar.hidden = !puede('todos');
+  const filaAcciones = h('div', { class: 'fila-acciones' }, btnAct, btnPasar);
+  const tarjAcciones = tarjeta(filaAcciones, estado);
 
   raiz.append(
     banda('Reportes'),
-    tarjeta(estado, btnAct),
-    tarjPasar,
-    tarjFiltros, resumenFiltros, chips, barraDim, zona, btnCompartir
+    chips, barraDim, tarjFiltros, resumenFiltros, zona, btnCompartir,
+    tarjAcciones
   );
   tarjFiltros.hidden = true; resumenFiltros.hidden = true; btnCompartir.hidden = true;
   pintarChips(); pintarEstado();
@@ -236,10 +286,10 @@ export function crearReportes(nav) {
     refrescar() { /* no hace falta: los datos se leen al abrir la pestaña */ },
     // Cada vez que se entra a la pestaña empieza limpia: filtros por defecto y datos al día.
     reiniciar() {
-      f = { cos: '', desde: '', corte: '', soc: '', tipo: '', cli: '', dim: 'Mes', solo: false }; vista = 'comparativo'; iCli.value = ''; panelAbierto = true; busqueda = '';
+      f = nuevoF(); vista = 'comparativo'; iCli.value = ''; panelAbierto = true; busqueda = '';
       const cache = leerCache();
       if (cache) usar(cache);
-      tarjPasar.hidden = !puede('todos'); iPasar.value = diaHoy();
+      btnPasar.hidden = !puede('todos');
       pintarTodo();
       cargar(false);
     }
