@@ -428,17 +428,19 @@ function fmtNumPlano(v) { return new Intl.NumberFormat('es-CR', { maximumFractio
 // ====================== Resumen del día (Diario) ======================
 const HEAD_R = ['Cosecha', 'Fecha', 'Beneficio', 'Compra', 'Sociedad', 'Finca', 'Corte/Lote', 'Recibido (Cajuelas)', 'Recibido (Fanegas)', 'Muestra Total', 'Muestra Verdes', 'Flotes Maduros', 'Flotes Secos', 'Broca', 'Total Flotes', '% Verdes', '% Flotes', '% Flotes Secos', '% Flotes Mad', '% Broca', 'Equiv. Maduras', 'Equiv. Verdes', 'Equiv. Flotes', 'Equiv. Broca'];
 const ANCH_R = [58, 56, 74, 48, 136, 88, 76, 54, 50, 44, 48, 50, 44, 40, 44, 48, 44, 50, 50, 44, 52, 50, 50, 50];
+const c2 = (v) => fmtNum(v || 0, 2);
+const p2 = (v) => fmtNum((v || 0) * 100, 2) + '%';
 function celdasRecibo(r) {
   const k = rc(r);
-  return [r.cosecha, diaLegible(r.dia), r.beneficio, r.compra, r.sociedad, r.finca, r.lote, fmtNum(k.recibidoCajuelas, 2), fmtNum(k.fanegas, 1),
-    fmtCant(r.muestraTotal), fmtCant(r.verdes), fmtCant(r.maduros), fmtCant(r.secos), fmtCant(r.broca), fmtCant(k.totalFlotes),
-    fmtPct(k.pVerdes), fmtPct(k.pFlotes), fmtPct(k.pSecos), fmtPct(k.pMaduros), fmtPct(k.pBroca),
-    fmtNum(k.eqMaduras, 1), fmtNum(k.eqVerdes, 1), fmtNum(k.eqFlotes, 1), fmtNum(k.eqBroca, 1)];
+  return [r.cosecha, diaLegible(r.dia), r.beneficio, r.compra, r.sociedad, r.finca, r.lote, fmtNum(k.recibidoCajuelas, 2), fmtNum(k.fanegas, 2),
+    c2(r.muestraTotal), c2(r.verdes), c2(r.maduros), c2(r.secos), c2(r.broca), c2(k.totalFlotes),
+    p2(k.pVerdes), p2(k.pFlotes), p2(k.pSecos), p2(k.pMaduros), p2(k.pBroca),
+    fmtNum(k.eqMaduras, 2), fmtNum(k.eqVerdes, 2), fmtNum(k.eqFlotes, 2), fmtNum(k.eqBroca, 2)];
 }
 function celdasTotal(etq, t) {
-  return [etq, '', '', '', '', '', '', fmtNum(t.cajuelas, 2), fmtNum(t.fanegas, 1), fmtCant(t.muestra), fmtCant(t.verdes), fmtCant(t.maduros), fmtCant(t.secos),
-    fmtCant(t.broca), fmtCant(t.flotes), fmtPct(t.pVerdes), fmtPct(t.pFlotes), fmtPct(t.pSecos), fmtPct(t.pMaduros), fmtPct(t.pBroca),
-    fmtNum(t.eqMaduras, 1), fmtNum(t.eqVerdes, 1), fmtNum(t.eqFlotes, 1), fmtNum(t.eqBroca, 1)];
+  return [etq, '', '', '', '', '', '', fmtNum(t.cajuelas, 2), fmtNum(t.fanegas, 2), c2(t.muestra), c2(t.verdes), c2(t.maduros), c2(t.secos),
+    c2(t.broca), c2(t.flotes), p2(t.pVerdes), p2(t.pFlotes), p2(t.pSecos), p2(t.pMaduros), p2(t.pBroca),
+    fmtNum(t.eqMaduras, 2), fmtNum(t.eqVerdes, 2), fmtNum(t.eqFlotes, 2), fmtNum(t.eqBroca, 2)];
 }
 export function paginasResumenDiario(recibos, dia, hasta = dia) {
   const rango = hasta && hasta !== dia;
@@ -488,7 +490,7 @@ export function paginasResumenDiario(recibos, dia, hasta = dia) {
       const p = rojoIdx === i ? conColor(base, ROJO, true) : base;
       const disp = soloEtiqueta && i === 0 ? x[7] - MG - 4 : ANCH_R[i] - 4;
       const t = recortar(v, p, disp);
-      const tx = i >= 7 ? x[i] + ANCH_R[i] - 3 - medir(p, t) : x[i] + 3;
+      const tx = soloEtiqueta && i === 0 ? x[0] + (x[7] - x[0] - medir(p, t)) / 2 : x[i] + (ANCH_R[i] - medir(p, t)) / 2;
       txt(c, t, tx, y + RH - 4.5, p);
     });
     y += RH;
@@ -527,7 +529,7 @@ export function paginasResumenSimple(recibos, dia, hasta = dia) {
   const celdas = (vals, p, yy) => vals.forEach((v, k) => {
     if (!v) return;
     const col = COLS[k], t = recortar(v, p, col[1] - 8);
-    const tx = col[2] === 'c' ? x[k] + (col[1] - medir(p, t)) / 2 : col[2] === 'd' ? x[k] + col[1] - 4 - medir(p, t) : x[k] + 4;
+    const tx = x[k] + (col[1] - medir(p, t)) / 2;
     txt(c, t, tx, yy + RH - 5, p);
   });
   const nueva = (primera) => {
@@ -553,13 +555,13 @@ export function paginasResumenSimple(recibos, dia, hasta = dia) {
   });
   if (y + RH * 5 > PH - MG) nueva(false);
   rectLleno(c, MG, y + 4, W, RH, '#D7E6DB');
-  txt(c, rango ? 'TOTAL DEL PERÍODO' : 'TOTAL DEL DÍA', x[0] + 4, y + 4 + RH - 5, bold);
+  { const et = rango ? 'TOTAL DEL PERÍODO' : 'TOTAL DEL DÍA'; txt(c, et, x[0] + (x[4] - x[0] - medir(bold, et)) / 2, y + 4 + RH - 5, bold); }
   celdas(['', '', '', '', fmtNum(total.muestra, 2), fmtNum(total.verdes, 2), fmtNum(total.flotes, 2), fmtNum(total.secos, 2), fmtNum(total.broca, 2), fmtNum(total.cajuelas, 2)], bold, y + 4);
   y += 4 + RH + 26;
   const g = P(12, true, false);
   [['Total Cajuelas =', total.cajuelas], ['Total Fanegas =', total.fanegas]].forEach(([e, v]) => {
-    const t = fmtNum(v, 2);
-    txt(c, e, x[9] - 40 - medir(g, e), y, g); txt(c, t, x[10] - 4 - medir(g, t), y, g); y += 24;
+    const t = e + ' ' + fmtNum(v, 2);
+    txt(c, t, MG + (W - medir(g, t)) / 2, y, g); y += 24;
   });
   txt(c, `Recibos incluidos: ${recibos.length} · No incluye recibos anulados.`, MG, PH - 14, P(7, false, false, '#6B7280'));
   return paginas.map((p) => ({ ...p, ancho: PW, alto: PH }));
