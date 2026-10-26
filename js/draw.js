@@ -3,7 +3,7 @@ import { fmtNum, fmtCant, fmtPct, fmtQty, fmtMoney, fmtMoney2, parseQty, diaLegi
 import { rc, totalesRecibos, montoLinea, tipoBoletoEtiqueta, totalFichas, totalCajuelasMov } from './data.js';
 import { normalizar } from './util.js';
 import { modoPruebas } from './store.js';
-import { celdaTxt, miles, pctSigno } from './rep_calc.js';
+import { celdaTxt, miles, cajF, pctSigno } from './rep_calc.js';
 
 const MONO = '"DejaVu Sans Mono", monospace';
 const SANS = '"DejaVu Sans", sans-serif';
@@ -656,7 +656,7 @@ function barrasV(c, x, y, w, h, g) {
       const col = (g.colores && g.series.length === 1 && g.colores[i]) || s.color || colorSerie(k);
       rectLleno(c, gx + k * bw, py + ph - bh, Math.max(bw - 1, 1), bh, col);
       if (n <= 14 && g.series.length <= 2 && s.valores[i] > 0) {
-        const t = miles(s.valores[i]); if (medir(val, t) <= slot * 1.05) txt(c, t, gx + k * bw + bw / 2 - medir(val, t) / 2, py + ph - bh - 2.5, val);
+        const t = g.dec ? cajF(s.valores[i]) : miles(s.valores[i]); if (medir(val, t) <= slot * 1.05) txt(c, t, gx + k * bw + bw / 2 - medir(val, t) / 2, py + ph - bh - 2.5, val);
       }
     });
     if (i % salto === 0) { const t = recortar(String(cat), peq, slot * salto - 2); txt(c, t, px + i * slot + slot / 2 - medir(peq, t) / 2, py + ph + 11, peq); }
@@ -678,7 +678,7 @@ function barrasH(c, x, y, w, h, g) {
     g.series.forEach((s, k) => {
       const bw = (s.valores[i] / esc.max) * pw;
       rectLleno(c, px, gy + k * bh, Math.max(bw, 0), Math.max(bh - 1, 1), s.color || colorSerie(k));
-      if (bh >= 7 && s.valores[i] > 0) txt(c, miles(s.valores[i]), px + bw + 3, gy + k * bh + bh / 2 + 2.5, val);
+      if (bh >= 7 && s.valores[i] > 0) txt(c, g.dec ? cajF(s.valores[i]) : miles(s.valores[i]), px + bw + 3, gy + k * bh + bh / 2 + 2.5, val);
     });
   });
   linea(c, px, y, px, y + h, 0.8, '#6B7280');
