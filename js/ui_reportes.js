@@ -75,7 +75,7 @@ export function crearReportes(nav) {
   function ajustarComp() {
     if (!datos || !f.cos || f.compFor === f.cos) return;
     const ant = cosechasDe(datos.filas).filter((c) => inicioAnio(c) < inicioAnio(f.cos));
-    f.comp = ant.slice(0, 1); f.compFor = f.cos;
+    f.comp = []; f.compFor = f.cos; // por defecto solo la cosecha elegida; las demás se tocan para comparar
   }
   function pintarOpPers() {
     clear(chipsDim); clear(chipsMed); clear(chipsComp); clear(chipsModo);
@@ -200,6 +200,7 @@ export function crearReportes(nav) {
         h('small', null, k.t), h('b', null, k.v),
         k.d != null ? h('span', { class: k.d < -0.0005 ? 'neg' : 'pos' }, `${pctSigno(k.d)} ${k.ref}`) : h('span', null, ' ')))));
     }
+    if (rep.datos && rep.datos.length) zona.append(h('div', { class: 'tarjeta rep-datos' }, h('b', null, 'Datos de interés'), ...rep.datos.map((t) => h('p', null, t))));
     (rep.graficos || []).forEach((g) => {
       const alto = g.tipo === 'barrasH' ? Math.max(200, 56 + g.cats.length * (g.series.length > 2 ? 40 : g.series.length > 1 ? 30 : 22)) : 250;
       const cv = lienzoGrafico(g, 360, alto);

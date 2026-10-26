@@ -315,6 +315,7 @@ export function contextoPers(filas, f) {
   return { items, base: items[0], prev: items[1] || null };
 }
 
+const nomDim = (d) => (d.k === 'apc' ? 'APC' : d.t.toLowerCase());
 function personalizado(filas, f) {
   const ctx = contextoPers(filas, f);
   const items = ctx.items, nC = items.length;
@@ -367,7 +368,7 @@ function personalizado(filas, f) {
   const filasT = nodos.slice(0, LIM).map((n) => ({ v: [...(dims.length ? n.nombres : ['Todos']), ...celdas(n.vals)] }));
   filasT.push({ v: ['TOTAL', ...new Array(nTxt - 1).fill(null), ...celdas(totales)], negrita: true, fondo: '#E8F1EB' });
 
-  const periodo = f.modo === 'completa' ? 'cosecha completa de cada año' : `${f.desde ? 'del ' + fmtFechaDMA(ctx.base.desde) + ' al ' : 'acumulado al '}${fmtFechaDMA(ctx.base.corte)}, misma fecha en cada cosecha`;
+  const periodo = f.modo === 'completa' ? 'cosecha completa de cada año' : `${f.desde ? 'del ' + fmtFechaDMA(ctx.base.desde) + ' al ' : 'acumulado al '}${fmtFechaDMA(ctx.base.corte)}${nC > 1 ? ', misma fecha en cada cosecha' : ''}`;
   const rep = {
     titulo: 'Reporte personalizado',
     subtitulos: [
@@ -384,26 +385,54 @@ function personalizado(filas, f) {
   if (nodos.length > LIM) notas.push(`Se muestran las primeras ${LIM} filas de ${nodos.length}.`);
   if (meds.some((m) => m.k === 'iva' || m.k === 'adeiva') && items.some((i) => inicioAnio(i.cos) <= 2020)) notas.push('El IVA de las cosechas 2019-2020 y 2020-2021 no está registrado y se toma como 0.');
   rep.nota = notas.join(' ');
+  // ----- Datos de interés (con una sola cosecha el informe se enfoca en ella) -----
+  const base = ctx.base;
+  const porFecha = agrupar(base.rows, (r) => r.f, (r) => r.f);
+  const diasRec = [...porFecha.values()].map((g) => ({ f: g.k, caj: g.rows.reduce((t, r) => t + r.caj, 0) }));
+  const datos = [];
+  if (diasRec.length) {
+    const mejor = diasRec.reduce((m, x) => (x.caj > m.caj ? x : m), diasRec[0]);
+    datos.push(`Día de mayor recepción: ${fmtFechaDMA(mejor.f)} con ${miles(mejor.caj)} cajuelas (${miles1(mejor.caj / FANEGA)} fanegas).`);
+    datos.push(`Se recibió café en ${diasRec.length} día(s): promedio de ${miles(base.s.caj / diasRec.length)} cajuelas por día de recepción.`);
+  }
+  const ag1 = dims[0];
+  let listaG = [];
+  if (ag1) {
+    const g1 = items.map((it) => agrupar(it.rows, ag1.clave, ag1.nombre));
+    listaG = [...new Set(g1.flatMap((m) => [...m.keys()]))].map((k) => ({ k, nombre: g1.find((m) => m.has(k)).get(k).nombre, vals: g1.map((m) => sumaTodo(m.has(k) ? m.get(k).rows : [])) }));
+    const porValor = [...listaG].sort((a, b2) => b2.vals[0][m0.k] - a.vals[0][m0.k]);
+    const tot = base.s[m0.k];
+    if (porValor.length > 1 && tot > 0) {
+      const pc = (v) => (v / tot * 100).toFixed(1).replace('.', ',') + ' %';
+      datos.push(`Mayor participación en ${m0.t.toLowerCase()} (${nomDim(ag1)}): ${porValor[0].nombre} con ${pc(porValor[0].vals[0][m0.k])}.`);
+      if (porValor.length >= 4) datos.push(`Las 3 principales suman ${pc(porValor.slice(0, 3).reduce((t, x) => t + x.vals[0][m0.k], 0))} del total.`);
+    }
+  }
+  if (!(base.s.n > 0)) datos.length = 0;
+  rep.datos = datos;
+
   if (f.graf !== false) {
     rep.graficos = [];
-    const ag1 = dims[0];
     if (ag1) {
-      const g1 = items.map((it) => agrupar(it.rows, ag1.clave, ag1.nombre));
-      let lista = [...new Set(g1.flatMap((m) => [...m.keys()]))].map((k) => ({ k, nombre: g1.find((m) => m.has(k)).get(k).nombre, vals: g1.map((m) => sumaTodo(m.has(k) ? m.get(k).rows : [])) }));
-      if (ag1.orden) lista.sort((a, b) => ag1.orden(a.k) - ag1.orden(b.k));
-      else lista.sort((a, b) => { for (let i = 0; i < nC; i++) { const dd = b.vals[i][m0.k] - a.vals[i][m0.k]; if (dd) return dd; } return 0; });
+      let lista = [...listaG];
+      if (ag1.orden) lista.sort((a, b2) => ag1.orden(a.k) - ag1.orden(b2.k));
+      else lista.sort((a, b2) => { for (let i = 0; i < nC; i++) { const dd = b2.vals[i][m0.k] - a.vals[i][m0.k]; if (dd) return dd; } return 0; });
       const total1 = lista.length;
       if (!ag1.orden) lista = lista.slice(0, 10);
       if (lista.length) {
         const series = items.slice(0, 4).map((it, i) => ({ nombre: it.cos, valores: lista.map((n) => n.vals[i][m0.k]) }));
         rep.graficos.push(ag1.orden
-          ? { tipo: 'barras', titulo: `${m0.t} por ${ag1.t.toLowerCase()}`, cats: lista.map((n) => (ag1.k === 'mes' ? n.nombre.slice(0, 3) : n.nombre)), series }
-          : { tipo: 'barrasH', titulo: `${m0.t}: ${lista.length < total1 ? 'los ' + lista.length + ' principales por' : 'por'} ${ag1.t.toLowerCase()}`, cats: lista.map((n) => n.nombre), series });
+          ? { tipo: 'barras', titulo: `${m0.t} por ${nomDim(ag1)}`, cats: lista.map((n) => (ag1.k === 'mes' ? n.nombre.slice(0, 3) : n.nombre)), series }
+          : { tipo: 'barrasH', titulo: `${m0.t}: ${lista.length < total1 ? 'los ' + lista.length + ' principales por' : 'por'} ${nomDim(ag1)}`, cats: lista.map((n) => n.nombre), series });
       }
     }
     if (nC > 1) {
       const orden = [...items].reverse();
       rep.graficos.push({ tipo: 'barras', titulo: `${m0.t} total por cosecha`, cats: orden.map((i) => i.cos), series: [{ nombre: m0.t, valores: orden.map((i) => i.s[m0.k]) }], colores: orden.map((i) => (i === ctx.base ? '#14532D' : '#86A894')) });
+    } else if (base.rows.length) {
+      const cv = curvas(ctx)[0];
+      const xmax = Math.max(1, cv.fin);
+      rep.graficos.push({ tipo: 'lineas', titulo: 'Cajuelas acumuladas día por día', series: [{ nombre: base.cos, pts: cv.pts }], xmax, xticks: xticksBase(ctx, xmax) });
     }
   }
   return rep;

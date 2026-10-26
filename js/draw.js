@@ -603,7 +603,7 @@ export function paginasTablas(tablas, pageW, pageH) {
         const p = (f.rojas || []).includes(i) ? conColor(f.negrita ? bold : text, '#C00000', true) : (f.negrita ? bold : text);
         const col = t.columnas[i];
         const tx = recortar(v, p, col.ancho - 6);
-        const px = t.bordes ? xs[i] + (col.ancho - medir(p, tx)) / 2 : col.derecha ? xs[i] + col.ancho - 3 - medir(p, tx) : xs[i] + 3;
+        const px = (t.bordes || col.centro) ? xs[i] + (col.ancho - medir(p, tx)) / 2 : col.derecha ? xs[i] + col.ancho - 3 - medir(p, tx) : xs[i] + 3;
         txt(c, tx, px, y + RH - 4.5, p);
       });
       y += RH;
@@ -726,10 +726,22 @@ export function lienzoGrafico(g, ancho = 640, alto = 300) {
 const COLORES_PDF_KPI = { pos: '#166534', neg: '#B91C1C' };
 /** Reporte completo para PDF: primera hoja con resumen y gráficos, luego la tabla. Apaisado. */
 export function paginasReporte(rep, pie = '') {
+  const MG = 24;
+  // 1) Ancho natural de cada columna según su contenido (nombres completos, APC angosto...).
+  const tTxt = P(8.2, false, false), tNeg = P(8.2, true, false), tCab = P(7.2, true, false, '#fff');
+  const celdasTxt = (rep.filas || []).map((f) => ({ f, c: rep.cols.map((k, i) => celdaTxt(k, f.v[i])) }));
+  const natural = rep.cols.map((k, i) => {
+    let w = 0;
+    celdasTxt.forEach(({ f, c }) => { if (c[i]) w = Math.max(w, medir(f.negrita ? tNeg : tTxt, c[i])); });
+    const wc = Math.max(0, ...String(k.t).split(' ').map((p) => medir(tCab, p)));
+    return Math.ceil(Math.max(w, wc, 26) + 12);
+  });
+  const sumNat = natural.reduce((t, x) => t + x, 0);
   // Poca información (pocas columnas y filas) → hoja vertical; si hay más → horizontal, y más ancha si hace falta.
   const nCols = (rep.cols || []).length, nFilas = (rep.filas || []).length;
-  const vertical = rep.vertical !== undefined ? rep.vertical : (nCols > 0 && nCols <= 4 && nFilas <= 26);
-  const W = vertical ? 595 : 842, H = vertical ? 842 : 595, MG = 24;
+  const cabeVertical = sumNat <= 595 - 2 * MG;
+  const vertical = rep.vertical !== undefined ? rep.vertical : (nCols > 0 && nCols <= 4 && nFilas <= 26 && cabeVertical);
+  const W = vertical ? 595 : 842, H = vertical ? 842 : 595;
   const pg = crearPagina(W, H, 2.2), c = pg.c;
   let y = MG;
   txt(c, rep.titulo, MG, y + 14, P(16, true, false)); y += 24;
@@ -744,7 +756,13 @@ export function paginasReporte(rep, pie = '') {
       { let sz = 14; while (sz > 7 && medir(P(sz, true, false), k.v) > bw - 16) sz -= 0.5; txt(c, k.v, bx + 8, y + 32, P(sz, true, false)); }
       if (k.d != null) { const tdl = recortar(`${pctSigno(k.d)} ${k.ref}`, P(8, true, false), bw - 12); txt(c, tdl, bx + 8, y + 46, P(8, true, false, k.d < 0 ? COLORES_PDF_KPI.neg : COLORES_PDF_KPI.pos)); }
     });
-    y += bh + 14;
+    y += bh + 12;
+  }
+  if (rep.datos && rep.datos.length) {
+    const pd = P(8.6, false, false, '#1F2937');
+    txt(c, 'Datos de interés', MG, y + 9, P(9, true, false, '#14532D')); y += 14;
+    rep.datos.forEach((t) => envolver('•  ' + t, pd, W - 2 * MG).forEach((l, i) => { txt(c, i ? '    ' + l : l, MG, y + 8, pd); y += 11.5; }));
+    y += 8;
   }
   const gs = (rep.graficos || []).slice(0, 2);
   if (gs.length) {
@@ -759,17 +777,18 @@ export function paginasReporte(rep, pie = '') {
   txt(c, pie, MG, H - 10, P(7, false, false, '#6B7280'));
   const paginas = [{ ...pg, ancho: W, alto: H }];
   if (rep.filas && rep.filas.length) {
-    const MIN = { txt: 170, mon: 74, int: 52, dec: 52, pct: 58, pcta: 58, fecha: 64 };
-    const minTotal = rep.cols.reduce((t, k) => t + (MIN[k.tipo] || 60), 0);
-    const TW = vertical ? W : Math.max(W, Math.ceil(2 * MG + minTotal));
-    const TH = vertical ? H : H;
-    const tw = TW - 2 * MG, sp = rep.cols.reduce((t, k) => t + k.peso, 0);
-    const columnas = rep.cols.map((k) => ({ titulo: k.t, ancho: tw * k.peso / sp, derecha: k.tipo !== 'txt' }));
+    // 2) La tabla ocupa el ancho que necesita (más ancha que la hoja si hay muchas columnas) y reparte lo que sobre.
+    const avail = W - 2 * MG;
+    const TW = sumNat <= avail ? W : Math.ceil(sumNat + 2 * MG);
+    const reparto = Math.max(0, (TW - 2 * MG) - sumNat);
+    const peso = rep.cols.map((k, i) => (k.tipo !== 'txt' ? 1 : natural[i] >= 110 ? 1 : 0.05));
+    const sp = peso.reduce((t, x) => t + x, 0);
+    const columnas = rep.cols.map((k, i) => ({ titulo: k.t, ancho: natural[i] + reparto * peso[i] / sp, derecha: k.tipo !== 'txt', centro: k.tipo !== 'txt' }));
     const filas = rep.filas.map((f) => ({
       celdas: rep.cols.map((k, i) => celdaTxt(k, f.v[i])), negrita: f.negrita, fondo: f.fondo,
       rojas: rep.cols.map((k, i) => (k.tipo === 'pct' && typeof f.v[i] === 'number' && f.v[i] < -0.0005 ? i : -1)).filter((i) => i >= 0)
     }));
-    paginasTablas([{ titulos: [[rep.titulo, 12]], columnas, filas, nota: (rep.nota || '') + (pie ? '  ' + pie : '') }], TW, TH).forEach((p) => paginas.push(p));
+    paginasTablas([{ titulos: [[rep.titulo, 12]], columnas, filas, nota: (rep.nota || '') + (pie ? '  ' + pie : '') }], TW, H).forEach((p) => paginas.push(p));
   }
   return paginas;
 }
