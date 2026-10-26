@@ -320,26 +320,36 @@ function personalizado(filas, f) {
   const items = ctx.items, nC = items.length;
   const meds = MEDIDAS.filter((m) => (f.med && f.med.length ? f.med : MEDIDAS_INI).includes(m.k));
   const m0 = meds[0];
-  const ag1 = AGRUPACIONES.find((a) => a.k === (f.agr1 || 'soc')) || AGRUPACIONES[0];
-  const ag2 = f.agr2 && f.agr2 !== ag1.k ? AGRUPACIONES.find((a) => a.k === f.agr2) : null;
-  const subs = (rowsPorItem, ag) => {
-    const mapas = rowsPorItem.map((rows) => agrupar(rows, ag.clave, ag.nombre));
-    const claves = [...new Set(mapas.flatMap((m) => [...m.keys()]))];
-    const nodos = claves.map((k) => {
-      const filasItem = mapas.map((m) => (m.has(k) ? m.get(k).rows : []));
-      const nombre = (mapas.find((m) => m.has(k)).get(k)).nombre;
-      return { k, nombre, filasItem, vals: filasItem.map(sumaTodo) };
-    });
-    if (ag.orden) nodos.sort((a, b) => ag.orden(a.k) - ag.orden(b.k));
-    else nodos.sort((a, b) => { for (let i = 0; i < nC; i++) { const d = b.vals[i][m0.k] - a.vals[i][m0.k]; if (d) return d; } return a.nombre.localeCompare(b.nombre, 'es'); });
-    return nodos;
-  };
-  const nivel1 = subs(items.map((i) => i.rows), ag1);
-  if (ag2) nivel1.forEach((n) => { n.hijos = subs(n.filasItem, ag2); });
+  // Las columnas de texto que se tocan (en el orden en que se tocaron) forman las filas; las de números se suman.
+  const dims = (f.dims || []).map((k) => AGRUPACIONES.find((a) => a.k === k)).filter(Boolean);
+  const claveDe = (r) => dims.map((d) => d.clave(r)).join('\u0001');
+  const nomDe = (r) => dims.map((d) => d.nombre(r));
+  const mapas = items.map((it) => agrupar(it.rows, dims.length ? claveDe : () => 'todo', dims.length ? nomDe : () => ['Todos']));
+  const claves = [...new Set(mapas.flatMap((m) => [...m.keys()]))];
+  const nodos = claves.map((k) => {
+    const nombres = (mapas.find((m) => m.has(k)).get(k)).nombre;
+    return { k, partes: k.split('\u0001'), nombres, vals: mapas.map((m) => sumaTodo(m.has(k) ? m.get(k).rows : [])) };
+  });
+  // Orden: por cada columna de texto, por calendario si es mes/día; si no, de mayor a menor según el total de ese grupo.
+  const totPref = (n, L) => { const pre = n.partes.slice(0, L + 1).join('\u0001'); return nodos.filter((x) => x.partes.slice(0, L + 1).join('\u0001') === pre).reduce((t, x) => t + x.vals[0][m0.k], 0); };
+  const cache = new Map();
+  const tp = (n, L) => { const id = n.k + '|' + L; if (!cache.has(id)) cache.set(id, totPref(n, L)); return cache.get(id); };
+  nodos.sort((a, b) => {
+    for (let L = 0; L < dims.length; L++) {
+      const d = dims[L];
+      if (a.partes[L] === b.partes[L]) continue;
+      if (d.orden) return d.orden(a.partes[L]) - d.orden(b.partes[L]);
+      const dif = tp(b, L) - tp(a, L);
+      if (dif) return dif;
+      return a.nombres[L].localeCompare(b.nombres[L], 'es');
+    }
+    for (let i = 0; i < nC; i++) { const dd = b.vals[i][m0.k] - a.vals[i][m0.k]; if (dd) return dd; }
+    return 0;
+  });
 
-  // Columnas: por cada medida, una por cosecha y (con 2 cosechas, o solo la primera medida con más) la variación.
+  // Columnas: las de texto, y por cada medida una por cosecha y (con 2 cosechas, o solo la primera medida con más) la variación.
   const peso = { mon: 1.5, int: 1.1, dec: 1, pct: 0.95, pcta: 0.95 };
-  const cols = [{ t: ag1.t + (ag2 ? ' / ' + ag2.t : ''), peso: 3.4, tipo: 'txt' }];
+  const cols = dims.length ? dims.map((d, i) => ({ t: d.t, peso: i === 0 ? 3.2 : 2, tipo: 'txt' })) : [{ t: 'Total', peso: 2, tipo: 'txt' }];
   const plan = [];
   meds.forEach((m, mi) => {
     items.forEach((it, i) => { cols.push({ t: nC > 1 ? `${m.t} ${corto(it.cos)}` : m.t, peso: peso[m.tipo], tipo: m.tipo }); plan.push({ m, i }); });
@@ -353,22 +363,15 @@ function personalizado(filas, f) {
     return vals[p.i][p.m.k];
   });
   const LIM = 150;
-  const filasT = [];
-  let cortado = false, total = 0;
-  const NB = '   ';
-  nivel1.forEach((n) => {
-    total += 1 + (n.hijos ? n.hijos.length : 0);
-    if (filasT.length >= LIM) { cortado = true; return; }
-    filasT.push({ v: [n.nombre, ...celdas(n.vals)], negrita: !!ag2, fondo: ag2 ? '#EEF4F0' : null });
-    if (n.hijos) n.hijos.forEach((h) => { if (filasT.length >= LIM) { cortado = true; return; } filasT.push({ v: [NB + h.nombre, ...celdas(h.vals)] }); });
-  });
-  filasT.push({ v: ['TOTAL', ...celdas(totales)], negrita: true, fondo: '#E8F1EB' });
+  const nTxt = dims.length || 1;
+  const filasT = nodos.slice(0, LIM).map((n) => ({ v: [...(dims.length ? n.nombres : ['Todos']), ...celdas(n.vals)] }));
+  filasT.push({ v: ['TOTAL', ...new Array(nTxt - 1).fill(null), ...celdas(totales)], negrita: true, fondo: '#E8F1EB' });
 
   const periodo = f.modo === 'completa' ? 'cosecha completa de cada año' : `${f.desde ? 'del ' + fmtFechaDMA(ctx.base.desde) + ' al ' : 'acumulado al '}${fmtFechaDMA(ctx.base.corte)}, misma fecha en cada cosecha`;
   const rep = {
     titulo: 'Reporte personalizado',
     subtitulos: [
-      `Por ${ag1.t.toLowerCase()}${ag2 ? ' y luego por ' + ag2.t.toLowerCase() : ''} · ${meds.map((m) => m.t).join(', ')}`,
+      [...dims.map((d) => d.t), ...meds.map((m) => m.t)].join(' · '),
       `${nC > 1 ? 'Cosechas ' + items.map((i) => i.cos).join(', ') : 'Cosecha ' + items[0].cos} · ${periodo}`,
       textoFiltros(f)
     ],
@@ -378,18 +381,24 @@ function personalizado(filas, f) {
   rep.kpis = meds.slice(0, 5).map((m) => ({ t: m.t, v: celdaTxt({ tipo: m.tipo }, ctx.base.s[m.k]), d: p ? delta(ctx.base.s[m.k], p[m.k]) : null, ref: p ? 'vs ' + ctx.prev.cos : '' }));
   const notas = [];
   if (nC > 2) notas.push(`La variación se muestra solo para ${m0.t}, comparando ${items[0].cos} con ${items[1].cos}.`);
-  if (cortado) notas.push(`Se muestran las primeras ${LIM} filas de ${total}.`);
+  if (nodos.length > LIM) notas.push(`Se muestran las primeras ${LIM} filas de ${nodos.length}.`);
   if (meds.some((m) => m.k === 'iva' || m.k === 'adeiva') && items.some((i) => inicioAnio(i.cos) <= 2020)) notas.push('El IVA de las cosechas 2019-2020 y 2020-2021 no está registrado y se toma como 0.');
   rep.nota = notas.join(' ');
   if (f.graf !== false) {
     rep.graficos = [];
-    if (!ag2 || true) {
-      const lista = ag1.orden ? nivel1 : nivel1.slice(0, 10);
+    const ag1 = dims[0];
+    if (ag1) {
+      const g1 = items.map((it) => agrupar(it.rows, ag1.clave, ag1.nombre));
+      let lista = [...new Set(g1.flatMap((m) => [...m.keys()]))].map((k) => ({ k, nombre: g1.find((m) => m.has(k)).get(k).nombre, vals: g1.map((m) => sumaTodo(m.has(k) ? m.get(k).rows : [])) }));
+      if (ag1.orden) lista.sort((a, b) => ag1.orden(a.k) - ag1.orden(b.k));
+      else lista.sort((a, b) => { for (let i = 0; i < nC; i++) { const dd = b.vals[i][m0.k] - a.vals[i][m0.k]; if (dd) return dd; } return 0; });
+      const total1 = lista.length;
+      if (!ag1.orden) lista = lista.slice(0, 10);
       if (lista.length) {
         const series = items.slice(0, 4).map((it, i) => ({ nombre: it.cos, valores: lista.map((n) => n.vals[i][m0.k]) }));
         rep.graficos.push(ag1.orden
           ? { tipo: 'barras', titulo: `${m0.t} por ${ag1.t.toLowerCase()}`, cats: lista.map((n) => (ag1.k === 'mes' ? n.nombre.slice(0, 3) : n.nombre)), series }
-          : { tipo: 'barrasH', titulo: `${m0.t}: ${lista.length < nivel1.length ? 'los ' + lista.length + ' principales por' : 'por'} ${ag1.t.toLowerCase()}`, cats: lista.map((n) => n.nombre), series });
+          : { tipo: 'barrasH', titulo: `${m0.t}: ${lista.length < total1 ? 'los ' + lista.length + ' principales por' : 'por'} ${ag1.t.toLowerCase()}`, cats: lista.map((n) => n.nombre), series });
       }
     }
     if (nC > 1) {

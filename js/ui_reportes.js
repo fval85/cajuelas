@@ -16,7 +16,7 @@ function guardarCache(o) { try { localStorage.setItem(LLAVE_CACHE, JSON.stringif
 export function crearReportes(nav) {
   const raiz = h('div', { class: 'pagina' });
   let datos = null;              // {filas (objetos), cosechas, t, actualizado}
-  const nuevoF = () => ({ cos: '', desde: '', corte: '', soc: '', tipo: '', cli: '', dim: 'Mes', solo: false, agr1: 'soc', agr2: '', med: [...MEDIDAS_INI], comp: [], compFor: '', modo: 'fecha', graf: true });
+  const nuevoF = () => ({ cos: '', desde: '', corte: '', soc: '', tipo: '', cli: '', dim: 'Mes', solo: false, dims: ['soc'], med: [...MEDIDAS_INI], comp: [], compFor: '', modo: 'fecha', graf: true });
   let f = nuevoF();
   let vista = 'comparativo';
   let cargando = false, errorCarga = '';
@@ -58,26 +58,19 @@ export function crearReportes(nav) {
   const resumenFiltros = h('button', { type: 'button', class: 'resumen-filtros', onclick: () => { panelAbierto = true; pintarFiltros(); window.scrollTo(0, 0); } });
   const btnVer = h('button', { type: 'button', class: 'btn-texto primario ancho', onclick: () => { panelAbierto = false; pintarFiltros(); window.scrollTo(0, 0); } }, 'Ver reporte');
   // ---- Opciones del reporte personalizado ----
-  const pAgr1 = selector('Agrupar por', async () => {
-    const v = await elegir('Agrupar por', AGRUPACIONES.map((a) => ({ etiqueta: a.t, valor: a.k })), { buscar: false });
-    if (v === undefined) return;
-    f.agr1 = v; if (f.agr2 === v) f.agr2 = ''; pintarFiltros(); pintar();
-  });
-  const pAgr2 = selector('Luego por (opcional)', async () => {
-    const v = await elegir('Luego por', [{ etiqueta: 'Sin segundo nivel', valor: '' }, ...AGRUPACIONES.filter((a) => a.k !== f.agr1).map((a) => ({ etiqueta: a.t, valor: a.k }))], { buscar: false });
-    if (v === undefined) return;
-    f.agr2 = v; pintarFiltros(); pintar();
-  });
+  const chipsDim = h('div', { class: 'chips envuelve chicas' });
   const chipsMed = h('div', { class: 'chips envuelve chicas' });
   const chipsComp = h('div', { class: 'chips envuelve chicas' });
   const chipsModo = h('div', { class: 'chips envuelve chicas' });
   const chkGraf = h('input', { type: 'checkbox' });
   chkGraf.addEventListener('change', () => { f.graf = chkGraf.checked; pintar(); });
-  const opPers = h('div', { class: 'op-pers' },
-    etiqueta('Agrupar por'), h('div', { class: 'dos-col' }, pAgr1, pAgr2),
-    etiqueta('Datos que quiere ver (marque varios)'), chipsMed,
+  const cuerpoOp = h('div', null,
+    etiqueta('Columnas de texto (toque las que quiera, en el orden que quiera)'), chipsDim,
+    etiqueta('Datos que se suman (toque los que quiera)'), chipsMed,
     etiqueta('Comparar con otras cosechas'), chipsComp, chipsModo,
     h('label', { class: 'radio' }, chkGraf, ' Mostrar gráficos'));
+  const btnOp = h('button', { type: 'button', class: 'btn-texto ancho', onclick: () => { cuerpoOp.hidden = !cuerpoOp.hidden; btnOp.textContent = cuerpoOp.hidden ? 'Mostrar opciones del reporte ▾' : 'Ocultar opciones ▴'; } }, 'Ocultar opciones ▴');
+  const opPers = tarjeta(cuerpoOp, btnOp);
   const lblSolo = h('label', { class: 'radio' }, chkSolo, ' Solo esta cosecha (sin comparar con las anteriores)');
   function ajustarComp() {
     if (!datos || !f.cos || f.compFor === f.cos) return;
@@ -85,7 +78,13 @@ export function crearReportes(nav) {
     f.comp = ant.slice(0, 1); f.compFor = f.cos;
   }
   function pintarOpPers() {
-    clear(chipsMed); clear(chipsComp); clear(chipsModo);
+    clear(chipsDim); clear(chipsMed); clear(chipsComp); clear(chipsModo);
+    AGRUPACIONES.forEach((d) => {
+      const pos = f.dims.indexOf(d.k);
+      chipsDim.append(h('button', { type: 'button', class: 'chip' + (pos >= 0 ? ' on' : ''), onclick: () => {
+        f.dims = pos >= 0 ? f.dims.filter((x) => x !== d.k) : [...f.dims, d.k]; pintarOpPers(); pintar();
+      } }, (pos >= 0 && f.dims.length > 1 ? (pos + 1) + '. ' : '') + d.t));
+    });
     MEDIDAS.forEach((m) => chipsMed.append(h('button', { type: 'button', class: 'chip' + (f.med.includes(m.k) ? ' on' : ''), onclick: () => {
       f.med = f.med.includes(m.k) ? (f.med.length > 1 ? f.med.filter((x) => x !== m.k) : f.med) : [...f.med, m.k]; pintarOpPers(); pintar();
     } }, m.t)));
@@ -101,7 +100,7 @@ export function crearReportes(nav) {
     h('div', { class: 'dos-col' }, h('div', null, etiqueta('Desde'), iDesde), h('div', null, etiqueta('Hasta'), iCorte)), bUltima,
     h('div', { class: 'dos-col' }, h('div', null, etiqueta('Sociedad'), pSoc), h('div', null, etiqueta('Tipo'), pTipo)),
     etiqueta('Cliente'), iCli,
-    lblSolo, opPers,
+    lblSolo,
     btnVer
   );
   const chips = h('div', { class: 'chips' });
@@ -114,16 +113,12 @@ export function crearReportes(nav) {
     iDesde.value = f.desde || ''; iCorte.value = f.corte || '';
     pSoc.poner(f.soc); pTipo.poner(f.tipo); chkSolo.checked = !!f.solo;
     const pers = vista === 'personalizado';
-    opPers.hidden = !pers; lblSolo.hidden = pers;
-    if (pers) {
-      pAgr1.poner((AGRUPACIONES.find((a) => a.k === f.agr1) || {}).t || '');
-      pAgr2.poner(f.agr2 ? (AGRUPACIONES.find((a) => a.k === f.agr2) || {}).t : '');
-      chkGraf.checked = f.graf !== false; pintarOpPers();
-    }
+    opPers.hidden = !pers || !datos; lblSolo.hidden = pers;
+    if (pers) { chkGraf.checked = f.graf !== false; pintarOpPers(); }
     tarjFiltros.hidden = !datos || !panelAbierto;
     resumenFiltros.hidden = !datos || panelAbierto;
     const rango = f.desde ? `${fmtFechaDMA(f.desde)} al ${fmtFechaDMA(f.corte)}` : `hasta ${fmtFechaDMA(f.corte)}`;
-    resumenFiltros.textContent = `⚙ Cosecha ${f.cos} · ${rango}${f.soc ? ' · ' + f.soc : ''}${f.tipo ? ' · ' + f.tipo : ''}${f.cli ? ' · ' + f.cli : ''}${f.solo && !pers ? ' · sin comparar' : ''}${pers ? ' · por ' + ((AGRUPACIONES.find((a) => a.k === f.agr1) || {}).t || '').toLowerCase() + (f.comp.length ? ' · con ' + f.comp.length + ' cosecha(s)' : '') : ''}  ›  Cambiar`;
+    resumenFiltros.textContent = `⚙ Cosecha ${f.cos} · ${rango}${f.soc ? ' · ' + f.soc : ''}${f.tipo ? ' · ' + f.tipo : ''}${f.cli ? ' · ' + f.cli : ''}${f.solo && !pers ? ' · sin comparar' : ''}${pers ? (f.comp.length ? ' · con ' + f.comp.length + ' cosecha(s)' : '') : ''}  ›  Cambiar`;
   }
   function pintarChips() {
     clear(chips);
@@ -276,10 +271,10 @@ export function crearReportes(nav) {
 
   raiz.append(
     banda('Reportes'),
-    chips, barraDim, tarjFiltros, resumenFiltros, zona, btnCompartir,
+    chips, barraDim, tarjFiltros, resumenFiltros, opPers, zona, btnCompartir,
     tarjAcciones
   );
-  tarjFiltros.hidden = true; resumenFiltros.hidden = true; btnCompartir.hidden = true;
+  tarjFiltros.hidden = true; resumenFiltros.hidden = true; opPers.hidden = true; btnCompartir.hidden = true;
   pintarChips(); pintarEstado();
   return {
     el: raiz,
