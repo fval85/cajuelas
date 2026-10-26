@@ -11,9 +11,12 @@ const DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const nf = (min, max) => new Intl.NumberFormat('es-CR', { minimumFractionDigits: min, maximumFractionDigits: max });
 const nf0 = nf(0, 0), nf1 = nf(1, 1);
 const limpio = (t) => t.replace(/[  ]/g, ' ');
-export const miles = (v) => limpio(nf0.format(Math.round(v)));
-export const miles1 = (v) => limpio(nf1.format(v));
-export const dinero = (v) => '₡' + miles(v);
+const nf02 = nf(0, 2), nf12 = nf(1, 2);
+const milesR = (v) => limpio(nf0.format(Math.round(v)));
+/** Cantidades (cajuelas, recibos…): sin decimales si es entero y hasta 2 si no (0,25 · 0,5 · 0,75), nunca redondeadas. */
+export const miles = (v) => limpio(nf02.format(Math.round(v * 100) / 100));
+export const miles1 = (v) => limpio(nf12.format(Math.round(v * 100) / 100));
+export const dinero = (v) => '₡' + milesR(v);
 export const fmtFechaDMA = (f) => (f ? `${f.slice(8, 10)}/${f.slice(5, 7)}/${f.slice(0, 4)}` : '');
 export function pctSigno(d) {
   if (d == null || !Number.isFinite(d)) return '—';

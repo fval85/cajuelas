@@ -23,17 +23,13 @@ export function crearReportes(nav) {
 
   const estado = h('p', { class: 'nota estado-datos' });
   const btnAct = boton('Actualizar datos', null, 'c-agregar', () => cargar(true));
-  const pCos = selector('Cosecha', async () => {
-    if (!datos) return;
-    const v = await elegir('Cosecha', cosechasDe(datos.filas).map((c) => ({ etiqueta: c, valor: c })), { buscar: false });
-    if (v === undefined) return;
-    f.cos = v; f.desde = ''; f.corte = ultimaFecha(datos.filas, v); f.soc = ''; f.compFor = ''; ajustarComp(); pintarFiltros(); pintar();
-  });
+  const chipsCos = h('div', { class: 'chips envuelve chicas' });
+  function elegirCosecha(v) { f.cos = v; f.desde = ''; f.corte = ultimaFecha(datos.filas, v); f.soc = ''; f.compFor = ''; ajustarComp(); pintarFiltros(); pintar(); }
   const iDesde = h('input', { class: 'campo', type: 'date' });
   iDesde.addEventListener('change', () => { f.desde = iDesde.value || ''; if (f.desde && f.corte && f.desde > f.corte) { f.corte = f.desde; } pintarFiltros(); pintar(); });
   const iCorte = h('input', { class: 'campo', type: 'date' });
   iCorte.addEventListener('change', () => { if (iCorte.value) { f.corte = iCorte.value; if (f.desde && f.desde > f.corte) f.desde = f.corte; pintarFiltros(); pintar(); } });
-  const bUltima = h('button', { type: 'button', class: 'btn-texto', onclick: () => { f.desde = ''; f.corte = ultimaFecha(datos.filas, f.cos); pintarFiltros(); pintar(); } }, 'Toda la cosecha hasta la última fecha');
+  const bUltima = h('button', { type: 'button', class: 'chip', onclick: () => { f.desde = ''; f.corte = ultimaFecha(datos.filas, f.cos); pintarFiltros(); pintar(); } }, 'Toda la cosecha');
   const pSoc = selector('Todas las sociedades', async () => {
     if (!datos) return;
     const nombres = [...new Set(datos.filas.filter((r) => r.cos === f.cos).map((r) => r.soc).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
@@ -52,11 +48,10 @@ export function crearReportes(nav) {
   let temporizador = 0;
   iCli.addEventListener('input', () => { clearTimeout(temporizador); temporizador = setTimeout(() => { f.cli = iCli.value.trim(); pintar(); }, 350); });
 
-  let panelAbierto = true, busqueda = '';
+  let busqueda = '', filtrosAbiertos = false;
   const chkSolo = h('input', { type: 'checkbox' });
   chkSolo.addEventListener('change', () => { f.solo = chkSolo.checked; pintar(); });
-  const resumenFiltros = h('button', { type: 'button', class: 'resumen-filtros', onclick: () => { panelAbierto = true; pintarFiltros(); window.scrollTo(0, 0); } });
-  const btnVer = h('button', { type: 'button', class: 'btn-texto primario ancho', onclick: () => { panelAbierto = false; pintarFiltros(); window.scrollTo(0, 0); } }, 'Ver reporte');
+  const btnFiltros = h('button', { type: 'button', class: 'chip', onclick: () => { filtrosAbiertos = !filtrosAbiertos; pintarFiltros(); } }, 'Filtros ▾');
   // ---- Opciones del reporte personalizado ----
   const chipsDim = h('div', { class: 'chips envuelve chicas' });
   const chipsMed = h('div', { class: 'chips envuelve chicas' });
@@ -95,13 +90,16 @@ export function crearReportes(nav) {
     } }, c)));
     [['fecha', 'A la misma fecha'], ['completa', 'Cosecha completa']].forEach(([k, t]) => chipsModo.append(h('button', { type: 'button', class: 'chip' + (f.modo === k ? ' on' : ''), onclick: () => { f.modo = k; pintarOpPers(); pintar(); } }, t)));
   }
-  const tarjFiltros = tarjeta(
-    etiqueta('Cosecha'), pCos,
-    h('div', { class: 'dos-col' }, h('div', null, etiqueta('Desde'), iDesde), h('div', null, etiqueta('Hasta'), iCorte)), bUltima,
+  const panelFiltros = tarjeta(
     h('div', { class: 'dos-col' }, h('div', null, etiqueta('Sociedad'), pSoc), h('div', null, etiqueta('Tipo'), pTipo)),
     etiqueta('Cliente'), iCli,
-    lblSolo,
-    btnVer
+    lblSolo
+  );
+  const barraFiltros = h('div', { class: 'barra-filtros' },
+    etiqueta('Cosecha'), chipsCos,
+    h('div', { class: 'dos-col' }, h('div', null, etiqueta('Desde'), iDesde), h('div', null, etiqueta('Hasta'), iCorte)),
+    h('div', { class: 'chips envuelve chicas fila-chips' }, bUltima, btnFiltros),
+    panelFiltros
   );
   const chips = h('div', { class: 'chips' });
   const zona = h('div', { class: 'rep-zona' });
@@ -109,16 +107,18 @@ export function crearReportes(nav) {
   const btnCompartir = boton('Compartir PDF', 'compartir', 'c-azul ancho-total', () => compartirReporte());
 
   function pintarFiltros() {
-    pCos.poner(f.cos);
+    clear(chipsCos);
+    if (datos) cosechasDe(datos.filas).forEach((c) => chipsCos.append(h('button', { type: 'button', class: 'chip' + (c === f.cos ? ' on' : ''), onclick: () => elegirCosecha(c) }, c)));
     iDesde.value = f.desde || ''; iCorte.value = f.corte || '';
     pSoc.poner(f.soc); pTipo.poner(f.tipo); chkSolo.checked = !!f.solo;
     const pers = vista === 'personalizado';
     opPers.hidden = !pers || !datos; lblSolo.hidden = pers;
     if (pers) { chkGraf.checked = f.graf !== false; pintarOpPers(); }
-    tarjFiltros.hidden = !datos || !panelAbierto;
-    resumenFiltros.hidden = !datos || panelAbierto;
-    const rango = f.desde ? `${fmtFechaDMA(f.desde)} al ${fmtFechaDMA(f.corte)}` : `hasta ${fmtFechaDMA(f.corte)}`;
-    resumenFiltros.textContent = `⚙ Cosecha ${f.cos} · ${rango}${f.soc ? ' · ' + f.soc : ''}${f.tipo ? ' · ' + f.tipo : ''}${f.cli ? ' · ' + f.cli : ''}${f.solo && !pers ? ' · sin comparar' : ''}${pers ? (f.comp.length ? ' · con ' + f.comp.length + ' cosecha(s)' : '') : ''}  ›  Cambiar`;
+    barraFiltros.hidden = !datos;
+    const nf = [f.soc, f.tipo, f.cli, !pers && f.solo].filter(Boolean).length;
+    btnFiltros.textContent = `Filtros${nf ? ' (' + nf + ')' : ''} ${filtrosAbiertos ? '▴' : '▾'}`;
+    btnFiltros.classList.toggle('on', nf > 0);
+    panelFiltros.hidden = !filtrosAbiertos;
   }
   function pintarChips() {
     clear(chips);
@@ -272,17 +272,17 @@ export function crearReportes(nav) {
 
   raiz.append(
     banda('Reportes'),
-    chips, barraDim, tarjFiltros, resumenFiltros, opPers, zona, btnCompartir,
+    chips, barraDim, barraFiltros, opPers, zona, btnCompartir,
     tarjAcciones
   );
-  tarjFiltros.hidden = true; resumenFiltros.hidden = true; opPers.hidden = true; btnCompartir.hidden = true;
+  barraFiltros.hidden = true; opPers.hidden = true; panelFiltros.hidden = true; btnCompartir.hidden = true;
   pintarChips(); pintarEstado();
   return {
     el: raiz,
     refrescar() { /* no hace falta: los datos se leen al abrir la pestaña */ },
     // Cada vez que se entra a la pestaña empieza limpia: filtros por defecto y datos al día.
     reiniciar() {
-      f = nuevoF(); vista = 'comparativo'; iCli.value = ''; panelAbierto = true; busqueda = '';
+      f = nuevoF(); vista = 'comparativo'; iCli.value = ''; filtrosAbiertos = false; busqueda = '';
       const cache = leerCache();
       if (cache) usar(cache);
       btnPasar.hidden = !puede('todos');

@@ -198,3 +198,8 @@ details { margin: 4px 0; } summary { padding: 8px 0; font-weight: 600; } details
 .estado-datos { margin: 8px 0 0; font-size: 12px; }
 .op-pers[hidden] { display: none; }
 .rep-datos p { margin: 6px 0 0; font-size: 14px; line-height: 1.35; } .rep-datos b { color: var(--verde); }
+.barra-filtros[hidden] { display: none; }
+.barra-filtros .dos-col { margin: 2px 0 8px; }
+.barra-filtros .campo { padding: 8px 10px; min-height: 40px; font-size: 14px; }
+.fila-chips { margin-top: 2px; }
+.chip.on-suave, .fila-chips .chip.on { background: #e8f1eb; color: var(--verde); border-color: var(--verde); }
