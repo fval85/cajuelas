@@ -116,3 +116,25 @@
   .acciones > .btn:not(.c-verde) svg { padding: 4px; }
   .dialogo-botones .btn-texto { flex-basis: 100px; padding-left: 8px; padding-right: 8px; }
 }
+
+/* ---- Modo oscuro: paleta menta suave, encabezado y tarjetas redondeadas, barra inferior flotante ---- */
+@media (prefers-color-scheme: dark) {
+  :root { --verde: #8fd9b6; --verde-2: #6fc79d; --verde-bg: #1f7a55; --verde-claro: #1f3a3a; --linea: #34495b; --superficie: #14212c; }
+  .banda, .cab-sub { background: var(--superficie); color: #fff; border-radius: 0 0 26px 26px; border-bottom: 1px solid var(--borde); margin-bottom: 16px; }
+  .banda h1, .cab-sub h1 { color: #fff; }
+  .c-verde, .chip.on, .btn-texto.primario, .interruptor.on, .tabla-rep th, .tabla-rep th.fija { background: var(--verde-bg); color: #fff; }
+  .c-agregar { background: color-mix(in srgb, var(--verde) 12%, var(--tarjeta)); color: var(--verde); border-color: var(--verde); }
+  .fila-chips .chip.on, .chip.on-suave { background: color-mix(in srgb, var(--verde) 18%, var(--tarjeta)); color: var(--verde); border-color: var(--verde); }
+  .resumen, .estado.bien { background: color-mix(in srgb, var(--verde) 13%, var(--tarjeta)); border-color: color-mix(in srgb, var(--verde) 40%, var(--borde)); color: var(--verde); }
+  .codigo, .resumen-filtros, .tabla-rep tr.total td { background: color-mix(in srgb, var(--verde) 12%, var(--tarjeta)); }
+  .tarjeta, .grupo, .fuente, .kpi, .tabla-scroll { border-radius: 20px; }
+  #tabs { left: 10px; right: 10px; bottom: calc(8px + env(safe-area-inset-bottom)); max-width: 560px; margin: 0 auto; border: 1px solid var(--borde); border-radius: 26px; background: var(--tarjeta); padding: 5px 6px; box-shadow: 0 6px 18px rgba(0, 0, 0, .45); }
+  .tab { height: 54px; border-radius: 20px; margin: 0 2px; }
+  .tab.on { background: color-mix(in srgb, var(--verde) 20%, var(--tarjeta)); color: var(--verde); }
+  .tab.on svg { color: var(--verde); }
+  #contenido { padding-bottom: calc(var(--tab-h) + 44px + env(safe-area-inset-bottom)); }
+  #toast { bottom: calc(var(--tab-h) + 40px + env(safe-area-inset-bottom)); }
+  #login { background: var(--superficie); }
+  .login-caja { background: var(--tarjeta); color: var(--texto); }
+  .login-caja h1 { color: var(--verde); }
+}
