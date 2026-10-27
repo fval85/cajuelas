@@ -201,11 +201,12 @@ export function crearBoletos(nav) {
       etiqueta('Desde'), iDesde, etiqueta('Hasta'), iHasta, etiqueta('Sociedad'), pSoc,
       admin ? etiqueta('Usuario (solo para «Comprobantes emitidos»)') : null, admin ? pUs : null,
       h('label', { class: 'radio' }, solo, ' Solo movimientos de este dispositivo'),
+      !admin && nombreUsuario() ? h('p', { class: 'nota' }, `«Comprobantes emitidos» solo incluye los que emitió ${nombreUsuario()}.`) : null,
       h('p', { class: 'nota' }, 'Con Internet usa los datos de Google Sheets (todos los dispositivos); sin conexión, solo los de este dispositivo.')
     ];
     dialogo({
       titulo: 'Reportes de Boletos', cuerpo,
-      botones: [{ texto: 'Cerrar' }, { texto: 'Generar PDF', clase: 'primario', onclick: () => { generar(rDet.checked ? 'det' : rInv.checked ? 'inv' : 'mov', cosecha, desde, hasta, sociedadFiltro, solo.checked, usuarioFiltro); return false; } }]
+      botones: [{ texto: 'Cerrar' }, { texto: 'Generar PDF', clase: 'primario', onclick: () => { generar(rDet.checked ? 'det' : rInv.checked ? 'inv' : 'mov', cosecha, desde, hasta, sociedadFiltro, solo.checked, admin ? usuarioFiltro : nombreUsuario()); return false; } }]
     });
   }
   async function generar(modo, cosecha, desde, hasta, sociedad, soloMio, usuarioFiltro = '') {

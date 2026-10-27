@@ -133,13 +133,19 @@ export function descargar(blob, nombre) {
 /** Abre la hoja de compartir del sistema (WhatsApp, correo, AirDrop…). Si no existe, descarga el archivo. */
 export async function compartir(archivos, titulo, texto = '') {
   const files = archivos.map((a) => new File([a.blob], a.nombre, { type: a.blob.type || 'application/octet-stream' }));
-  try {
-    if (navigator.canShare && navigator.canShare({ files })) {
-      await navigator.share({ files, title: titulo, text: texto });
-      return 'compartido';
-    }
-  } catch (e) {
-    if (e && e.name === 'AbortError') return 'cancelado';
+  const puede = (fs) => { try { return !!(navigator.canShare && navigator.canShare({ files: fs })); } catch { return false; } };
+  const intento = async (fs) => {
+    try {
+      if (puede(fs)) { await navigator.share({ files: fs, title: titulo, text: texto }); return 'compartido'; }
+    } catch (e) { if (e && e.name === 'AbortError') return 'cancelado'; }
+    return null;
+  };
+  let r = await intento(files);
+  if (r) return r;
+  // Algunos teléfonos no aceptan ciertos tipos (por ejemplo Excel) junto con el PDF: se comparte lo que sí acepten.
+  if (files.length > 1) {
+    const ok = files.filter((f) => puede([f]));
+    if (ok.length && ok.length < files.length) { r = await intento(ok); if (r) return r === 'compartido' ? 'parcial' : r; }
   }
   files.forEach((f, i) => descargar(archivos[i].blob, f.name));
   return 'descargado';

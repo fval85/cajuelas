@@ -8,7 +8,7 @@ export const ROLES = {
   'Administrador': ['registro', 'diario', 'boletos', 'anular', 'reimprimir', 'resumenes', 'precios', 'config', 'provisional', 'reportes', 'todos'],
   'Recibidor de Café': ['diario', 'reimprimir', 'resumenes'],
   'Encargado de boletos': ['boletos', 'reimprimir', 'resumenes'],
-  'Digitador de registro': ['registro', 'reimprimir']
+  'Digitador de registro': ['registro', 'reimprimir', 'resumenes']
 };
 const HORAS_SESION = 12;
 const oyentes = new Set();

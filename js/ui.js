@@ -118,6 +118,7 @@ export function verDocumento({ titulo, paginas, nombrePdf, intro, adicionales = 
     if (!archivos) return;
     const r = await compartir(archivos, titulo, textoCompartir || titulo);
     if (r === 'descargado') toast('Se descargó el archivo (este navegador no puede abrir «Compartir»).');
+    else if (r === 'parcial') toast('Se compartió el PDF. El otro archivo no se puede enviar junto: use su botón aparte.', 6000);
   });
   (async () => {
     try {

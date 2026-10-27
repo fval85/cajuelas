@@ -187,7 +187,9 @@ export function crearDiario(nav) {
   async function resumenDelDia() {
     const f = await pedirPeriodo({ titulo: 'Resumen de Diario', usuarios: puede('todos') });
     if (!f) return;
-    const { desde, hasta, usuario: usuarioFiltro } = f;
+    // Administradores: cualquier usuario. Los demás: solo lo que ellos mismos emitieron.
+    const { desde, hasta } = f;
+    const usuarioFiltro = f.usuario || (puede('todos') ? '' : nombreUsuario());
     const unDia = desde === hasta;
     toast('Preparando el resumen…', 2000);
     const remoto = configurado() ? (unDia ? await recibosDelDia(desde) : await recibosDelRango(desde, hasta)) : null;

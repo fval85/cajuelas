@@ -259,8 +259,10 @@ export function crearRegistro(nav) {
     if (puede('todos')) return resumenAdmin(co);
     if (!co || !selSociedad) return toast('Elija la cosecha activa en Ajustes y la sociedad para generar su resumen.');
     const hoy = diaHoy();
-    const deSoc = lineas.todas().filter((l) => l.date === hoy && normalizar(l.sociedad) === normalizar(selSociedad) && (!l.cosecha || normalizar(l.cosecha) === normalizar(co)));
-    return armarResumen(co, hoy, selSociedad, deSoc, '');
+    // Cada usuario genera el resumen de SU sociedad con SUS comprobantes de hoy (si hay control de acceso, no se mezclan los de otros usuarios del mismo teléfono).
+    const yo = nombreUsuario();
+    const deSoc = lineas.todas().filter((l) => l.date === hoy && normalizar(l.sociedad) === normalizar(selSociedad) && (!l.cosecha || normalizar(l.cosecha) === normalizar(co)) && (!yo || usuarioCoincide(l.usuario, yo)));
+    return armarResumen(co, hoy, selSociedad, deSoc, yo ? `Usuario: ${yo}.` : '');
   }
   /** Administrador: cualquier fecha, sociedad y usuario, con los comprobantes de todos los dispositivos. */
   async function resumenAdmin(co) {
@@ -341,7 +343,8 @@ export function crearRegistro(nav) {
     const libro = new Blob([xlsx('Resumen', f)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     verDocumento({
       titulo: 'Resumen general', paginas, nombrePdf: `Resumen_General_de_Cajuelas_${sello}.pdf`, ancho: true,
-      adicionales: [{ blob: libro, nombre: `Resumen_General_de_Cajuelas_${sello}.xlsx` }], textoBoton: 'Compartir PDF y Excel',
+      botonesAparte: [{ texto: 'Compartir Excel', archivo: { blob: libro, nombre: `Resumen_General_de_Cajuelas_${sello}.xlsx` } }], textoBoton: 'Compartir PDF',
+      textoCompartir: `Resumen de Registro · ${socNombre} · ${diaLegible(dia)}`,
       intro: `${socNombre} · ${personas.length} personas · Total a pagar ${fmtMoney(d.total)}${extra ? '\n' + extra : ''}`
     });
   }
