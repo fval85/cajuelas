@@ -32,6 +32,7 @@ export function celdaTxt(col, v) {
     case 'int': return miles(v);
     case 'caj': case 'dec': return cajF(v);
     case 'mon': return dinero(v);
+    case 'usd': return '$ ' + cajF(v);
     case 'pct': return pctSigno(v);
     case 'pcta': return pctSimple(v);
     case 'fecha': return fmtFechaDMA(v);

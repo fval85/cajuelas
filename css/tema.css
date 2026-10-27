@@ -151,3 +151,14 @@
 .chips.filtros-activos { padding-bottom: 4px; }
 .filtros-resumen { margin: 2px 0 6px; }
 .btn-texto.limpiar { padding: 4px 6px; min-height: 36px; font-size: 14px; }
+
+/* ---- Ventas de exportación ---- */
+.progreso { height: 8px; border-radius: 99px; background: var(--borde); overflow: hidden; margin: 10px 0 4px; }
+.progreso i { display: block; height: 100%; border-radius: 99px; background: var(--verde); }
+.tabla-rep.centrada th, .tabla-rep.centrada td { text-align: center; }
+.tabla-rep.centrada td.fija, .tabla-rep.centrada th.fija { text-align: center; }
+.centrado { text-align: center; }
+.rep-titulo.centrado { margin-left: auto; margin-right: auto; }
+.kpis.centrada .kpi { text-align: center; }
+.kpis.centrada { grid-template-columns: repeat(2, 1fr); }
+.kpis.centrada .kpi:last-child:nth-child(odd) { grid-column: 1 / -1; }

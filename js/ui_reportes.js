@@ -5,6 +5,7 @@ import { modoPruebas } from './store.js';
 import { historicos, pasarAHistoricos } from './sync.js';
 import { elegirVarios } from './util.js';
 import { tarjeta, etiqueta, banda, selector, boton, verDocumento, cabSub } from './ui.js';
+import { crearVentasExp } from './ui_export.js';
 import { cargarFuentes, paginasReporte, lienzoGrafico } from './draw.js';
 import { FILTROS, opcionesFiltro, filtrar, suma, cajF, parseFilas, cosechasDe, ultimaFecha, armarReporte, filasExcel, celdaTxt, pctSigno, fmtFechaDMA, VISTAS, DIMENSIONES, inicioAnio, MEDIDAS, MEDIDAS_INI, AGRUPACIONES } from './rep_calc.js';
 
@@ -24,7 +25,7 @@ export function crearReportes(nav) {
   let cargando = false, errorCarga = '';
 
   const estado = h('p', { class: 'nota estado-datos' });
-  const btnAct = boton('Actualizar datos', null, 'c-agregar', () => cargar(true));
+  const btnAct = boton('Actualizar datos', null, 'c-agregar', () => { cargar(true); exp.cargar(true); });
   const chipsCos = h('div', { class: 'chips envuelve chicas' });
   function elegirCosecha(v) { f.cos = v; f.desde = ''; f.corte = ultimaFecha(datos.filas, v); f.compFor = ''; ajustarComp(); pintarFiltros(); pintar(); }
   const iDesde = h('input', { class: 'campo', type: 'date' });
@@ -280,10 +281,13 @@ export function crearReportes(nav) {
   const bandaInicio = banda('Reportes');
   const cabDetalle = cabSub('Café recibido', () => ir('inicio'));
   cabDetalle.hidden = true;
+  const exp = crearVentasExp({ abrir: () => ir('exp'), volver: () => ir('inicio'), alCambiar: () => { if (pantalla === 'inicio') pintarInicio(); } });
+  exp.cab.hidden = true;
   function ir(p) { pantalla = p; mostrar(); window.scrollTo(0, 0); }
   function mostrar() {
     const det = pantalla === 'detalle';
-    bandaInicio.hidden = det; inicio.hidden = det; cabDetalle.hidden = !det; detalle.hidden = !det;
+    const ex = pantalla === 'exp';
+    bandaInicio.hidden = det || ex; inicio.hidden = det || ex; cabDetalle.hidden = !det; detalle.hidden = !det; exp.cab.hidden = !ex; exp.el.hidden = !ex;
   }
   const colones = (v) => '₡ ' + Math.round(v).toLocaleString('es-CR').replace(/[  ]/g, ' ');
   function sparkline(valores) {
@@ -306,7 +310,7 @@ export function crearReportes(nav) {
   function pintarInicio() {
     clear(inicio);
     if (!datos || !f.cos) {
-      inicio.append(tarjeta(h('p', { class: 'nota' }, cargando ? 'Descargando…' : datos ? 'El archivo Históricos no tiene datos.' : 'Para ver los reportes la app necesita leer el Google Sheet «Históricos». Revise que en la hoja Configuración del libro de Google Sheets esté el enlace en la fila «Históricos» y toque «Actualizar datos».')), tarjAcciones);
+      inicio.append(exp.tarjetaHub(), tarjeta(h('p', { class: 'nota' }, cargando ? 'Descargando…' : datos ? 'El archivo Históricos no tiene datos.' : 'Para ver los reportes la app necesita leer el Google Sheet «Históricos». Revise que en la hoja Configuración del libro de Google Sheets esté el enlace en la fila «Históricos» y toque «Actualizar datos».')), tarjAcciones);
       return;
     }
     const rows = filtrar(datos.filas, f.cos, f.corte || ultimaFecha(datos.filas, f.cos), {}, '');
@@ -327,12 +331,12 @@ export function crearReportes(nav) {
       h('p', { class: 'cifra' }, colones(t.int)),
       h('p', { class: 'sub' }, `Adelantos: ${colones(t.ade)} · toque para ver por sociedad`));
     inicio.append(cafe, dinero,
-      vacia('🚢 Ventas de exportación (ICAFE)', 'Cuando tenga la tabla lista se conecta aquí: kilos, compradores, fechas de venta y entrega.', 'PRÓXIMAMENTE'),
+      exp.tarjetaHub(),
       vacia('➕ Agregar otra tabla de café', 'Cada tabla nueva aparece como una tarjeta más en esta pantalla.'),
       tarjAcciones);
   }
 
-  raiz.append(bandaInicio, cabDetalle, inicio, detalle);
+  raiz.append(bandaInicio, cabDetalle, exp.cab, inicio, detalle, exp.el);
   barraFiltros.hidden = true; opPers.hidden = true; panelFiltros.hidden = true; btnCompartir.hidden = true;
   pintarChips(); pintarEstado(); pintarInicio(); mostrar();
   return {
@@ -341,6 +345,7 @@ export function crearReportes(nav) {
     // Cada vez que se entra a la pestaña empieza limpia: filtros por defecto y datos al día.
     reiniciar() {
       f = nuevoF(); vista = 'comparativo'; pantalla = 'inicio'; mostrar(); filtrosAbiertos = false; busqueda = '';
+      exp.reiniciar();
       const cache = leerCache();
       if (cache) usar(cache);
       btnPasar.hidden = !puede('todos');

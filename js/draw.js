@@ -589,7 +589,7 @@ export function paginasTablas(tablas, pageW, pageH) {
     };
     const nueva = (primera) => {
       pg = crearPagina(pageW, pageH, Math.min(2.2, 4200 / pageW)); c = pg.c; paginas.push({ ...pg, ancho: pageW, alto: pageH }); y = MG;
-      if (primera) { t.titulos.forEach(([tx, size]) => { txt(c, tx, MG, y + size, P(size, true, false)); y += size + 5; }); y += 6; }
+      if (primera) { t.titulos.forEach(([tx, size]) => { const pt = P(size, true, false); txt(c, tx, t.centrado ? (pageW - medir(pt, tx)) / 2 : MG, y + size, pt); y += size + 5; }); y += 6; }
       else { txt(c, ((t.titulos[0] || [''])[0]) + ' (continuación)', MG, y + 9, bold); y += 16; }
       encabezado();
     };
@@ -669,7 +669,8 @@ function barrasH(c, x, y, w, h, g) {
   const peq = P(7.5, false, false, '#374151'), val = P(7, true, false, '#111827');
   const n = g.cats.length, ns = g.series.length;
   const lw = Math.min(w * 0.36, Math.max(...g.cats.map((t) => medir(peq, String(t)))) + 4);
-  const px = x + lw + 4, pw = w - lw - 4 - 34;
+  const maxLab = Math.max(0, ...g.series.flatMap((s) => s.valores.map((v) => medir(val, g.dec ? cajF(v) : miles(v)))));
+  const px = x + lw + 4, pw = w - lw - 4 - Math.max(34, Math.ceil(maxLab) + 8);
   const max = Math.max(...g.series.flatMap((s) => s.valores), 0);
   const esc = escalaBonita(max);
   const slot = h / n, grupo = Math.min(slot * 0.8, ns * 16), bh = grupo / ns;
@@ -746,16 +747,18 @@ export function paginasReporte(rep, pie = '') {
   const W = vertical ? 595 : 842, H = vertical ? 842 : 595;
   const pg = crearPagina(W, H, 2.2), c = pg.c;
   let y = MG;
-  txt(c, rep.titulo, MG, y + 14, P(16, true, false)); y += 24;
-  rep.subtitulos.forEach((t) => { envolver(t, P(9, false, false), W - 2 * MG).forEach((l) => { txt(c, l, MG, y + 9, P(9, false, false, '#374151')); y += 12; }); });
+  const cx = (t, p) => (rep.centrado ? (W - medir(p, t)) / 2 : MG);
+  { const pt = P(16, true, false); let tt = rep.titulo; let ps = pt; if (rep.centrado) { let sz = 16; while (sz > 9 && medir(P(sz, true, false), tt) > W - 2 * MG) sz -= 0.5; ps = P(sz, true, false); } txt(c, tt, cx(tt, ps), y + 14, ps); y += 24; }
+  rep.subtitulos.forEach((t) => { envolver(t, P(9, false, false), W - 2 * MG).forEach((l) => { const pp = P(9, false, false, '#374151'); txt(c, l, cx(l, pp), y + 9, pp); y += 12; }); });
   y += 8;
   if (rep.kpis && rep.kpis.length) {
     const n = rep.kpis.length, gap = 8, bw = (W - 2 * MG - gap * (n - 1)) / n, bh = 52;
     rep.kpis.forEach((k, i) => {
       const bx = MG + i * (bw + gap);
       rectLleno(c, bx, y, bw, bh, '#E8F1EB');
-      txt(c, k.t, bx + 8, y + 14, P(8, false, false, '#374151'));
-      { let sz = 14; while (sz > 7 && medir(P(sz, true, false), k.v) > bw - 16) sz -= 0.5; txt(c, k.v, bx + 8, y + 32, P(sz, true, false)); }
+      const kc = (t, p) => (rep.centrado ? bx + (bw - medir(p, t)) / 2 : bx + 8);
+      { const pk = P(8, false, false, '#374151'); const tk = recortar(k.t, pk, bw - 8); txt(c, tk, kc(tk, pk), y + 14, pk); }
+      { let sz = 14; while (sz > 7 && medir(P(sz, true, false), k.v) > bw - 16) sz -= 0.5; const pv = P(sz, true, false); txt(c, k.v, kc(k.v, pv), y + 32, pv); }
       if (k.d != null) { const tdl = recortar(`${pctSigno(k.d)} ${k.ref}`, P(8, true, false), bw - 12); txt(c, tdl, bx + 8, y + 46, P(8, true, false, k.d < 0 ? COLORES_PDF_KPI.neg : COLORES_PDF_KPI.pos)); }
     });
     y += bh + 12;
@@ -766,7 +769,7 @@ export function paginasReporte(rep, pie = '') {
     rep.datos.forEach((t) => envolver('•  ' + t, pd, W - 2 * MG).forEach((l, i) => { txt(c, i ? '    ' + l : l, MG, y + 8, pd); y += 11.5; }));
     y += 8;
   }
-  const gs = (rep.graficos || []).slice(0, 2);
+  const gs = (rep.graficos || []).slice(0, 3);
   if (gs.length) {
     if (vertical) {
       const gh = (H - y - MG - 12 - 14 * (gs.length - 1)) / gs.length;
@@ -785,12 +788,12 @@ export function paginasReporte(rep, pie = '') {
     const reparto = Math.max(0, (TW - 2 * MG) - sumNat);
     const peso = rep.cols.map((k, i) => (k.tipo !== 'txt' ? 1 : natural[i] >= 110 ? 1 : 0.05));
     const sp = peso.reduce((t, x) => t + x, 0);
-    const columnas = rep.cols.map((k, i) => ({ titulo: k.t, ancho: natural[i] + reparto * peso[i] / sp, derecha: k.tipo !== 'txt', centro: k.tipo !== 'txt' }));
+    const columnas = rep.cols.map((k, i) => ({ titulo: k.t, ancho: natural[i] + reparto * peso[i] / sp, derecha: k.tipo !== 'txt', centro: k.tipo !== 'txt' || !!k.centro }));
     const filas = rep.filas.map((f) => ({
       celdas: rep.cols.map((k, i) => celdaTxt(k, f.v[i])), negrita: f.negrita, fondo: f.fondo,
-      rojas: rep.cols.map((k, i) => (k.tipo === 'pct' && typeof f.v[i] === 'number' && f.v[i] < -0.0005 ? i : -1)).filter((i) => i >= 0)
+      rojas: rep.cols.map((k, i) => ((k.tipo === 'pct' || k.neg) && typeof f.v[i] === 'number' && f.v[i] < -0.0005 ? i : -1)).filter((i) => i >= 0)
     }));
-    paginasTablas([{ titulos: [[rep.titulo, 12]], columnas, filas, nota: (rep.nota || '') + (pie ? '  ' + pie : '') }], TW, H).forEach((p) => paginas.push(p));
+    paginasTablas([{ titulos: [[rep.titulo, 12]], centrado: !!rep.centrado, columnas, filas, nota: (rep.nota || '') + (pie ? '  ' + pie : '') }], TW, H).forEach((p) => paginas.push(p));
   }
   return paginas;
 }

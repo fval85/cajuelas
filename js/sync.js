@@ -128,6 +128,16 @@ export async function historicos() {
   return { error: null, filas: r.json.filas, cosechas: r.json.cosechas || [], usadas: r.json.usadas || [], actualizado: s(r.json.actualizado) };
 }
 
+/** Hojas Resumen, Contratos, Entregas y Pagos del Google Sheet «Exportaciones» (ventas de exportación y consumo nacional). */
+export async function exportaciones() {
+  if (!configurado()) return { error: 'Falta configurar la URL y el token en Ajustes > Administración.' };
+  const { url, token } = syncCfg();
+  const r = await postJson(url, { action: 'exportaciones', token }, 60000);
+  if (!r.ok) return { error: r.message };
+  if (!r.json.resumen || !Array.isArray(r.json.resumen.filas)) return { error: 'El Apps Script no está actualizado (falta la acción exportaciones).' };
+  return { error: null, resumen: r.json.resumen, contratos: r.json.contratos, entregas: r.json.entregas, pagos: r.json.pagos, actualizado: s(r.json.actualizado) };
+}
+
 /** Pasa a Históricos el total de un día de Diario (una línea por sociedad + finca). Solo administradores (lo valida el servidor). */
 export async function pasarAHistoricos({ fecha, soloVer = false, forzar = false }) {
   if (!configurado()) return { error: 'Falta configurar la URL y el token en Ajustes > Administración.' };
