@@ -250,12 +250,11 @@ export function crearBoletos(nav) {
     tarjeta(etiqueta('Oficina'), pickOf, etiqueta('Sociedad'), pickSoc, etiqueta('Fecha del movimiento'), inFecha),
     infoSaldo,
     tarjeta(etiqueta('Cantidad de fichas'), cajaFichas),
-    h('div', { class: 'fila-botones cuatro' },
-      boton('Entrega', 'emitir', 'c-verde', () => emitir(BOL_ENTREGA)), boton('Refuerzo', 'emitir', 'c-ambar', () => emitir(BOL_REFUERZO)),
-      boton('Saldo', 'enviar', 'c-azul', () => emitir(BOL_SALDO)), boton('Fichas\ndañadas', 'anular', 'c-rojo', () => emitir(BOL_PERDIDA))),
-    h('div', { class: 'fila-botones tres' },
-      boton('Reimprimir', 'imprimir', 'c-teal', reimprimir, 'reimprimir'), boton('Anular', 'anular', 'c-rojo', anular, 'anular'), boton('Conteo\ngeneral', 'enviar', 'c-ambar', () => emitir(BOL_CONTEO))),
-    boton('Reportes', 'resumen', 'c-azul ancho-total', reportes, 'resumenes')
+    h('div', { class: 'acciones' },
+      boton('Entrega de fichas', 'emitir', 'c-verde', () => emitir(BOL_ENTREGA)), boton('Refuerzo', 'emitir', 'c-ambar', () => emitir(BOL_REFUERZO)),
+      boton('Saldo', 'enviar', 'c-azul', () => emitir(BOL_SALDO)), boton('Conteo general', 'enviar', 'c-ambar', () => emitir(BOL_CONTEO)),
+      boton('Reimprimir', 'imprimir', 'c-teal', reimprimir, 'reimprimir'), boton('Reportes', 'resumen', 'c-azul', reportes, 'resumenes'),
+      boton('Fichas dañadas', 'anular', 'c-rojo', () => emitir(BOL_PERDIDA)), boton('Anular', 'anular', 'c-rojo', anular, 'anular'))
   );
   refrescar();
   return { el: raiz, refrescar };

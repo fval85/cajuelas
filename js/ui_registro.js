@@ -356,8 +356,9 @@ export function crearRegistro(nav) {
     ),
     boton('+  Agregar línea', null, 'c-agregar ancho-total', () => agregarFila()),
     resumen,
-    h('div', { class: 'fila-botones' }, boton('Emitir', 'emitir', 'c-verde', emitir), boton('Reimprimir', 'imprimir', 'c-teal', reimprimir, 'reimprimir'), boton('Anular', 'anular', 'c-rojo', anular, 'anular')),
-    h('div', { class: 'fila-botones dos' }, boton('Resumen', 'resumen', 'c-azul', resumen_, 'resumenes'), boton('Envío masivo', 'enviar', 'c-ambar', tiquetesDelDia, 'resumenes'))
+    h('div', { class: 'acciones' },
+      boton('Emitir comprobante', 'emitir', 'c-verde', emitir), boton('Reimprimir', 'imprimir', 'c-teal', reimprimir, 'reimprimir'), boton('Resumen', 'resumen', 'c-azul', resumen_, 'resumenes'),
+      boton('Envío masivo', 'enviar', 'c-ambar', tiquetesDelDia, 'resumenes'), boton('Anular', 'anular', 'c-rojo', anular, 'anular'))
   );
 
   function pintar() {

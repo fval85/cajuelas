@@ -1,0 +1,118 @@
+/* Pantallas nuevas (Ajustes y Reportes en tarjetas) y tema oscuro automático según el teléfono. */
+:root { color-scheme: light dark; --verde-bg: #14532d; --sombra-ac: #14532d; }
+
+/* ---- Listas de filas (Ajustes) ---- */
+.grupo { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 18px; margin: 0 0 12px; overflow: hidden; }
+.grupo[hidden] { display: none; }
+.fila-aj { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 58px; padding: 12px 16px; border: 0; border-bottom: 1px solid var(--borde); background: transparent; color: var(--texto); font: inherit; text-align: left; }
+.fila-aj:last-child { border-bottom: 0; }
+.fila-aj:active { background: rgba(127, 127, 127, .12); }
+.fila-aj .ic { flex: none; width: 28px; text-align: center; font-size: 21px; line-height: 1; }
+.fila-aj .tx { flex: 1; min-width: 0; font-size: 16px; font-weight: 600; }
+.fila-aj .tx small { display: block; margin-top: 2px; font-size: 12.5px; font-weight: 400; color: var(--gris); overflow-wrap: anywhere; }
+.fila-aj .fl { flex: none; color: var(--gris); font-size: 22px; line-height: 1; }
+.fila-aj.peligro .tx { color: var(--rojo); }
+.interruptor { flex: none; position: relative; width: 44px; height: 24px; border-radius: 12px; background: #9ca3af; transition: background .15s; }
+.interruptor::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: left .15s; }
+.interruptor.on { background: var(--verde-bg); }
+.interruptor.on::after { left: 22px; }
+.titulo-grupo { margin: 14px 4px 6px; font-size: 12px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--gris); }
+.cab-sub { display: flex; align-items: center; gap: 4px; margin: 0 -16px 14px; padding: 6px 8px; background: var(--verde-bg); color: #fff; min-height: 52px; }
+.cab-sub h1 { font-size: 19px; font-weight: 700; flex: 1; }
+.cab-sub .atras { border: 0; background: transparent; color: #fff; font-size: 32px; line-height: 1; padding: 4px 12px 8px; min-height: 44px; }
+
+/* ---- Reportes: tarjetas por fuente ---- */
+.fuente { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 18px; padding: 14px; margin-bottom: 12px; }
+.fuente-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.fuente-cab h3 { margin: 0; font-size: 17px; }
+.fuente-cab span { font-size: 12px; font-weight: 700; color: var(--gris); }
+.fuente .sub { margin: 2px 0 0; font-size: 13px; color: var(--gris); }
+.fuente .cifra { margin: 6px 0 0; font-size: 24px; font-weight: 800; color: var(--verde); font-variant-numeric: tabular-nums; }
+.fuente svg.spark { display: block; width: 100%; height: 44px; margin: 8px 0 4px; }
+.fuente .chips { padding: 6px 0 0; }
+.fuente .chips.envuelve { padding-bottom: 0; }
+.fuente.toque { cursor: pointer; }
+.fuente.vacia { background: transparent; border: 2px dashed var(--borde); text-align: center; color: var(--gris); }
+.fuente.vacia h3 { color: var(--gris); font-size: 15px; }
+.insignia { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 9px; background: var(--verde-bg); color: #fff; font-size: 10px; font-weight: 700; vertical-align: middle; }
+.cab-sub[hidden], .atras-rep[hidden] { display: none; }
+
+/* ---- Tema oscuro ---- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --verde: #4ade80; --verde-2: #22c55e; --verde-claro: #1c3a2a; --linea: #3b5163; --fondo: #08141a; --tarjeta: #1c2e3d;
+    --texto: #f1f5f9; --gris: #9fb3c2; --borde: #2b4152; --rojo: #f87171; --azul: #3b82f6; --ambar: #d97706; --teal: #0f9d8f;
+  }
+  body { background: var(--fondo); }
+  .nota { color: var(--gris); }
+  .campo, .selector, .celda-in, .chip, .sugerencias, .sug, .item, .dialogo, .kpi, .tabla-scroll, .tabla-rep th, .tabla-rep td, .cuadro, .enc.grupo, #tabs { background-color: var(--tarjeta); }
+  .campo.selec { background-color: var(--tarjeta); }
+  .tabla-rep th { background: var(--verde-bg); }
+  .tabla-rep th.fija { background: var(--verde-bg); }
+  .tabla-rep td, .sug, .item, .dialogo-botones { border-color: var(--borde); }
+  .tabla-rep tr.total td { background: #1c3a2a; }
+  .tabla-rep tr.destacada td { background: #4a3a10; }
+  .tabla-rep .fija { box-shadow: 1px 0 0 var(--borde); }
+  .tabla-rep tr.clic:active td { background: #243b4d; }
+  .selector.vacio .sel-texto { color: #7f93a3; }
+  .tab { color: var(--gris); }
+  #tabs { border-top-color: var(--borde); }
+  .banda, .c-verde, .chip.on, .btn-texto.primario, .interruptor.on { background: var(--verde-bg); color: #fff; }
+  .chip.on, .fila-chips .chip.on { border-color: var(--verde); }
+  .fila-chips .chip.on, .chip.on-suave { background: #1c3a2a; color: var(--verde); }
+  .c-agregar { background: #1c3a2a; color: var(--verde); border-color: var(--verde); }
+  .icono-borrar { background: #3a1d1d; border-color: #7f1d1d; }
+  .resumen { background: #123524; border-color: #1f6b3d; color: #bbf7d0; }
+  .estado.bien { background: #123524; color: var(--verde); }
+  .estado.aviso, #barra-estado { background: #4a3a10; color: #fcd34d; border-color: #7a5a12; }
+  .tip { background: #12283f; border-color: #1e4a7a; }
+  .dialogo-botones { border-top-color: var(--borde); }
+  .velo { background: rgba(0, 0, 0, .65); }
+  .visor { background: #0f1c25; }
+  .pos { color: #4ade80; } .neg { color: #f87171; }
+  .codigo { background: #1c3a2a; }
+  .resumen-filtros { background: #1c3a2a; }
+  #toast { background: #e5e7eb; color: #111827; }
+  .grafico-caja { background: #fff; }
+  .grafico-caja .grafico { border-radius: 8px; }
+  .banda .user-chip, .cab-sub .atras { color: #fff; }
+  details, summary { color: var(--texto); }
+}
+.banda[hidden] { display: none; }
+
+/* ---- Botones uniformes: principal verde, secundarios neutros con icono verde, peligro en rojo ---- */
+.acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.acciones > .btn { margin: 0; min-width: 0; }
+.acciones > .btn.c-verde { grid-column: 1 / -1; }
+.acciones > .btn[hidden] { display: none; }
+.btn { border-radius: 14px; }
+.btn.c-teal, .btn.c-azul, .btn.c-ambar, .btn.c-rojo { background: var(--tarjeta); color: var(--texto); border: 1.5px solid var(--borde); }
+.btn.c-rojo { color: var(--rojo); border-color: color-mix(in srgb, var(--rojo) 55%, var(--borde)); }
+.btn.c-teal svg, .btn.c-azul svg, .btn.c-ambar svg, .btn.c-rojo svg { flex: none; box-sizing: content-box; width: 22px; height: 22px; padding: 6px; border-radius: 11px; background: var(--verde-claro); color: var(--verde); }
+.btn.c-rojo svg { background: color-mix(in srgb, var(--rojo) 14%, var(--tarjeta)); color: var(--rojo); }
+.acciones > .btn:not(.c-verde) { flex-direction: row; justify-content: flex-start; gap: 10px; min-height: 62px; padding: 8px 10px; text-align: left; font-size: 14px; line-height: 1.15; overflow-wrap: normal; word-break: normal; }
+.acciones > .btn.c-verde { flex-direction: row; gap: 8px; min-height: 58px; font-size: 17px; }
+.acciones > .btn span { min-width: 0; }
+.fila-acciones > .btn { min-width: 0; }
+.fila-botones > .btn { min-width: 0; }
+
+/* ---- Botones de los diálogos ---- */
+.dialogo-botones { justify-content: stretch; gap: 8px; }
+.dialogo-botones .btn-texto { flex: 1 1 120px; min-width: 0; border: 1.5px solid var(--borde); background: var(--tarjeta); color: var(--texto); border-radius: 14px; min-height: 48px; padding: 10px 14px; font-size: 15px; }
+.dialogo-botones .btn-texto.primario { background: var(--verde-bg); border-color: var(--verde-bg); color: #fff; }
+.dialogo-botones .btn-texto.peligro { background: var(--rojo); border-color: var(--rojo); color: #fff; }
+.btn-texto.primario { border-radius: 14px; }
+@media (prefers-color-scheme: dark) {
+  .btn.c-teal, .btn.c-azul, .btn.c-ambar, .btn.c-rojo { background: var(--tarjeta); }
+  .btn.c-azul, .btn.c-teal, .btn.c-ambar { color: var(--texto); }
+  .btn.c-rojo { color: var(--rojo); }
+  .dialogo-botones .btn-texto { background: #243b4d; color: var(--texto); }
+  .dialogo-botones .btn-texto.primario { background: var(--verde-bg); color: #fff; }
+  .dialogo-botones .btn-texto.peligro { background: #b91c1c; color: #fff; }
+}
+@media (max-width: 370px) {
+  .acciones { gap: 8px; }
+  .acciones > .btn:not(.c-verde) { gap: 6px; padding: 8px 8px; font-size: 13px; }
+  .acciones > .btn:not(.c-verde) svg { padding: 4px; }
+  .dialogo-botones .btn-texto { flex-basis: 100px; padding-left: 8px; padding-right: 8px; }
+}

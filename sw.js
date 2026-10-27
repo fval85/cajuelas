@@ -1,8 +1,8 @@
 // Service worker: guarda la aplicación para que abra sin conexión y avisa cuando hay una versión nueva.
-const VERSION = '2.6.5';
+const VERSION = '2.7.1';
 const CACHE = 'cajuelas-' + VERSION;
 const ARCHIVOS = [
-  './', './index.html', './manifest.webmanifest', './css/app.css',
+  './', './index.html', './manifest.webmanifest', './css/app.css', './css/tema.css',
   './js/main.js', './js/util.js', './js/store.js', './js/sync.js', './js/data.js', './js/files.js', './js/draw.js', './js/ui.js',
   './js/ui_registro.js', './js/ui_reportes.js', './js/rep_calc.js', './js/ui_diario.js', './js/ui_boletos.js', './js/ui_ajustes.js', './js/users.js', './js/imprimir.js',
   './fonts/DejaVuSans.woff', './fonts/DejaVuSans-Bold.woff', './fonts/DejaVuSansMono.woff', './fonts/DejaVuSansMono-Bold.woff',

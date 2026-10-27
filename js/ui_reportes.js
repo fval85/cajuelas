@@ -3,9 +3,9 @@ import { h, clear, toast, elegir, normalizar, diaHoy, ahoraTxt, confirmar, dialo
 import { puede } from './users.js';
 import { modoPruebas } from './store.js';
 import { historicos, pasarAHistoricos } from './sync.js';
-import { tarjeta, etiqueta, banda, selector, boton, verDocumento } from './ui.js';
+import { tarjeta, etiqueta, banda, selector, boton, verDocumento, cabSub } from './ui.js';
 import { cargarFuentes, paginasReporte, lienzoGrafico } from './draw.js';
-import { parseFilas, cosechasDe, ultimaFecha, armarReporte, filasExcel, celdaTxt, pctSigno, fmtFechaDMA, VISTAS, DIMENSIONES, inicioAnio, MEDIDAS, MEDIDAS_INI, AGRUPACIONES } from './rep_calc.js';
+import { filtrar, suma, cajF, parseFilas, cosechasDe, ultimaFecha, armarReporte, filasExcel, celdaTxt, pctSigno, fmtFechaDMA, VISTAS, DIMENSIONES, inicioAnio, MEDIDAS, MEDIDAS_INI, AGRUPACIONES } from './rep_calc.js';
 
 const LLAVE_CACHE = 'cajuelas_hist' + (modoPruebas ? '_t' : '');
 const MIN_REFRESCO = 30; // minutos antes de volver a pedir los datos al abrir la pestaña
@@ -19,6 +19,7 @@ export function crearReportes(nav) {
   const nuevoF = () => ({ cos: '', desde: '', corte: '', soc: '', tipo: '', cli: '', dim: 'Mes', solo: false, dims: ['soc'], med: [...MEDIDAS_INI], comp: [], compFor: '', modo: 'fecha', graf: true });
   let f = nuevoF();
   let vista = 'comparativo';
+  let pantalla = 'inicio';       // 'inicio' (tarjetas por fuente) o 'detalle' (un reporte)
   let cargando = false, errorCarga = '';
 
   const estado = h('p', { class: 'nota estado-datos' });
@@ -217,7 +218,7 @@ export function crearReportes(nav) {
     if (rep.nota) zona.append(h('p', { class: 'nota' }, rep.nota));
     btnCompartir.hidden = false;
   }
-  function pintarTodo() { pintarFiltros(); pintarChips(); pintar(); }
+  function pintarTodo() { pintarFiltros(); pintarChips(); pintar(); pintarInicio(); }
 
   // ---------- Compartir ----------
   async function compartirReporte() {
@@ -270,19 +271,73 @@ export function crearReportes(nav) {
   const filaAcciones = h('div', { class: 'fila-acciones' }, btnAct, btnPasar);
   const tarjAcciones = tarjeta(filaAcciones, estado);
 
-  raiz.append(
-    banda('Reportes'),
-    chips, barraDim, barraFiltros, opPers, zona, btnCompartir,
-    tarjAcciones
-  );
+  // ---------- Inicio: una tarjeta por fuente de datos ----------
+  const inicio = h('div', { class: 'rep-inicio' });
+  const detalle = h('div', { class: 'rep-detalle', hidden: true }, chips, barraDim, barraFiltros, opPers, zona, btnCompartir);
+  const bandaInicio = banda('Reportes');
+  const cabDetalle = cabSub('Café recibido', () => ir('inicio'));
+  cabDetalle.hidden = true;
+  function ir(p) { pantalla = p; mostrar(); window.scrollTo(0, 0); }
+  function mostrar() {
+    const det = pantalla === 'detalle';
+    bandaInicio.hidden = det; inicio.hidden = det; cabDetalle.hidden = !det; detalle.hidden = !det;
+  }
+  const colones = (v) => '₡ ' + Math.round(v).toLocaleString('es-CR').replace(/[  ]/g, ' ');
+  function sparkline(valores) {
+    const ns = 'http://www.w3.org/2000/svg', W = 300, H = 44;
+    const s = document.createElementNS(ns, 'svg'); s.setAttribute('viewBox', `0 0 ${W} ${H}`); s.setAttribute('preserveAspectRatio', 'none'); s.setAttribute('class', 'spark'); s.setAttribute('aria-hidden', 'true');
+    if (valores.length < 2) return s;
+    const mx = Math.max(...valores), mn = Math.min(...valores), rg = mx - mn || 1;
+    const pts = valores.map((v, i) => `${(i / (valores.length - 1) * (W - 4) + 2).toFixed(1)},${(H - 4 - (v - mn) / rg * (H - 8)).toFixed(1)}`).join(' ');
+    const l = document.createElementNS(ns, 'polyline'); l.setAttribute('points', pts); l.setAttribute('fill', 'none'); l.setAttribute('stroke', 'var(--verde)'); l.setAttribute('stroke-width', '2.5'); l.setAttribute('stroke-linejoin', 'round'); l.setAttribute('stroke-linecap', 'round'); l.setAttribute('vector-effect', 'non-scaling-stroke');
+    s.append(l); return s;
+  }
+  function serieAcumulada(rows) {
+    const porDia = new Map();
+    rows.forEach((r) => porDia.set(r.f, (porDia.get(r.f) || 0) + r.caj));
+    let acc = 0; const v = [...porDia.keys()].sort().map((k) => (acc += porDia.get(k)));
+    if (v.length <= 40) return v;
+    return Array.from({ length: 40 }, (_, i) => v[Math.round(i * (v.length - 1) / 39)]);
+  }
+  const vacia = (titulo, texto, insignia) => h('div', { class: 'fuente vacia' }, h('h3', null, titulo, insignia ? h('span', { class: 'insignia' }, insignia) : null), h('p', { class: 'sub' }, texto));
+  function pintarInicio() {
+    clear(inicio);
+    if (!datos || !f.cos) {
+      inicio.append(tarjeta(h('p', { class: 'nota' }, cargando ? 'Descargando…' : datos ? 'El archivo Históricos no tiene datos.' : 'Para ver los reportes la app necesita leer el Google Sheet «Históricos». Revise que en la hoja Configuración del libro de Google Sheets esté el enlace en la fila «Históricos» y toque «Actualizar datos».')), tarjAcciones);
+      return;
+    }
+    const rows = filtrar(datos.filas, f.cos, f.corte || ultimaFecha(datos.filas, f.cos), {}, '');
+    const t = suma(rows);
+    const cafe = h('div', { class: 'fuente' },
+      h('div', { class: 'fuente-cab' }, h('h3', null, '☕ Café recibido'), h('span', null, 'Históricos')),
+      h('p', { class: 'sub' }, `Cosecha ${f.cos} · hasta ${fmtFechaDMA(f.corte || ultimaFecha(datos.filas, f.cos))}`),
+      h('p', { class: 'cifra' }, `${cajF(t.caj)} cajuelas`),
+      h('p', { class: 'sub' }, `${cajF(t.fan)} fanegas · ${t.n} recibos`),
+      sparkline(serieAcumulada(rows)),
+      h('div', { class: 'chips envuelve chicas' }, ...VISTAS.map(([k, tx]) => h('button', { type: 'button', class: 'chip', onclick: () => { vista = k; pintarChips(); pintarFiltros(); pintar(); ir('detalle'); } }, tx))));
+    const dinero = h('div', { class: 'fuente toque', onclick: () => {
+      vista = 'personalizado'; f.dims = ['soc']; f.med = ['ade', 'int', 'adeint']; f.comp = []; f.compFor = f.cos;
+      pintarChips(); pintarFiltros(); pintar(); ir('detalle');
+    } },
+      h('div', { class: 'fuente-cab' }, h('h3', null, '💰 Adelantos e intereses'), h('span', null, 'Históricos')),
+      h('p', { class: 'sub' }, `Cosecha ${f.cos} · intereses a la fecha de corte`),
+      h('p', { class: 'cifra' }, colones(t.int)),
+      h('p', { class: 'sub' }, `Adelantos: ${colones(t.ade)} · toque para ver por sociedad`));
+    inicio.append(cafe, dinero,
+      vacia('🚢 Ventas de exportación (ICAFE)', 'Cuando tenga la tabla lista se conecta aquí: kilos, compradores, fechas de venta y entrega.', 'PRÓXIMAMENTE'),
+      vacia('➕ Agregar otra tabla de café', 'Cada tabla nueva aparece como una tarjeta más en esta pantalla.'),
+      tarjAcciones);
+  }
+
+  raiz.append(bandaInicio, cabDetalle, inicio, detalle);
   barraFiltros.hidden = true; opPers.hidden = true; panelFiltros.hidden = true; btnCompartir.hidden = true;
-  pintarChips(); pintarEstado();
+  pintarChips(); pintarEstado(); pintarInicio(); mostrar();
   return {
     el: raiz,
     refrescar() { /* no hace falta: los datos se leen al abrir la pestaña */ },
     // Cada vez que se entra a la pestaña empieza limpia: filtros por defecto y datos al día.
     reiniciar() {
-      f = nuevoF(); vista = 'comparativo'; iCli.value = ''; filtrosAbiertos = false; busqueda = '';
+      f = nuevoF(); vista = 'comparativo'; pantalla = 'inicio'; mostrar(); iCli.value = ''; filtrosAbiertos = false; busqueda = '';
       const cache = leerCache();
       if (cache) usar(cache);
       btnPasar.hidden = !puede('todos');

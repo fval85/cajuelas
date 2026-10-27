@@ -247,3 +247,20 @@ export function pedirPeriodo({ titulo, usuarios = false, textoBoton = 'Generar',
     d.alCerrar = () => { if (!hecho) res(null); };
   });
 }
+
+// ---------- Filas estilo lista (Ajustes y menús) ----------
+/** Fila con icono, título, subtítulo y flecha (o interruptor). `sw`: true/false muestra un interruptor en vez de la flecha. */
+export function filaAj({ ic, t, s, onclick, peligro, sw }) {
+  const el = h('button', { type: 'button', class: 'fila-aj' + (peligro ? ' peligro' : ''), onclick },
+    h('span', { class: 'ic', 'aria-hidden': 'true' }, ic || ''),
+    h('span', { class: 'tx' }, t, s ? h('small', null, s) : null),
+    sw === undefined ? h('span', { class: 'fl', 'aria-hidden': 'true' }, '›') : h('span', { class: 'interruptor' + (sw ? ' on' : ''), role: 'switch', 'aria-checked': String(!!sw) }));
+  el.cambiarSub = (txt) => { const sm = el.querySelector('small'); if (sm) sm.textContent = txt; };
+  return el;
+}
+export const grupo = (...filas) => h('div', { class: 'grupo' }, ...filas.filter(Boolean));
+export const tituloGrupo = (t) => h('div', { class: 'titulo-grupo' }, t);
+/** Cabecera de una subpantalla: flecha para volver y título. */
+export function cabSub(titulo, volver) {
+  return h('header', { class: 'cab-sub' }, h('button', { type: 'button', class: 'atras', 'aria-label': 'Volver', onclick: volver }, '‹'), h('h1', null, titulo));
+}

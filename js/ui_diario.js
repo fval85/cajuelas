@@ -226,9 +226,9 @@ export function crearDiario(nav) {
     tarjeta(etiqueta('Beneficio'), pickBen, etiqueta('Buscar por finca (llena la sociedad)'), buscaFinca, etiqueta('Sociedad'), pickSoc,
       h('div', { class: 'dos-col' }, h('div', null, etiqueta('Finca'), finca), h('div', null, etiqueta('Corte/Lote'), lote))),
     tarjeta(cuadroMuestra, h('div', { class: 'titulo-cuadro' }, 'CANTIDAD'), h('div', { class: 'cuadro-centro' }, cuadroCant)),
-    h('div', { class: 'fila-botones' },
-      boton('Emitir', 'emitir', 'c-verde', emitir), boton('Reimprimir', 'imprimir', 'c-teal', reimprimir, 'reimprimir'), boton('Anular', 'anular', 'c-rojo', anular, 'anular')),
-    h('div', { class: 'fila-botones dos' }, boton('Resumen', 'resumen', 'c-azul', resumenDelDia, 'resumenes'), boton('Envío masivo', 'enviar', 'c-ambar', masivo, 'resumenes'))
+    h('div', { class: 'acciones' },
+      boton('Emitir recibo', 'emitir', 'c-verde', emitir), boton('Reimprimir', 'imprimir', 'c-teal', reimprimir, 'reimprimir'), boton('Resumen', 'resumen', 'c-azul', resumenDelDia, 'resumenes'),
+      boton('Envío masivo', 'enviar', 'c-ambar', masivo, 'resumenes'), boton('Anular', 'anular', 'c-rojo', anular, 'anular'))
   );
   refrescar();
   return { el: raiz, refrescar };
