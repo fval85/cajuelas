@@ -63,15 +63,34 @@ export function parseFilas(raw) {
     soc: String(a[5] || '').trim(), fin: String(a[6] || '').trim(), tipo: String(a[7] || '').trim().toUpperCase(),
     caj: Number(a[8]) || 0, ade: Number(a[9]) || 0, int: Number(a[10]) || 0,
     est: String(a[11] || '').trim(), iva: Number(a[12]) || 0, dias: Number(a[13]) || 0
-  })).filter((r) => r.cos && r.f).map((r) => ({ ...r, nc: normalizar(r.cli), ns: normalizar(r.soc), nf: normalizar(r.fin), nt: normalizar(r.tipo), ne: normalizar(r.est) }));
+  })).filter((r) => r.cos && r.f).map((r) => ({ ...r, na: normalizar(r.apc), nc: normalizar(r.cli), ns: normalizar(r.soc), nf: normalizar(r.fin), nt: normalizar(r.tipo), ne: normalizar(r.est) }));
 }
 export const cosechasDe = (filas) => [...new Set(filas.map((r) => r.cos))].sort((a, b) => inicioAnio(b) - inicioAnio(a));
 export function ultimaFecha(filas, cos) { let m = ''; for (const r of filas) if (r.cos === cos && r.f > m) m = r.f; return m; }
 
+/** Filtros que se pueden marcar (una, varias o todas las opciones). `clave` compara sin tildes ni mayúsculas. */
+export const FILTROS = [
+  { k: 'soc', t: 'Sociedad', val: (r) => r.soc, clave: (r) => r.ns },
+  { k: 'cli', t: 'Cliente', val: (r) => r.cli, clave: (r) => r.nc },
+  { k: 'tipo', t: 'Tipo (M/V)', val: (r) => r.tipo, clave: (r) => r.nt },
+  { k: 'est', t: 'Estatus', val: (r) => r.est, clave: (r) => r.ne },
+  { k: 'apc', t: 'APC', val: (r) => r.apc, clave: (r) => r.na },
+  { k: 'fin', t: 'Finca', val: (r) => r.fin, clave: (r) => r.nf },
+  { k: 'mes', t: 'Mes', val: (r) => nombreMes(r.f), clave: (r) => normalizar(nombreMes(r.f)) }
+];
+const activos = (fl, sin = '') => FILTROS.filter((x) => x.k !== sin && fl && fl[x.k] && fl[x.k].length).map((x) => ({ x, set: new Set(fl[x.k].map((v) => normalizar(v))) }));
+const pasa = (r, act) => act.every(({ x, set }) => set.has(x.clave(r)));
 export function filtrar(filas, cos, corte, f, desde = '') {
-  const toks = normalizar(f.cli || '').split(' ').filter(Boolean);
-  const soc = normalizar(f.soc || ''), tipo = normalizar(f.tipo || '');
-  return filas.filter((r) => r.cos === cos && r.f <= corte && (!desde || r.f >= desde) && (!soc || r.ns === soc) && (!tipo || r.nt === tipo) && (!toks.length || toks.every((k) => r.nc.includes(k))));
+  const act = activos(f && f.fl);
+  return filas.filter((r) => r.cos === cos && r.f <= corte && (!desde || r.f >= desde) && pasa(r, act));
+}
+/** Opciones de un filtro: solo las que existen en la cosecha con los DEMÁS filtros ya elegidos (la lista se reduce). */
+export function opcionesFiltro(filas, cos, fl, k) {
+  const x = FILTROS.find((y) => y.k === k), act = activos(fl, k), m = new Map();
+  filas.forEach((r) => { if (r.cos === cos && pasa(r, act)) { const v = x.val(r); if (v) m.set(normalizar(v), v); } });
+  (fl && fl[k] || []).forEach((v) => m.set(normalizar(v), v)); // lo ya elegido siempre se puede desmarcar
+  const l = [...m.values()];
+  return k === 'mes' ? l.sort((a, b) => MESES.indexOf(a) - MESES.indexOf(b)) : l.sort((a, b) => a.localeCompare(b, 'es'));
 }
 export function suma(rows) {
   let caj = 0, ade = 0, int = 0;
@@ -103,10 +122,7 @@ export function contexto(filas, f) {
   return { items, base: items[0], prev: items[1] || null };
 }
 function textoFiltros(f) {
-  const t = [];
-  if (f.soc) t.push('Sociedad: ' + f.soc);
-  if (f.tipo) t.push('Tipo: ' + f.tipo);
-  if (f.cli) t.push('Cliente: ' + f.cli);
+  const t = FILTROS.filter((x) => f.fl && f.fl[x.k] && f.fl[x.k].length).map((x) => `${x.t}: ${f.fl[x.k].join(', ')}`);
   return t.length ? t.join(' · ') : 'Sin filtros adicionales (todas las sociedades, tipos y clientes)';
 }
 function encabezado(titulo, ctx, f) {

@@ -3,9 +3,10 @@ import { h, clear, toast, elegir, normalizar, diaHoy, ahoraTxt, confirmar, dialo
 import { puede } from './users.js';
 import { modoPruebas } from './store.js';
 import { historicos, pasarAHistoricos } from './sync.js';
+import { elegirVarios } from './util.js';
 import { tarjeta, etiqueta, banda, selector, boton, verDocumento, cabSub } from './ui.js';
 import { cargarFuentes, paginasReporte, lienzoGrafico } from './draw.js';
-import { filtrar, suma, cajF, parseFilas, cosechasDe, ultimaFecha, armarReporte, filasExcel, celdaTxt, pctSigno, fmtFechaDMA, VISTAS, DIMENSIONES, inicioAnio, MEDIDAS, MEDIDAS_INI, AGRUPACIONES } from './rep_calc.js';
+import { FILTROS, opcionesFiltro, filtrar, suma, cajF, parseFilas, cosechasDe, ultimaFecha, armarReporte, filasExcel, celdaTxt, pctSigno, fmtFechaDMA, VISTAS, DIMENSIONES, inicioAnio, MEDIDAS, MEDIDAS_INI, AGRUPACIONES } from './rep_calc.js';
 
 const LLAVE_CACHE = 'cajuelas_hist' + (modoPruebas ? '_t' : '');
 const MIN_REFRESCO = 30; // minutos antes de volver a pedir los datos al abrir la pestaña
@@ -16,7 +17,7 @@ function guardarCache(o) { try { localStorage.setItem(LLAVE_CACHE, JSON.stringif
 export function crearReportes(nav) {
   const raiz = h('div', { class: 'pagina' });
   let datos = null;              // {filas (objetos), cosechas, t, actualizado}
-  const nuevoF = () => ({ cos: '', desde: '', corte: '', soc: '', tipo: '', cli: '', dim: 'Mes', solo: false, dims: ['soc'], med: [...MEDIDAS_INI], comp: [], compFor: '', modo: 'fecha', graf: true });
+  const nuevoF = () => ({ cos: '', desde: '', corte: '', fl: {}, dim: 'Mes', solo: false, dims: ['soc'], med: [...MEDIDAS_INI], comp: [], compFor: '', modo: 'fecha', graf: true });
   let f = nuevoF();
   let vista = 'comparativo';
   let pantalla = 'inicio';       // 'inicio' (tarjetas por fuente) o 'detalle' (un reporte)
@@ -25,34 +26,16 @@ export function crearReportes(nav) {
   const estado = h('p', { class: 'nota estado-datos' });
   const btnAct = boton('Actualizar datos', null, 'c-agregar', () => cargar(true));
   const chipsCos = h('div', { class: 'chips envuelve chicas' });
-  function elegirCosecha(v) { f.cos = v; f.desde = ''; f.corte = ultimaFecha(datos.filas, v); f.soc = ''; f.compFor = ''; ajustarComp(); pintarFiltros(); pintar(); }
+  function elegirCosecha(v) { f.cos = v; f.desde = ''; f.corte = ultimaFecha(datos.filas, v); f.compFor = ''; ajustarComp(); pintarFiltros(); pintar(); }
   const iDesde = h('input', { class: 'campo', type: 'date' });
   iDesde.addEventListener('change', () => { f.desde = iDesde.value || ''; if (f.desde && f.corte && f.desde > f.corte) { f.corte = f.desde; } pintarFiltros(); pintar(); });
   const iCorte = h('input', { class: 'campo', type: 'date' });
   iCorte.addEventListener('change', () => { if (iCorte.value) { f.corte = iCorte.value; if (f.desde && f.desde > f.corte) f.desde = f.corte; pintarFiltros(); pintar(); } });
   const bUltima = h('button', { type: 'button', class: 'chip', onclick: () => { f.desde = ''; f.corte = ultimaFecha(datos.filas, f.cos); pintarFiltros(); pintar(); } }, 'Toda la cosecha');
-  const pSoc = selector('Todas las sociedades', async () => {
-    if (!datos) return;
-    const nombres = [...new Set(datos.filas.filter((r) => r.cos === f.cos).map((r) => r.soc).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
-    const v = await elegir('Sociedad', [{ etiqueta: 'Todas las sociedades', valor: '' }, ...nombres.map((n) => ({ etiqueta: n, valor: n }))]);
-    if (v === undefined) return;
-    f.soc = v; pintarFiltros(); pintar();
-  });
-  const pTipo = selector('Todos los tipos', async () => {
-    if (!datos) return;
-    const tipos = [...new Set(datos.filas.map((r) => r.tipo).filter(Boolean))].sort();
-    const v = await elegir('Tipo', [{ etiqueta: 'Todos los tipos', valor: '' }, ...tipos.map((n) => ({ etiqueta: n, valor: n }))], { buscar: false });
-    if (v === undefined) return;
-    f.tipo = v; pintarFiltros(); pintar();
-  });
-  const iCli = h('input', { class: 'campo', type: 'search', placeholder: 'Cliente (opcional)', autocomplete: 'off' });
-  let temporizador = 0;
-  iCli.addEventListener('input', () => { clearTimeout(temporizador); temporizador = setTimeout(() => { f.cli = iCli.value.trim(); pintar(); }, 350); });
-
   let busqueda = '', filtrosAbiertos = false;
   const chkSolo = h('input', { type: 'checkbox' });
   chkSolo.addEventListener('change', () => { f.solo = chkSolo.checked; pintar(); });
-  const btnFiltros = h('button', { type: 'button', class: 'chip', onclick: () => { filtrosAbiertos = !filtrosAbiertos; pintarFiltros(); } }, 'Filtros ▾');
+  const btnFiltros = h('button', { type: 'button', class: 'chip', onclick: () => { filtrosAbiertos = !filtrosAbiertos; pintarFiltros(); } }, '+ Filtro ▾');
   // ---- Opciones del reporte personalizado ----
   const chipsDim = h('div', { class: 'chips envuelve chicas' });
   const chipsMed = h('div', { class: 'chips envuelve chicas' });
@@ -91,15 +74,28 @@ export function crearReportes(nav) {
     } }, c)));
     [['fecha', 'A la misma fecha'], ['completa', 'Cosecha completa']].forEach(([k, t]) => chipsModo.append(h('button', { type: 'button', class: 'chip' + (f.modo === k ? ' on' : ''), onclick: () => { f.modo = k; pintarOpPers(); pintar(); } }, t)));
   }
-  const panelFiltros = tarjeta(
-    h('div', { class: 'dos-col' }, h('div', null, etiqueta('Sociedad'), pSoc), h('div', null, etiqueta('Tipo'), pTipo)),
-    etiqueta('Cliente'), iCli,
-    lblSolo
-  );
+  // ---- Filtros: etiquetas activas (✕ para quitar) + lista con casillas al tocar cada una ----
+  const chipsActivos = h('div', { class: 'chips envuelve chicas filtros-activos' });
+  const chipsAgregar = h('div', { class: 'chips envuelve chicas' });
+  const btnLimpiar = h('button', { type: 'button', class: 'btn-texto limpiar', onclick: () => { f.fl = {}; pintarFiltros(); pintar(); } }, 'Limpiar todos');
+  const panelAgregar = h('div', null, etiqueta('Agregar filtro'), chipsAgregar);
+  async function abrirFiltro(k) {
+    if (!datos) return;
+    const x = FILTROS.find((y) => y.k === k);
+    const ops = opcionesFiltro(datos.filas, f.cos, f.fl, k);
+    const otros = FILTROS.filter((y) => y.k !== k && (f.fl[y.k] || []).length).length;
+    const r = await elegirVarios(x.t, ops, f.fl[k] || [], { detalle: `${ops.length} ${ops.length === 1 ? 'opción' : 'opciones'}${otros ? ' con los otros filtros ya elegidos' : ''}. Toque las que quiera; sin marcar ninguna son todas.` });
+    if (r === undefined) return;
+    if (r.length) f.fl[k] = r; else delete f.fl[k];
+    pintarFiltros(); pintar();
+  }
+  const textoFiltro = (x) => { const v = f.fl[x.k]; return v.length === 1 ? `${x.t}: ${v[0]}` : `${x.t}: ${v.length}`; };
+  const panelFiltros = tarjeta(panelAgregar, lblSolo);
   const barraFiltros = h('div', { class: 'barra-filtros' },
     etiqueta('Cosecha'), chipsCos,
     h('div', { class: 'dos-col' }, h('div', null, etiqueta('Desde'), iDesde), h('div', null, etiqueta('Hasta'), iCorte)),
     h('div', { class: 'chips envuelve chicas fila-chips' }, bUltima, btnFiltros),
+    chipsActivos, btnLimpiar,
     panelFiltros
   );
   const chips = h('div', { class: 'chips' });
@@ -111,13 +107,20 @@ export function crearReportes(nav) {
     clear(chipsCos);
     if (datos) cosechasDe(datos.filas).forEach((c) => chipsCos.append(h('button', { type: 'button', class: 'chip' + (c === f.cos ? ' on' : ''), onclick: () => elegirCosecha(c) }, c)));
     iDesde.value = f.desde || ''; iCorte.value = f.corte || '';
-    pSoc.poner(f.soc); pTipo.poner(f.tipo); chkSolo.checked = !!f.solo;
+    chkSolo.checked = !!f.solo;
     const pers = vista === 'personalizado';
     opPers.hidden = !pers || !datos; lblSolo.hidden = pers;
     if (pers) { chkGraf.checked = f.graf !== false; pintarOpPers(); }
     barraFiltros.hidden = !datos;
-    const nf = [f.soc, f.tipo, f.cli, !pers && f.solo].filter(Boolean).length;
-    btnFiltros.textContent = `Filtros${nf ? ' (' + nf + ')' : ''} ${filtrosAbiertos ? '▴' : '▾'}`;
+    clear(chipsActivos); clear(chipsAgregar);
+    const act = FILTROS.filter((x) => (f.fl[x.k] || []).length);
+    act.forEach((x) => chipsActivos.append(h('span', { class: 'chip on con-x' },
+      h('button', { type: 'button', class: 'txt', onclick: () => abrirFiltro(x.k) }, textoFiltro(x)),
+      h('button', { type: 'button', class: 'x', 'aria-label': 'Quitar el filtro ' + x.t, onclick: () => { delete f.fl[x.k]; pintarFiltros(); pintar(); } }, '✕'))));
+    FILTROS.filter((x) => !(f.fl[x.k] || []).length).forEach((x) => chipsAgregar.append(h('button', { type: 'button', class: 'chip', onclick: () => abrirFiltro(x.k) }, '+ ' + x.t)));
+    chipsActivos.hidden = !act.length; btnLimpiar.hidden = act.length < 2;
+    const nf = act.length + (!pers && f.solo ? 1 : 0);
+    btnFiltros.textContent = `+ Filtro${nf ? ' (' + nf + ')' : ''} ${filtrosAbiertos ? '▴' : '▾'}`;
     btnFiltros.classList.toggle('on', nf > 0);
     panelFiltros.hidden = !filtrosAbiertos;
   }
@@ -177,7 +180,7 @@ export function crearReportes(nav) {
         const neg = c.tipo === 'pct' && typeof v === 'number' && v < -0.0005, pos = c.tipo === 'pct' && typeof v === 'number' && v > 0.0005;
         tr.append(h('td', { class: (i === 0 ? 'fija ' : '') + (c.tipo !== 'txt' ? 'der ' : '') + (neg ? 'neg ' : '') + (pos ? 'pos' : '') }, celdaTxt(c, v)));
       });
-      if (r.accion) tr.addEventListener('click', () => { f.soc = r.accion.soc; vista = 'fincas'; pintarFiltros(); pintarChips(); pintar(); window.scrollTo(0, 0); });
+      if (r.accion) tr.addEventListener('click', () => { f.fl.soc = [r.accion.soc]; vista = 'fincas'; pintarFiltros(); pintarChips(); pintar(); window.scrollTo(0, 0); });
       cuerpo.append(tr);
     });
     t.append(cuerpo);
@@ -337,7 +340,7 @@ export function crearReportes(nav) {
     refrescar() { /* no hace falta: los datos se leen al abrir la pestaña */ },
     // Cada vez que se entra a la pestaña empieza limpia: filtros por defecto y datos al día.
     reiniciar() {
-      f = nuevoF(); vista = 'comparativo'; pantalla = 'inicio'; mostrar(); iCli.value = ''; filtrosAbiertos = false; busqueda = '';
+      f = nuevoF(); vista = 'comparativo'; pantalla = 'inicio'; mostrar(); filtrosAbiertos = false; busqueda = '';
       const cache = leerCache();
       if (cache) usar(cache);
       btnPasar.hidden = !puede('todos');

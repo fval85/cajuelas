@@ -138,3 +138,16 @@
   .login-caja { background: var(--tarjeta); color: var(--texto); }
   .login-caja h1 { color: var(--verde); }
 }
+
+/* ---- Filtros con selección múltiple ---- */
+.item.opcion { flex-direction: row; align-items: center; gap: 12px; }
+.item.opcion .fuerte { font-weight: 700; }
+.cb { flex: none; width: 22px; height: 22px; border: 2px solid var(--gris); border-radius: 7px; display: inline-grid; place-items: center; font-size: 14px; line-height: 1; color: #fff; }
+.cb.on { background: var(--verde-bg); border-color: var(--verde-bg); }
+.chip.con-x { display: inline-flex; align-items: center; padding: 0; overflow: hidden; }
+.chip.con-x button { border: 0; background: transparent; color: inherit; font: inherit; font-weight: 700; min-height: 0; }
+.chip.con-x .txt { padding: 8px 6px 8px 14px; }
+.chip.con-x .x { padding: 8px 12px 8px 6px; opacity: .85; }
+.chips.filtros-activos { padding-bottom: 4px; }
+.filtros-resumen { margin: 2px 0 6px; }
+.btn-texto.limpiar { padding: 4px 6px; min-height: 36px; font-size: 14px; }

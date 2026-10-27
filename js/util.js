@@ -1,5 +1,5 @@
 // Utilidades comunes: DOM, formatos, fechas, diálogos.
-export const VERSION = '2.7.2';
+export const VERSION = '2.8.0';
 
 export function h(tag, attrs, ...children) {
   const el = document.createElement(tag);
@@ -170,6 +170,37 @@ export function elegir(titulo, opciones, { vacio = 'No hay opciones.', buscar = 
     const botones = [{ texto: 'Cancelar' }];
     if (accionVacio && !opciones.length) botones.unshift({ texto: accionVacio.texto, clase: 'primario', onclick: () => { hecho = true; res(undefined); accionVacio.onclick(); } });
     const d = dialogo({ titulo, cuerpo: [buscar && opciones.length > 8 ? q : null, lista], botones });
+    d.alCerrar = () => { if (!hecho) res(undefined); };
+    pintar();
+  });
+}
+
+/** Lista con casillas para escoger una, varias o todas las opciones. `seleccion`: valores marcados ([] = todas). Devuelve el arreglo elegido o undefined si cancela. */
+export function elegirVarios(titulo, opciones, seleccion = [], { detalle = '' } = {}) {
+  return new Promise((res) => {
+    let hecho = false;
+    const sel = new Set(seleccion.map((v) => normalizar(v)));
+    const lista = h('div', { class: 'lista alta' });
+    const q = h('input', { type: 'search', class: 'campo', placeholder: 'Buscar…', autocomplete: 'off' });
+    let btnOk;
+    const resumen = () => { if (btnOk) btnOk.textContent = sel.size ? `Aplicar (${sel.size})` : 'Aplicar (todas)'; };
+    const fila = (txt, marcada, onclick, fuerte) => h('button', { type: 'button', class: 'item opcion', role: 'checkbox', 'aria-checked': String(marcada), onclick },
+      h('span', { class: 'cb' + (marcada ? ' on' : ''), 'aria-hidden': 'true' }, marcada ? '✓' : ''), h('span', { class: fuerte ? 'fuerte' : '' }, txt));
+    const pintar = () => {
+      clear(lista);
+      const toks = normalizar(q.value).split(' ').filter(Boolean);
+      const ok = opciones.filter((o) => { const t = normalizar(o); return toks.every((k) => t.includes(k)); });
+      lista.append(fila('Todas', sel.size === 0, () => { sel.clear(); pintar(); }, true));
+      if (!ok.length) lista.append(h('p', { class: 'vacio' }, 'Sin coincidencias.'));
+      ok.forEach((o) => lista.append(fila(o, sel.has(normalizar(o)), () => { const k = normalizar(o); if (sel.has(k)) sel.delete(k); else sel.add(k); pintar(); })));
+      resumen();
+    };
+    q.addEventListener('input', pintar);
+    const d = dialogo({
+      titulo, cuerpo: [detalle ? h('p', { class: 'nota' }, detalle) : null, opciones.length > 8 ? q : null, lista],
+      botones: [{ texto: 'Cancelar' }, { texto: 'Aplicar', clase: 'primario', onclick: () => { hecho = true; res(opciones.filter((o) => sel.has(normalizar(o)))); } }]
+    });
+    btnOk = d.caja.querySelector('.btn-texto.primario');
     d.alCerrar = () => { if (!hecho) res(undefined); };
     pintar();
   });
