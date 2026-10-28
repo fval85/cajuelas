@@ -54,7 +54,7 @@ export async function enviarPendientes() {
       const q = pendientes();
       if (!q.length) break;
       const r = await postJson(url, { ...q[0], token });
-      if (!r.ok) { error = r.message; break; }
+      if (!r.ok) { error = r.message; try { db.set('ultimo_error', { t: Date.now(), m: r.message }); } catch { /* nada */ } break; }
       const q2 = pendientes(); q2.shift(); db.set('pending_sends', q2);
       enviados++; avisar();
     }
@@ -147,6 +147,17 @@ export async function pasarAHistoricos({ fecha, soloVer = false, forzar = false 
   if (r.json && r.json.success === false) return { error: r.json.message || r.message };
   if (!r.json || typeof r.json.lineas !== 'number') return { error: 'El Apps Script no está actualizado (falta la acción pasarHistoricos).' };
   return { error: null, ...r.json };
+}
+
+/** Corrige el día de un comprobante emitido con fecha equivocada (solo administradores; lo valida y audita el servidor). */
+export async function corregirFecha({ tipo, comprobante, dispositivo, diaActual, diaNuevo }) {
+  if (!configurado()) return { error: 'Falta configurar la URL y el token en Ajustes > Administración.' };
+  const { url, token } = syncCfg();
+  const ses = db.get('sesion', null) || {};
+  const r = await postJson(url, { action: 'corregirFecha', token, tipo, comprobante, dispositivo, diaActual, diaNuevo, usuario: ses.nombre || '', hash: ses.hash || '' }, 60000);
+  if (r.ok) return { error: null };
+  if (r.json && r.json.message) return { error: r.json.message };
+  return { error: /desconocid|inv[aá]lid/i.test(r.message) ? r.message : 'El Apps Script no está actualizado (falta la acción corregirFecha). ' + r.message };
 }
 
 export async function movimientosBoletos(cosecha, hasta, normMedida) {

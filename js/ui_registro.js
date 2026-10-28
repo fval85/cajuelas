@@ -5,7 +5,9 @@ import { nombreUsuario, puede } from './users.js';
 import { lineas, montoLinea, aGrupo, todosLosComprobantes, payloadRegistro, idReporte } from './data.js';
 import { cargarFuentes, paginasTexto, lineasComprobante, lineasAnulacion, paginasResumenRegistro } from './draw.js';
 import { xlsx } from './files.js';
+import { ajuste } from './apariencia.js';
 import { encolar, registroDelDia } from './sync.js';
+import { buscarComprobantesHoja, filtrarSociedades, itemComprobante, corregirFechaComprobante } from './ui_admin.js';
 import { tarjeta, etiqueta, banda, selector, boton, campoBusqueda, verDocumento, listaBuscable, pedirMotivo, icono, filtrosAdmin, usuarioCoincide } from './ui.js';
 
 export function crearRegistro(nav) {
@@ -52,6 +54,7 @@ export function crearRegistro(nav) {
   function validarSeleccion() {
     let co = cosecha();
     if (!co && cat.cosechas.length === 1 && !cosechaActiva()) co = cat.cosechas[0];
+    if (!selSociedad) selSociedad = ajuste('soc', '');
     if (!co) { selSociedad = ''; selFinca = ''; }
     else {
       const s = findSociedad(co, selSociedad);
@@ -185,6 +188,17 @@ export function crearRegistro(nav) {
 
   // ---------- Reimprimir ----------
   async function reimprimir() {
+    if (puede('todos') && configurado()) {
+      const donde = await elegir('Reimprimir comprobante', [{ etiqueta: 'De este dispositivo', valor: 'local' }, { etiqueta: 'De cualquier usuario, dispositivo o fecha (Google Sheets)', valor: 'hoja' }], { buscar: false });
+      if (!donde) return;
+      if (donde === 'hoja') {
+        const b = await buscarComprobantesHoja('Buscar comprobantes para reimprimir');
+        if (!b) return;
+        const g = await listaBuscable({ titulo: 'Reimprimir comprobante', placeholder: 'Buscar: número, nombre, finca, usuario...', texto: 'comprobantes', items: b.lista.map(itemComprobante) });
+        if (g) mostrarTiquetes([lineasComprobante(g, true)], `Comprobante ${g.numero}`, `tiquete_${g.numero}.pdf`);
+        return;
+      }
+    }
     const todos = todosLosComprobantes();
     if (!todos.length) return toast('Todavía no hay comprobantes emitidos para reimprimir.');
     const g = await listaBuscable({
@@ -245,7 +259,28 @@ export function crearRegistro(nav) {
   }
 
   // ---------- Tiquetes del día ----------
+  async function corregirFecha() {
+    const b = await buscarComprobantesHoja('Buscar el comprobante con fecha equivocada');
+    if (!b) return;
+    const g = await listaBuscable({ titulo: 'Comprobante a corregir', placeholder: 'Buscar: número, nombre, finca, usuario...', texto: 'comprobantes', items: b.lista.map(itemComprobante) });
+    if (!g) return;
+    await corregirFechaComprobante('registro', { numero: g.numero, dispositivo: g.dispositivo, dia: g.date, detalle: `${g.persona}\n${g.sociedad} · ${g.finca}` });
+  }
+
   async function tiquetesDelDia() {
+    if (puede('todos') && configurado()) {
+      const donde = await elegir('Envío masivo de tiquetes', [{ etiqueta: 'Los de hoy en este dispositivo', valor: 'local' }, { etiqueta: 'Cualquier usuario, dispositivo, fecha o sociedad (Google Sheets)', valor: 'hoja' }], { buscar: false });
+      if (!donde) return;
+      if (donde === 'hoja') {
+        const b = await buscarComprobantesHoja('Comprobantes para enviar en masa');
+        if (!b) return;
+        const lista = await filtrarSociedades(b.lista.filter((g) => !g.anulado));
+        if (!lista) return;
+        if (!lista.length) return toast('No quedó ningún comprobante.');
+        return mostrarTiquetes(lista.map((g) => lineasComprobante(g, true)), 'Tiquetes de la hoja', `tiquetes_${b.desde.replace(/-/g, '')}_${b.hasta.replace(/-/g, '')}.pdf`,
+          `${lista.length} comprobantes de la hoja (${diaLegible(b.desde)} a ${diaLegible(b.hasta)}) · Total a pagar ${fmtMoney(lista.reduce((t, g) => t + g.neto, 0))}. Un tiquete por página; no incluye anulados.`);
+      }
+    }
     const hoy = diaHoy();
     const grupos = todosLosComprobantes().filter((g) => g.date === hoy && !g.anulado).reverse();
     if (!grupos.length) return toast('Hoy todavía no hay comprobantes para compartir.');
@@ -361,7 +396,7 @@ export function crearRegistro(nav) {
     resumen,
     h('div', { class: 'acciones' },
       boton('Emitir comprobante', 'emitir', 'c-verde', emitir), boton('Reimprimir', 'imprimir', 'c-teal', reimprimir, 'reimprimir'), boton('Resumen', 'resumen', 'c-azul', resumen_, 'resumenes'),
-      boton('Envío masivo', 'enviar', 'c-ambar', tiquetesDelDia, 'resumenes'), boton('Anular', 'anular', 'c-rojo', anular, 'anular'))
+      boton('Envío masivo', 'enviar', 'c-ambar', tiquetesDelDia, 'resumenes'), boton('Anular', 'anular', 'c-rojo', anular, 'anular'), boton('Corregir\nfecha', 'registro', 'c-azul', corregirFecha, 'todos'))
   );
 
   function pintar() {

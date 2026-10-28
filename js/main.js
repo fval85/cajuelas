@@ -8,6 +8,7 @@ import { crearBoletos } from './ui_boletos.js';
 import { crearReportes } from './ui_reportes.js';
 import { crearAjustes, actualizarCatalogo } from './ui_ajustes.js';
 import { icono } from './ui.js';
+import { aplicarApariencia, tabInicio } from './apariencia.js';
 import { hayControl, puede, necesitaLogin, pantallaLogin, cerrarLogin, alCambiarSesion, actualizarUsuarios, sesion } from './users.js';
 
 // Cada vez que se abre la app las pantallas empiezan limpias (salvo al actualizar o restaurar una copia).
@@ -24,6 +25,7 @@ cargarCatalogo();
 cargarBoletosCat();
 pedirAlmacenamientoPersistente();
 
+aplicarApariencia(); window.addEventListener('load', aplicarApariencia);
 const app = document.getElementById('app');
 const barra = h('div', { id: 'barra-estado', hidden: true });
 const contenido = h('main', { id: 'contenido' });
@@ -78,12 +80,14 @@ new MutationObserver(() => {
   programado = true;
   requestAnimationFrame(() => { programado = false; aplicarPermisos(); });
 }).observe(contenido, { childList: true, subtree: true });
+const tabArranque = () => { const t = tabInicio(); return t >= 0 && (!permisoTab[t] || puede(permisoTab[t])) ? t : primeraPermitida(); };
 ir(0);
 alCambiarSesion(() => {
   revisarAcceso();
-  if (sesion()) ir(primeraPermitida());
+  if (sesion()) ir(tabArranque());
 });
 revisarAcceso();
+if (tabInicio() >= 0 && !necesitaLogin()) ir(tabArranque());
 actualizarUsuarios(true).then(() => revisarAcceso());
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') actualizarUsuarios().then(() => revisarAcceso()); });
 setInterval(() => actualizarUsuarios().then(() => revisarAcceso()), 5 * 60000);

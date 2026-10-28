@@ -4,10 +4,11 @@ import { puede } from './users.js';
 import { modoPruebas } from './store.js';
 import { historicos, pasarAHistoricos } from './sync.js';
 import { elegirVarios } from './util.js';
+import { barraCompacta, hojaFiltros, guardadosDe, elegirPeriodo } from './ui_filtros.js';
 import { tarjeta, etiqueta, banda, selector, boton, verDocumento, cabSub } from './ui.js';
 import { crearVentasExp } from './ui_export.js';
 import { cargarFuentes, paginasReporte, lienzoGrafico } from './draw.js';
-import { FILTROS, opcionesFiltro, filtrar, suma, cajF, parseFilas, cosechasDe, ultimaFecha, armarReporte, filasExcel, celdaTxt, pctSigno, fmtFechaDMA, VISTAS, DIMENSIONES, inicioAnio, MEDIDAS, MEDIDAS_INI, AGRUPACIONES } from './rep_calc.js';
+import { desplazar, sumarDias, FILTROS, opcionesFiltro, filtrar, suma, cajF, parseFilas, cosechasDe, ultimaFecha, armarReporte, filasExcel, celdaTxt, pctSigno, fmtFechaDMA, VISTAS, DIMENSIONES, inicioAnio, MEDIDAS, MEDIDAS_INI, AGRUPACIONES } from './rep_calc.js';
 
 const LLAVE_CACHE = 'cajuelas_hist' + (modoPruebas ? '_t' : '');
 const MIN_REFRESCO = 30; // minutos antes de volver a pedir los datos al abrir la pestaña
@@ -18,25 +19,54 @@ function guardarCache(o) { try { localStorage.setItem(LLAVE_CACHE, JSON.stringif
 export function crearReportes(nav) {
   const raiz = h('div', { class: 'pagina' });
   let datos = null;              // {filas (objetos), cosechas, t, actualizado}
-  const nuevoF = () => ({ cos: '', desde: '', corte: '', fl: {}, dim: 'Mes', solo: false, dims: ['soc'], med: [...MEDIDAS_INI], comp: [], compFor: '', modo: 'fecha', graf: true });
+  const nuevoF = () => ({ cos: '', desde: '', corte: '', per: 'cosecha', fl: {}, dim: 'Mes', solo: false, dims: ['soc'], med: [...MEDIDAS_INI], comp: [], compFor: '', modo: 'fecha', graf: true });
   let f = nuevoF();
   let vista = 'comparativo';
   let pantalla = 'inicio';       // 'inicio' (tarjetas por fuente) o 'detalle' (un reporte)
   let cargando = false, errorCarga = '';
 
   const estado = h('p', { class: 'nota estado-datos' });
-  const btnAct = boton('Actualizar datos', null, 'c-agregar', () => { cargar(true); exp.cargar(true); });
-  const chipsCos = h('div', { class: 'chips envuelve chicas' });
-  function elegirCosecha(v) { f.cos = v; f.desde = ''; f.corte = ultimaFecha(datos.filas, v); f.compFor = ''; ajustarComp(); pintarFiltros(); pintar(); }
-  const iDesde = h('input', { class: 'campo', type: 'date' });
-  iDesde.addEventListener('change', () => { f.desde = iDesde.value || ''; if (f.desde && f.corte && f.desde > f.corte) { f.corte = f.desde; } pintarFiltros(); pintar(); });
-  const iCorte = h('input', { class: 'campo', type: 'date' });
-  iCorte.addEventListener('change', () => { if (iCorte.value) { f.corte = iCorte.value; if (f.desde && f.desde > f.corte) f.desde = f.corte; pintarFiltros(); pintar(); } });
-  const bUltima = h('button', { type: 'button', class: 'chip', onclick: () => { f.desde = ''; f.corte = ultimaFecha(datos.filas, f.cos); pintarFiltros(); pintar(); } }, 'Toda la cosecha');
-  let busqueda = '', filtrosAbiertos = false;
-  const chkSolo = h('input', { type: 'checkbox' });
-  chkSolo.addEventListener('change', () => { f.solo = chkSolo.checked; pintar(); });
-  const btnFiltros = h('button', { type: 'button', class: 'chip', onclick: () => { filtrosAbiertos = !filtrosAbiertos; pintarFiltros(); } }, '+ Filtro ▾');
+  const actualizarTodo = () => { cargar(true); exp.cargar(true); };
+  let busqueda = '';
+  const guard = guardadosDe('cafe');
+  const barra = barraCompacta();
+  // Cosecha: se cambia desde la hoja de filtros (fila «Cosecha»).
+  // ---- Periodo unificado ----
+  const ref = () => ultimaFecha(datos.filas, f.cos);
+  function aplicarPer(per, d, hasta) {
+    f.per = per;
+    const ult = ref();
+    if (per === 'hoy') { f.desde = ult; f.corte = ult; }
+    else if (per === 'semana') { const dow = (new Date(ult + 'T12:00:00Z').getUTCDay() + 6) % 7; f.desde = sumarDias(ult, -dow); f.corte = ult; }
+    else if (per === 'mes') { f.desde = ult.slice(0, 8) + '01'; f.corte = ult; }
+    else if (per === 'rango') { f.desde = d; f.corte = hasta; }
+    else { f.desde = ''; f.corte = ult; }
+  }
+  const dm = (x) => (x ? `${x.slice(8, 10)}/${x.slice(5, 7)}` : '');
+  function textoPeriodo() {
+    if (!datos || !f.cos) return 'Periodo';
+    const ult = ref();
+    const base = { hoy: ult === diaHoy() ? `Hoy ${dm(ult)}` : `Último día ${dm(ult)}`, semana: `Esta semana (${dm(f.desde)}–${dm(f.corte)})`, mes: `Este mes (${dm(f.desde)}–${dm(f.corte)})`, rango: `${dm(f.desde)} – ${dm(f.corte)}`, cosecha: 'Toda la cosecha' }[f.per] || 'Toda la cosecha';
+    return base;
+  }
+  async function pedirPer() {
+    if (!datos) return;
+    const r = await elegirPeriodo({ actual: f.per, desde: f.desde, hasta: f.corte, ref: ref() });
+    if (!r) return;
+    aplicarPer(r.per, r.desde, r.hasta); pintarFiltros(); pintar(); pintarInicio();
+  }
+  async function elegirCosechaDlg() {
+    const cs = cosechasDe(datos.filas);
+    const v = await elegir('Cosecha', cs.map((c) => ({ etiqueta: c, valor: c })), { buscar: false });
+    if (v === undefined) return;
+    f.cos = v; f.compFor = ''; ajustarComp(); aplicarPer(f.per === 'rango' ? 'cosecha' : f.per); f.fl = {};
+    pintarFiltros(); pintar(); pintarInicio();
+  }
+  async function elegirComparar() {
+    const v = await elegir('Comparar con', [{ etiqueta: 'Cosechas anteriores (a la misma fecha)', valor: false }, { etiqueta: 'Sin comparar (solo esta cosecha)', valor: true }], { buscar: false });
+    if (v === undefined) return;
+    f.solo = v; pintarFiltros(); pintar();
+  }
   // ---- Opciones del reporte personalizado ----
   const chipsDim = h('div', { class: 'chips envuelve chicas' });
   const chipsMed = h('div', { class: 'chips envuelve chicas' });
@@ -51,10 +81,8 @@ export function crearReportes(nav) {
     h('label', { class: 'radio' }, chkGraf, ' Mostrar gráficos'));
   const btnOp = h('button', { type: 'button', class: 'btn-texto ancho', onclick: () => { cuerpoOp.hidden = !cuerpoOp.hidden; btnOp.textContent = cuerpoOp.hidden ? 'Mostrar opciones del reporte ▾' : 'Ocultar opciones ▴'; } }, 'Ocultar opciones ▴');
   const opPers = tarjeta(cuerpoOp, btnOp);
-  const lblSolo = h('label', { class: 'radio' }, chkSolo, ' Solo esta cosecha (sin comparar con las anteriores)');
   function ajustarComp() {
     if (!datos || !f.cos || f.compFor === f.cos) return;
-    const ant = cosechasDe(datos.filas).filter((c) => inicioAnio(c) < inicioAnio(f.cos));
     f.comp = []; f.compFor = f.cos; // por defecto solo la cosecha elegida; las demás se tocan para comparar
   }
   function pintarOpPers() {
@@ -75,11 +103,7 @@ export function crearReportes(nav) {
     } }, c)));
     [['fecha', 'A la misma fecha'], ['completa', 'Cosecha completa']].forEach(([k, t]) => chipsModo.append(h('button', { type: 'button', class: 'chip' + (f.modo === k ? ' on' : ''), onclick: () => { f.modo = k; pintarOpPers(); pintar(); } }, t)));
   }
-  // ---- Filtros: etiquetas activas (✕ para quitar) + lista con casillas al tocar cada una ----
-  const chipsActivos = h('div', { class: 'chips envuelve chicas filtros-activos' });
-  const chipsAgregar = h('div', { class: 'chips envuelve chicas' });
-  const btnLimpiar = h('button', { type: 'button', class: 'btn-texto limpiar', onclick: () => { f.fl = {}; pintarFiltros(); pintar(); } }, 'Limpiar todos');
-  const panelAgregar = h('div', null, etiqueta('Agregar filtro'), chipsAgregar);
+  // ---- Filtros: hoja inferior + chips activos ----
   async function abrirFiltro(k) {
     if (!datos) return;
     const x = FILTROS.find((y) => y.k === k);
@@ -91,39 +115,63 @@ export function crearReportes(nav) {
     pintarFiltros(); pintar();
   }
   const textoFiltro = (x) => { const v = f.fl[x.k]; return v.length === 1 ? `${x.t}: ${v[0]}` : `${x.t}: ${v.length}`; };
-  const panelFiltros = tarjeta(panelAgregar, lblSolo);
-  const barraFiltros = h('div', { class: 'barra-filtros' },
-    etiqueta('Cosecha'), chipsCos,
-    h('div', { class: 'dos-col' }, h('div', null, etiqueta('Desde'), iDesde), h('div', null, etiqueta('Hasta'), iCorte)),
-    h('div', { class: 'chips envuelve chicas fila-chips' }, bUltima, btnFiltros),
-    chipsActivos, btnLimpiar,
-    panelFiltros
-  );
+  const nActivos = () => FILTROS.filter((x) => (f.fl[x.k] || []).length).length + (f.solo && vista !== 'personalizado' ? 1 : 0);
+  const nRecibos = () => (datos && f.cos ? filtrar(datos.filas, f.cos, f.corte || ref(), f, f.desde || '').length : 0);
+  const estadoGuardable = () => ({ fl: JSON.parse(JSON.stringify(f.fl)), per: f.per, desde: f.per === 'rango' ? f.desde : '', corte: f.per === 'rango' ? f.corte : '', solo: !!f.solo });
+  function aplicarGuardado(e) {
+    f.fl = JSON.parse(JSON.stringify(e.fl || {})); f.solo = !!e.solo; aplicarPer(e.per || 'cosecha', e.desde, e.corte);
+    pintarFiltros(); pintar();
+  }
+  function abrirHoja() {
+    if (!datos) return;
+    hojaFiltros({
+      titulo: 'Filtros · Café recibido', guardados: guard, guardable: estadoGuardable, aplicar: aplicarGuardado,
+      limpiar: () => { f.fl = {}; f.solo = false; aplicarPer('cosecha'); pintarFiltros(); pintar(); },
+      contar: () => `Ver resultados · ${nRecibos()} recibos`,
+      alCerrar: () => { pintarFiltros(); pintar(); pintarInicio(); },
+      filas: () => [
+        { t: 'Cosecha', valor: f.cos, abrir: elegirCosechaDlg },
+        { t: 'Periodo', valor: textoPeriodo(), on: f.per !== 'cosecha', abrir: pedirPer },
+        { t: 'Comparar con', valor: f.solo ? 'Sin comparar' : 'Cosechas anteriores', on: f.solo, abrir: elegirComparar },
+        ...FILTROS.map((x) => { const v = f.fl[x.k] || []; return { t: x.t, valor: !v.length ? 'Todos' : v.length === 1 ? v[0] : `${v.length} de ${opcionesFiltro(datos.filas, f.cos, {}, x.k).length}`, on: v.length > 0, abrir: () => abrirFiltro(x.k) }; })
+      ]
+    });
+  }
+  // Segmento rápido Todos / Interno / Externo (sobre el filtro Cliente)
+  const esInterno = (v) => normalizar(v) === 'interno';
+  function segmento() {
+    const cli = f.fl.cli || [];
+    const set = (k) => {
+      if (k === 'todos') delete f.fl.cli;
+      else {
+        const ops = opcionesFiltro(datos.filas, f.cos, { ...f.fl, cli: [] }, 'cli');
+        const l = ops.filter((o) => (k === 'interno' ? esInterno(o) : !esInterno(o)));
+        if (l.length) f.fl.cli = l; else { toast(k === 'interno' ? 'No hay clientes internos con estos filtros.' : 'No hay clientes externos con estos filtros.'); return; }
+      }
+      pintarFiltros(); pintar();
+    };
+    const on = !cli.length ? 'todos' : cli.length === 1 && esInterno(cli[0]) ? 'interno' : cli.some(esInterno) ? '' : 'externo';
+    return { opciones: [['todos', 'Todos'], ['interno', 'Interno'], ['externo', 'Externo']].map(([k, t]) => ({ t, on: on === k, click: () => set(k) })) };
+  }
+  const barraFiltros = h('div', { class: 'barra-filtros' }, barra.el);
   const chips = h('div', { class: 'chips' });
   const zona = h('div', { class: 'rep-zona' });
   const barraDim = h('div', { class: 'chips chicas', hidden: true });
-  const btnCompartir = boton('Compartir PDF', 'compartir', 'c-azul ancho-total', () => compartirReporte());
+  const agrupar = h('div', { class: 'agrupar' }, etiqueta('Agrupar por'), chips);
+  const btnCompartir = boton('Compartir PDF', 'compartir', 'c-azul ancho-total compartir-fijo', () => compartirReporte());
 
   function pintarFiltros() {
-    clear(chipsCos);
-    if (datos) cosechasDe(datos.filas).forEach((c) => chipsCos.append(h('button', { type: 'button', class: 'chip' + (c === f.cos ? ' on' : ''), onclick: () => elegirCosecha(c) }, c)));
-    iDesde.value = f.desde || ''; iCorte.value = f.corte || '';
-    chkSolo.checked = !!f.solo;
     const pers = vista === 'personalizado';
-    opPers.hidden = !pers || !datos; lblSolo.hidden = pers;
+    opPers.hidden = !pers || !datos;
     if (pers) { chkGraf.checked = f.graf !== false; pintarOpPers(); }
     barraFiltros.hidden = !datos;
-    clear(chipsActivos); clear(chipsAgregar);
+    if (!datos) return;
     const act = FILTROS.filter((x) => (f.fl[x.k] || []).length);
-    act.forEach((x) => chipsActivos.append(h('span', { class: 'chip on con-x' },
-      h('button', { type: 'button', class: 'txt', onclick: () => abrirFiltro(x.k) }, textoFiltro(x)),
-      h('button', { type: 'button', class: 'x', 'aria-label': 'Quitar el filtro ' + x.t, onclick: () => { delete f.fl[x.k]; pintarFiltros(); pintar(); } }, '✕'))));
-    FILTROS.filter((x) => !(f.fl[x.k] || []).length).forEach((x) => chipsAgregar.append(h('button', { type: 'button', class: 'chip', onclick: () => abrirFiltro(x.k) }, '+ ' + x.t)));
-    chipsActivos.hidden = !act.length; btnLimpiar.hidden = act.length < 2;
-    const nf = act.length + (!pers && f.solo ? 1 : 0);
-    btnFiltros.textContent = `+ Filtro${nf ? ' (' + nf + ')' : ''} ${filtrosAbiertos ? '▴' : '▾'}`;
-    btnFiltros.classList.toggle('on', nf > 0);
-    panelFiltros.hidden = !filtrosAbiertos;
+    const activos = act.map((x) => ({ t: textoFiltro(x), abrir: () => abrirFiltro(x.k), quitar: () => { delete f.fl[x.k]; pintarFiltros(); pintar(); } }));
+    if (!pers && f.solo) activos.push({ t: 'Sin comparar', abrir: elegirComparar, quitar: () => { f.solo = false; pintarFiltros(); pintar(); } });
+    const gs = guard.lista().map((g) => ({ n: g.n, on: JSON.stringify(g.est.fl || {}) === JSON.stringify(f.fl) && (g.est.per || 'cosecha') === f.per && !!g.est.solo === !!f.solo, click: () => aplicarGuardado(g.est) }));
+    barra.pintar({ periodo: textoPeriodo(), nFiltros: nActivos(), onPeriodo: pedirPer, onFiltros: abrirHoja, segmento: segmento(), guardados: gs, activos,
+      onLimpiar: () => { f.fl = {}; f.solo = false; pintarFiltros(); pintar(); } });
   }
   function pintarChips() {
     clear(chips);
@@ -137,8 +185,8 @@ export function crearReportes(nav) {
   function usar(o) {
     datos = { filas: parseFilas(o.filas), cosechas: o.cosechas || [], t: o.t, actualizado: o.actualizado || '' };
     const cs = cosechasDe(datos.filas);
-    if (!cs.includes(f.cos)) { f.cos = cs[0] || ''; f.corte = ''; }
-    if (!f.corte) f.corte = ultimaFecha(datos.filas, f.cos);
+    if (!cs.includes(f.cos)) { f.cos = cs[0] || ''; f.corte = ''; f.per = 'cosecha'; f.desde = ''; }
+    if (!f.corte || f.per !== 'rango') aplicarPer(f.per === 'rango' ? 'cosecha' : f.per, f.desde, f.corte);
     ajustarComp();
     errorCarga = '';
   }
@@ -229,7 +277,10 @@ export function crearReportes(nav) {
     if (!ultimo) return;
     await cargarFuentes();
     const pie = `Generado ${ahoraTxt()} · Fuente: Históricos${datos && datos.actualizado ? ' (' + datos.actualizado + ')' : ''}`;
-    const paginas = paginasReporte(ultimo, pie);
+    const extra = [`Periodo: ${textoPeriodo()}`, ...(vista === 'personalizado' ? [] : [f.solo ? 'Sin comparar con otras cosechas' : 'Comparado con cosechas anteriores a la misma fecha'])];
+    const gn = guard.lista().find((g) => JSON.stringify(g.est.fl || {}) === JSON.stringify(f.fl) && (g.est.per || 'cosecha') === f.per && !!g.est.solo === !!f.solo);
+    if (gn) extra.push('Filtro guardado: ' + gn.n);
+    const paginas = paginasReporte({ ...ultimo, subtitulos: [...ultimo.subtitulos, extra.join(' · ')] }, pie);
     const sello = `${ultimo.vista}_${f.cos}_${f.desde ? f.desde.replace(/-/g, '') + '_' : ''}${(f.corte || diaHoy()).replace(/-/g, '')}`;
     verDocumento({
       titulo: ultimo.titulo, paginas, nombrePdf: `Reporte_${sello}.pdf`, ancho: true, maxPaginas: 4,
@@ -264,21 +315,30 @@ export function crearReportes(nav) {
       cargar(true);
     } finally { btnPasar.disabled = false; }
   }
-  const btnPasar = boton('Pasar día a Históricos', null, 'c-azul', () => {
+  const btnPasar = { disabled: false };
+  function abrirPasar() {
     const iPasar = h('input', { class: 'campo', type: 'date', value: diaHoy() });
     dialogo({
       titulo: 'Pasar un día a Históricos',
       cuerpo: [h('p', { class: 'nota' }, 'Solo administradores. Escoja el día de Diario que quiere pasar. Si vuelve a pasar el mismo día, las líneas se actualizan (no se duplican).'), iPasar],
       botones: [{ texto: 'Cancelar' }, { texto: 'Revisar', clase: 'primario', onclick: () => { if (!iPasar.value) { toast('Escoja la fecha del día.'); return false; } const fch = iPasar.value; setTimeout(() => pasarDia(fch), 0); } }]
     });
-  });
-  const filaAcciones = h('div', { class: 'fila-acciones' }, btnAct, btnPasar);
-  const tarjAcciones = tarjeta(filaAcciones, estado);
+  }
+  async function menuMas() {
+    const op = [{ etiqueta: '↻ Actualizar datos', valor: 'act' }];
+    if (puede('todos')) op.push({ etiqueta: 'Pasar día a Históricos', valor: 'pasar' });
+    const v = await elegir('Reportes', op, { buscar: false });
+    if (v === 'act') actualizarTodo(); else if (v === 'pasar') abrirPasar();
+  }
+  const tarjAcciones = tarjeta(estado);
 
-  // ---------- Inicio: una tarjeta por fuente de datos ----------
+  // ---------- Inicio: tarjetas por fuente de datos ----------
   const inicio = h('div', { class: 'rep-inicio' });
-  const detalle = h('div', { class: 'rep-detalle', hidden: true }, chips, barraDim, barraFiltros, opPers, zona, btnCompartir);
+  const detalle = h('div', { class: 'rep-detalle', hidden: true }, barraFiltros, agrupar, barraDim, opPers, zona, btnCompartir);
   const bandaInicio = banda('Reportes');
+  const btnRefrescar = h('button', { type: 'button', class: 'hub-menu', 'aria-label': 'Actualizar datos', onclick: actualizarTodo }, '↻');
+  const btnMas = h('button', { type: 'button', class: 'hub-menu', 'aria-label': 'Más opciones', onclick: menuMas }, '⋯');
+  bandaInicio.append(btnRefrescar, btnMas);
   const cabDetalle = cabSub('Café recibido', () => ir('inicio'));
   cabDetalle.hidden = true;
   const exp = crearVentasExp({ abrir: () => ir('exp'), volver: () => ir('inicio'), alCambiar: () => { if (pantalla === 'inicio') pintarInicio(); } });
@@ -289,7 +349,7 @@ export function crearReportes(nav) {
     const ex = pantalla === 'exp';
     bandaInicio.hidden = det || ex; inicio.hidden = det || ex; cabDetalle.hidden = !det; detalle.hidden = !det; exp.cab.hidden = !ex; exp.el.hidden = !ex;
   }
-  const colones = (v) => '₡ ' + Math.round(v).toLocaleString('es-CR').replace(/[  ]/g, ' ');
+  const colones = (v) => '₡ ' + Math.round(v).toLocaleString('es-CR').replace(/[  ]/g, ' ');
   function sparkline(valores) {
     const ns = 'http://www.w3.org/2000/svg', W = 300, H = 44;
     const s = document.createElementNS(ns, 'svg'); s.setAttribute('viewBox', `0 0 ${W} ${H}`); s.setAttribute('preserveAspectRatio', 'none'); s.setAttribute('class', 'spark'); s.setAttribute('aria-hidden', 'true');
@@ -306,51 +366,55 @@ export function crearReportes(nav) {
     if (v.length <= 40) return v;
     return Array.from({ length: 40 }, (_, i) => v[Math.round(i * (v.length - 1) / 39)]);
   }
-  const vacia = (titulo, texto, insignia) => h('div', { class: 'fuente vacia' }, h('h3', null, titulo, insignia ? h('span', { class: 'insignia' }, insignia) : null), h('p', { class: 'sub' }, texto));
+  function hace() {
+    if (!datos || !datos.t) return '';
+    const m = Math.max(0, Math.round((Date.now() - datos.t) / 60000));
+    return m < 1 ? 'Actualizado ahora' : m < 60 ? `Actualizado hace ${m} min` : m < 1440 ? `Actualizado hace ${Math.round(m / 60)} h` : `Actualizado hace ${Math.round(m / 1440)} d`;
+  }
   function pintarInicio() {
     clear(inicio);
     if (!datos || !f.cos) {
-      inicio.append(exp.tarjetaHub(), tarjeta(h('p', { class: 'nota' }, cargando ? 'Descargando…' : datos ? 'El archivo Históricos no tiene datos.' : 'Para ver los reportes la app necesita leer el Google Sheet «Históricos». Revise que en la hoja Configuración del libro de Google Sheets esté el enlace en la fila «Históricos» y toque «Actualizar datos».')), tarjAcciones);
+      inicio.append(exp.tarjetaHub(), tarjeta(h('p', { class: 'nota' }, cargando ? 'Descargando…' : datos ? 'El archivo Históricos no tiene datos.' : 'Para ver los reportes la app necesita leer el Google Sheet «Históricos». Revise que en la hoja Configuración del libro de Google Sheets esté el enlace en la fila «Históricos» y toque ↻.')), tarjAcciones);
       return;
     }
-    const rows = filtrar(datos.filas, f.cos, f.corte || ultimaFecha(datos.filas, f.cos), {}, '');
+    const corte = f.corte || ref();
+    const rows = filtrar(datos.filas, f.cos, corte, {}, f.desde || '');
     const t = suma(rows);
+    const todas = cosechasDe(datos.filas), ant = todas.filter((c) => inicioAnio(c) < inicioAnio(f.cos))[0];
+    let pill = null;
+    if (ant) {
+      const dif = inicioAnio(ant) - inicioAnio(f.cos);
+      const tp = suma(filtrar(datos.filas, ant, desplazar(corte, dif), {}, f.desde ? desplazar(f.desde, dif) : ''));
+      if (tp.caj > 0) { const d = t.caj / tp.caj - 1; pill = h('span', { class: 'pill' + (d < -0.0005 ? ' neg' : '') }, `${pctSigno(d)} vs ${ant}`); }
+    }
     const cafe = h('div', { class: 'fuente' },
       h('div', { class: 'fuente-cab' }, h('h3', null, '☕ Café recibido'), h('span', null, 'Históricos')),
-      h('p', { class: 'sub' }, `Cosecha ${f.cos} · hasta ${fmtFechaDMA(f.corte || ultimaFecha(datos.filas, f.cos))}`),
-      h('p', { class: 'cifra' }, `${cajF(t.caj)} cajuelas`),
+      h('div', { class: 'chips chicas' }, h('button', { type: 'button', class: 'chip', onclick: pedirPer }, '📅 ' + textoPeriodo() + ' ▾')),
+      h('p', { class: 'sub' }, `Cosecha ${f.cos} · hasta ${fmtFechaDMA(corte)}`),
+      h('div', { class: 'cifra-fila' }, h('p', { class: 'cifra' }, `${cajF(t.caj)} cajuelas`), pill),
       h('p', { class: 'sub' }, `${cajF(t.fan)} fanegas · ${t.n} recibos`),
+      h('p', { class: 'cifra2' }, `${colones(t.ade)} en adelantos`),
+      h('p', { class: 'sub' }, `Intereses a la fecha: ${colones(t.int)}`),
       sparkline(serieAcumulada(rows)),
       h('div', { class: 'chips envuelve chicas' }, ...VISTAS.map(([k, tx]) => h('button', { type: 'button', class: 'chip', onclick: () => { vista = k; pintarChips(); pintarFiltros(); pintar(); ir('detalle'); } }, tx))));
-    const dinero = h('div', { class: 'fuente toque', onclick: () => {
-      vista = 'personalizado'; f.dims = ['soc']; f.med = ['ade', 'int', 'adeint']; f.comp = []; f.compFor = f.cos;
-      pintarChips(); pintarFiltros(); pintar(); ir('detalle');
-    } },
-      h('div', { class: 'fuente-cab' }, h('h3', null, '💰 Adelantos e intereses'), h('span', null, 'Históricos')),
-      h('p', { class: 'sub' }, `Cosecha ${f.cos} · intereses a la fecha de corte`),
-      h('p', { class: 'cifra' }, colones(t.int)),
-      h('p', { class: 'sub' }, `Adelantos: ${colones(t.ade)} · toque para ver por sociedad`));
-    inicio.append(cafe, dinero,
-      exp.tarjetaHub(),
-      vacia('➕ Agregar otra tabla de café', 'Cada tabla nueva aparece como una tarjeta más en esta pantalla.'),
-      tarjAcciones);
+    inicio.append(cafe, exp.tarjetaHub(), h('p', { class: 'nota actualizado' }, hace() + (errorCarga ? ' · ⚠ sin conexión con la hoja' : '')), tarjAcciones);
   }
 
   raiz.append(bandaInicio, cabDetalle, exp.cab, inicio, detalle, exp.el);
-  barraFiltros.hidden = true; opPers.hidden = true; panelFiltros.hidden = true; btnCompartir.hidden = true;
+  barraFiltros.hidden = true; opPers.hidden = true; btnCompartir.hidden = true;
   pintarChips(); pintarEstado(); pintarInicio(); mostrar();
   return {
     el: raiz,
     refrescar() { /* no hace falta: los datos se leen al abrir la pestaña */ },
     // Cada vez que se entra a la pestaña empieza limpia: filtros por defecto y datos al día.
     reiniciar() {
-      f = nuevoF(); vista = 'comparativo'; pantalla = 'inicio'; mostrar(); filtrosAbiertos = false; busqueda = '';
+      f = nuevoF(); vista = 'comparativo'; pantalla = 'inicio'; mostrar(); busqueda = '';
       exp.reiniciar();
       const cache = leerCache();
       if (cache) usar(cache);
-      btnPasar.hidden = !puede('todos');
       pintarTodo();
       cargar(false);
-    }
+    },
+    estadoDatos() { return { ok: !!datos, filas: datos ? datos.filas.length : 0, cosechas: datos ? cosechasDe(datos.filas) : [], error: errorCarga, t: datos ? datos.t : 0 }; }
   };
 }

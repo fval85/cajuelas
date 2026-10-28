@@ -779,9 +779,45 @@ export function paginasReporte(rep, pie = '') {
       gs.forEach((g, i) => dibujarGrafico(c, MG + i * (gw + 16), y, gw, H - y - MG - 12, g));
     }
   }
+  // Una sola hoja: si el reporte no tiene gráficos y la tabla cabe debajo, se dibuja en la misma página.
+  let enHoja = false;
+  if (rep.unaHoja && !gs.length && rep.filas && rep.filas.length && sumNat <= W - 2 * MG && y + 28 + 16 * rep.filas.length + 14 <= H - MG - 14) {
+    enHoja = true;
+    const avail = W - 2 * MG, reparto = Math.max(0, avail - sumNat);
+    const peso = rep.cols.map((k, i) => (k.tipo !== 'txt' ? 1 : natural[i] >= 110 ? 1 : 0.05));
+    const sp = peso.reduce((t, x) => t + x, 0);
+    const anchos = rep.cols.map((k, i) => natural[i] + reparto * peso[i] / sp);
+    const xs = [MG]; anchos.forEach((a, i) => xs.push(xs[i] + a));
+    const der = xs[xs.length - 1], HH = 28, RH = 16;
+    const text = P(8.2, false, false), bold = P(8.2, true, false), head = P(7.2, true, false, '#fff');
+    y += 4;
+    rectLleno(c, MG, y, der - MG, HH, '#14532D');
+    rep.cols.forEach((col, i) => {
+      const w = anchos[i] - 4, ls = []; let cur = '';
+      for (const word of col.t.split(' ')) { const cand = cur ? cur + ' ' + word : word; if (!cur || medir(head, cand) <= w) cur = cand; else { ls.push(cur); cur = word; } }
+      ls.push(cur);
+      const top = y + (HH - ls.length * 9) / 2 + 7;
+      ls.slice(0, 3).forEach((l, k) => { const tl = recortar(l, head, w); txt(c, tl, xs[i] + (anchos[i] - medir(head, tl)) / 2, top + k * 9, head); });
+    });
+    y += HH;
+    rep.filas.forEach((f, idx) => {
+      const bg = f.fondo || (idx % 2 ? '#F4F8F5' : null);
+      if (bg) rectLleno(c, MG, y, der - MG, RH, bg);
+      linea(c, MG, y + RH, der, y + RH, 0.6, '#9DB8A6');
+      rep.cols.forEach((k, i) => {
+        const v = celdaTxt(k, f.v[i]); if (!v) return;
+        const rojo = (k.tipo === 'pct' || k.neg) && typeof f.v[i] === 'number' && f.v[i] < -0.0005;
+        const p = rojo ? conColor(f.negrita ? bold : text, '#C00000', true) : (f.negrita ? bold : text);
+        const tx = recortar(v, p, anchos[i] - 6);
+        txt(c, tx, xs[i] + (anchos[i] - medir(p, tx)) / 2, y + RH - 4.5, p);
+      });
+      y += RH;
+    });
+    if (rep.nota) { const np = P(7.5, false, false, '#6B7280'); y += 6; envolver(rep.nota, np, der - MG).forEach((l) => { if (y + 12 < H - MG - 14) { txt(c, l, MG, y + 8, np); y += 11; } }); }
+  }
   txt(c, pie, MG, H - 10, P(7, false, false, '#6B7280'));
   const paginas = [{ ...pg, ancho: W, alto: H }];
-  if (rep.filas && rep.filas.length) {
+  if (rep.filas && rep.filas.length && !enHoja) {
     // 2) La tabla ocupa el ancho que necesita (más ancha que la hoja si hay muchas columnas) y reparte lo que sobre.
     const avail = W - 2 * MG;
     const TW = sumNat <= avail ? W : Math.ceil(sumNat + 2 * MG);

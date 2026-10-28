@@ -6,6 +6,8 @@ import { recibos, rc, payloadRecibo } from './data.js';
 import { cargarFuentes, paginasRecibos, paginasResumenDiario, paginasResumenSimple, MODO } from './draw.js';
 import { pdfDePaginas } from './files.js';
 import { encolar, recibosDelDia, recibosDelRango } from './sync.js';
+import { ajuste } from './apariencia.js';
+import { buscarRecibosHoja, filtrarSociedades, itemRecibo, corregirFechaComprobante } from './ui_admin.js';
 import { tarjeta, etiqueta, banda, selector, boton, campoBusqueda, verDocumento, listaBuscable, pedirMotivo, pedirPeriodo, usuarioCoincide } from './ui.js';
 
 export function crearDiario(nav) {
@@ -100,6 +102,7 @@ export function crearDiario(nav) {
     selBeneficio = bens.find((b) => normalizar(b) === normalizar(selBeneficio)) || (bens.length === 1 ? bens[0] : '');
     pickBen.poner(selBeneficio); db.set('dia_beneficio', selBeneficio);
     const lista = sociedades();
+    if (!selSociedad) selSociedad = ajuste('soc', '');
     const s = lista.find((x) => normalizar(x.nombre) === normalizar(selSociedad)) || (lista.length === 1 ? lista[0] : null);
     selSociedad = s ? s.nombre : '';
     pickSoc.poner(selSociedad); db.set('dia_sociedad', selSociedad);
@@ -139,6 +142,17 @@ export function crearDiario(nav) {
   }
 
   async function reimprimir() {
+    if (puede('todos') && configurado()) {
+      const donde = await elegir('Reimprimir recibo', [{ etiqueta: 'De este dispositivo', valor: 'local' }, { etiqueta: 'De cualquier usuario, dispositivo o fecha (Google Sheets)', valor: 'hoja' }], { buscar: false });
+      if (!donde) return;
+      if (donde === 'hoja') {
+        const b = await buscarRecibosHoja('Buscar recibos para reimprimir');
+        if (!b) return;
+        const r = await listaBuscable({ titulo: 'Reimprimir recibo', placeholder: 'Buscar: número, sociedad, finca, usuario...', texto: 'recibos', items: b.lista.map(itemRecibo) });
+        if (r) mostrar([{ r, modo: MODO.REIMPRESION }], `Recibo ${r.numero}`, `recibo_${r.numero}.pdf`);
+        return;
+      }
+    }
     const todos = recibos.items().slice().reverse();
     if (!todos.length) return toast('Todavía no hay recibos emitidos para reimprimir.');
     const r = await listaBuscable({
@@ -153,10 +167,32 @@ export function crearDiario(nav) {
   }
 
   async function masivo() {
+    if (puede('todos') && configurado()) {
+      const donde = await elegir('Envío masivo de recibos', [{ etiqueta: 'Los de hoy en este dispositivo', valor: 'local' }, { etiqueta: 'Cualquier usuario, dispositivo, fecha o sociedad (Google Sheets)', valor: 'hoja' }], { buscar: false });
+      if (!donde) return;
+      if (donde === 'hoja') {
+        const b = await buscarRecibosHoja('Recibos para enviar en masa');
+        if (!b) return;
+        const lista = await filtrarSociedades(b.lista);
+        if (!lista) return;
+        if (!lista.length) return toast('No quedó ningún recibo.');
+        const ord = lista.slice().sort((a, c) => (a.dia + a.emitido) < (c.dia + c.emitido) ? -1 : 1);
+        return mostrar(ord.map((r) => ({ r, modo: MODO.REIMPRESION })), 'Recibos del día', `recibos_${b.desde.replace(/-/g, '')}_${b.hasta.replace(/-/g, '')}.pdf`,
+          `${ord.length} recibos de la hoja (${diaLegible(b.desde)} a ${diaLegible(b.hasta)}) en un solo PDF, una página por recibo.`);
+      }
+    }
     const del = recibos.items().filter((r) => r.dia === diaHoy() && !r.anulado);
     if (!del.length) return toast('Hoy todavía no hay recibos para enviar.');
     mostrar(del.map((r) => ({ r, modo: MODO.NORMAL })), 'Recibos del día', `recibos_dia_${diaHoy().replace(/-/g, '')}.pdf`,
       `${del.length} recibos de hoy en un solo PDF (una página por recibo). Vista previa de los dos primeros.`);
+  }
+
+  async function corregirFecha() {
+    const b = await buscarRecibosHoja('Buscar el recibo con fecha equivocada');
+    if (!b) return;
+    const r = await listaBuscable({ titulo: 'Recibo a corregir', placeholder: 'Buscar: número, sociedad, finca, usuario...', texto: 'recibos', items: b.lista.map(itemRecibo) });
+    if (!r) return;
+    await corregirFechaComprobante('recibo', { numero: r.numero, dispositivo: r.dispositivo, dia: r.dia, detalle: `${r.sociedad} · ${r.finca}${r.lote ? ' · ' + r.lote : ''}` });
   }
 
   async function anular() {
@@ -230,7 +266,7 @@ export function crearDiario(nav) {
     tarjeta(cuadroMuestra, h('div', { class: 'titulo-cuadro' }, 'CANTIDAD'), h('div', { class: 'cuadro-centro' }, cuadroCant)),
     h('div', { class: 'acciones' },
       boton('Emitir recibo', 'emitir', 'c-verde', emitir), boton('Reimprimir', 'imprimir', 'c-teal', reimprimir, 'reimprimir'), boton('Resumen', 'resumen', 'c-azul', resumenDelDia, 'resumenes'),
-      boton('Envío masivo', 'enviar', 'c-ambar', masivo, 'resumenes'), boton('Anular', 'anular', 'c-rojo', anular, 'anular'))
+      boton('Envío masivo', 'enviar', 'c-ambar', masivo, 'resumenes'), boton('Anular', 'anular', 'c-rojo', anular, 'anular'), boton('Corregir\nfecha', 'registro', 'c-azul', corregirFecha, 'todos'))
   );
   refrescar();
   return { el: raiz, refrescar };

@@ -1,10 +1,10 @@
 // Service worker: guarda la aplicación para que abra sin conexión y avisa cuando hay una versión nueva.
-const VERSION = '2.9.1';
+const VERSION = '2.10.0';
 const CACHE = 'cajuelas-' + VERSION;
 const ARCHIVOS = [
   './', './index.html', './manifest.webmanifest', './css/app.css', './css/tema.css',
   './js/main.js', './js/util.js', './js/store.js', './js/sync.js', './js/data.js', './js/files.js', './js/draw.js', './js/ui.js',
-  './js/ui_registro.js', './js/ui_reportes.js', './js/rep_calc.js', './js/ui_export.js', './js/exp_calc.js', './js/ui_diario.js', './js/ui_boletos.js', './js/ui_ajustes.js', './js/users.js', './js/imprimir.js',
+  './js/ui_registro.js', './js/ui_reportes.js', './js/rep_calc.js', './js/ui_export.js', './js/exp_calc.js', './js/ui_diario.js', './js/ui_boletos.js', './js/ui_ajustes.js', './js/users.js', './js/imprimir.js', './js/ui_filtros.js', './js/ui_admin.js', './js/apariencia.js', './js/novedades.js',
   './fonts/DejaVuSans.woff', './fonts/DejaVuSans-Bold.woff', './fonts/DejaVuSansMono.woff', './fonts/DejaVuSansMono-Bold.woff',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'
 ];

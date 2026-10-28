@@ -2,10 +2,13 @@
 import { h, clear, toast, aviso, confirmar, elegir, dialogo, formulario, normalizar, fmtMoney, plainNumber, parseQty, stampCorto, VERSION } from './util.js';
 import { db, cat, bol, syncCfg, guardarSyncCfg, configurado, deviceName, cosechaActiva, aplicarConfigHoja, modoPruebas, cambiarModo, borrarDatosOperativos,
   reemplazarDesdeHoja, reemplazarBoletosDesdeHoja } from './store.js';
-import { cuantosPendientes, enviarPendientes, descartarPendientes, probar, descargarCatalogo, alCambiarPendientes } from './sync.js';
+import { cuantosPendientes, enviarPendientes, descartarPendientes, probar, descargarCatalogo, alCambiarPendientes, postJson, historicos, exportaciones } from './sync.js';
+import { TEMAS, TEXTOS, TABS, ajuste, guardarAjuste, aplicarApariencia } from './apariencia.js';
+import { NOVEDADES } from './novedades.js';
+import { parseExp } from './exp_calc.js';
 import { compartir, descargar } from './files.js';
-import { tarjeta, etiqueta, banda, selector, boton, filaAj, grupo, cabSub } from './ui.js';
-import { hayControl, sesion, salir, actualizarUsuarios } from './users.js';
+import { tarjeta, etiqueta, banda, selector, boton, filaAj, grupo, tituloGrupo, cabSub } from './ui.js';
+import { hayControl, sesion, salir, actualizarUsuarios, puede, lista as listaUsuarios } from './users.js';
 import { esComputadora, anchoMm, setAnchoMm, imprimirTiquetes } from './imprimir.js';
 import { crearPagina } from './draw.js';
 
@@ -83,55 +86,178 @@ export function crearAjustes(nav) {
     if (vista === 'catalogo') return vistaCatalogo();
     if (vista === 'impresion') return vistaImpresion();
     if (vista === 'copia') return vistaCopia();
+    if (vista === 'conexiones') return vistaConexiones();
+    if (vista === 'apariencia') return vistaApariencia();
+    if (vista === 'novedades') return vistaNovedades();
     vistaInicio();
   }
   const irInicio = () => { vista = 'inicio'; desbloqueado = false; pintar(); };
 
-  // ----- Pantalla principal: lista de filas -----
+  // ----- Pantalla principal -----
   const textoPend = (n) => (n ? `⏳ ${n} ${n === 1 ? 'registro pendiente' : 'registros pendientes'} de enviar` : '✔ Todo enviado a Google Sheets');
+  const hace = (t) => { if (!t) return 'sin descargar'; const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 1 ? 'ahora' : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : `hace ${Math.round(m / 1440)} d`; };
+  const cacheT = (k) => { try { const o = JSON.parse(localStorage.getItem(k + (modoPruebas ? '_t' : '')) || 'null'); return o && o.t ? o.t : 0; } catch { return 0; } };
+  const diasSinRespaldo = () => { const t = db.get('ultimo_respaldo', 0); return t ? Math.floor((Date.now() - t) / 86400000) : null; };
+  const textoRespaldo = () => { const d = diasSinRespaldo(); return d === null ? 'Aún no ha hecho ninguna copia de seguridad' : d === 0 ? 'Último respaldo: hoy' : `Último respaldo: hace ${d} ${d === 1 ? 'día' : 'días'}`; };
+  const respaldoVencido = () => { const d = diasSinRespaldo(); return d === null || d > 7; };
+  async function enviarAhora() {
+    if (!configurado()) return toast('Falta configurar la sincronización (pida ayuda al administrador).', 5000);
+    if (!cuantosPendientes()) return toast('No hay envíos pendientes.');
+    toast('Enviando…', 1500);
+    const r = await enviarPendientes();
+    pintar();
+    toast(r.error ? `Se enviaron ${r.enviados}. Quedan ${r.restantes}. ${r.error}` : `Enviados: ${r.enviados}. No quedan pendientes.`, 6000);
+  }
+  /** Una sola acción: usuarios y catálogo. */
+  async function actualizarTodo() {
+    if (!configurado()) return toast('Primero configure la URL y el token en Ajustes > Conexión.', 5000);
+    toast('Actualizando usuarios y catálogo…', 2500);
+    const u = await actualizarUsuarios(true);
+    await actualizarCatalogo(true, alCatalogo);
+    if (!u.ok) toast('Usuarios: ' + u.message, 5000);
+    pintar();
+  }
+  async function copiarDiagnostico() {
+    const e = db.get('ultimo_error', null);
+    const sUs = hayControl() ? sesion() : null;
+    const txt = ['Diagnóstico · Registro de Cajuelas', `Versión: ${VERSION}${modoPruebas ? ' (modo de pruebas)' : ''}`, `Dispositivo: ${deviceName()}`, `Usuario: ${sUs ? sUs.nombre + ' (' + sUs.rol + ')' : 'sin control de acceso'}`,
+      `En línea: ${navigator.onLine ? 'sí' : 'no'}`, `Envíos pendientes: ${cuantosPendientes()}`, `Cosecha activa: ${cosechaActiva() || '—'}`,
+      `Catálogo: ${cat.actualizado ? new Date(cat.actualizado).toLocaleString('es-CR') : 'sin recibir'}`, `Históricos: ${hace(cacheT('cajuelas_hist'))} · Exportaciones: ${hace(cacheT('cajuelas_exp'))}`,
+      `Último respaldo: ${diasSinRespaldo() === null ? 'nunca' : 'hace ' + diasSinRespaldo() + ' d'}`,
+      `Último error de envío: ${e ? new Date(e.t).toLocaleString('es-CR') + ' · ' + e.m : 'ninguno'}`, `Navegador: ${navigator.userAgent}`].join('\n');
+    try { await navigator.clipboard.writeText(txt); toast('Diagnóstico copiado. Péguelo en un mensaje.', 4000); }
+    catch { aviso('Diagnóstico', txt); }
+  }
+
+  const sep = (...x) => x;
+  function tarjetaEstado() {
+    const sUs = hayControl() ? sesion() : null;
+    const co = cosechaActiva();
+    const fila = (ic, t, ok = true) => h('div', { class: 'estado-fila' + (ok ? '' : ' mal') }, h('span', { 'aria-hidden': 'true' }, ic), h('span', null, t));
+    const n = cuantosPendientes();
+    return h('button', { type: 'button', class: 'tarjeta tarjeta-estado', onclick: () => { vista = 'conexiones'; pintar(); }, 'aria-label': 'Ver el estado de las conexiones' },
+      h('b', null, 'Estado de la app'),
+      fila('👤', sUs ? `${sUs.nombre} · ${sUs.rol}` : 'Sin control de acceso'),
+      fila(navigator.onLine ? '🟢' : '🔴', navigator.onLine ? 'En línea' : 'Sin conexión', navigator.onLine),
+      fila(n ? '⏳' : '✔', n ? `${n} ${n === 1 ? 'envío pendiente' : 'envíos pendientes'}` : 'Sin envíos pendientes', !n),
+      fila('📋', `Catálogo: ${co ? 'cosecha ' + co : 'sin cosecha'} · ${cat.actualizado ? hace(cat.actualizado) : 'sin recibir'}`),
+      fila('📊', `Históricos ${hace(cacheT('cajuelas_hist'))} · Exportaciones ${hace(cacheT('cajuelas_exp'))}`),
+      fila(respaldoVencido() ? '⚠' : '💾', textoRespaldo() + (respaldoVencido() ? ' · haga una copia hoy' : ''), !respaldoVencido()),
+      fila('✔', `Versión ${VERSION} · al día`),
+      h('small', { class: 'nota' }, 'Toque para ver el estado de las conexiones'));
+  }
   function vistaInicio() {
     const sUs = hayControl() ? sesion() : null;
     const co = cosechaActiva();
     const nPend = cuantosPendientes();
-    const ult = cat.actualizado ? `actualizado ${new Date(cat.actualizado).toLocaleString('es-CR', { dateStyle: 'short', timeStyle: 'short' })}` : 'aún no se ha recibido';
-    const fPend = filaAj({ ic: '☁', t: 'Envíos a Google Sheets', s: textoPend(nPend), onclick: async () => {
-      if (!configurado()) return toast('Falta configurar la sincronización (pida ayuda al administrador).', 5000);
-      if (!cuantosPendientes()) return toast('No hay envíos pendientes.');
-      toast('Enviando…', 1500);
-      const r = await enviarPendientes();
-      pintar();
-      toast(r.error ? `Se enviaron ${r.enviados}. Quedan ${r.restantes}. ${r.error}` : `Enviados: ${r.enviados}. No quedan pendientes.`, 6000);
-    } });
+    const esAdmin = puede('config');
+    const fPend = filaAj({ ic: '☁', t: 'Envíos a Google Sheets', s: textoPend(nPend), onclick: enviarAhora });
     const fAlm = filaAj({ ic: 'ℹ', t: `Versión ${VERSION}`, s: `Dispositivo: ${deviceName()}`, onclick: () => toast(`Versión ${VERSION} · ${deviceName()}`) });
-    const nombresCfg = [
-      filaAj({ ic: '⚙', t: 'Sincronización con la hoja', s: configurado() ? 'Configurada' : 'Sin configurar: falta la URL y el token', onclick: () => { vista = 'sync'; desbloqueado = false; pintar(); } }),
-      filaAj({ ic: '📚', t: 'Catálogo recibido', s: 'Cosechas, sociedades y fincas', onclick: () => { vista = 'catalogo'; pintar(); } }),
-      filaAj({ ic: '👥', t: 'Lista de usuarios', s: 'Actualizar desde la hoja', onclick: async () => { const r = await actualizarUsuarios(true); toast(r.ok ? 'Lista de usuarios actualizada.' : r.message, 5000); } })
-    ];
-    const datosCfg = [
-      esComputadora() ? filaAj({ ic: '🖨', t: 'Impresora de 80 mm', s: `Ancho ${anchoMm()} mm`, onclick: () => { vista = 'impresion'; pintar(); } }) : null,
-      filaAj({ ic: '💾', t: 'Copia de seguridad', s: 'Guardar o restaurar los datos de este dispositivo', onclick: () => { vista = 'copia'; pintar(); } })
-    ];
-    const pruebas = [
-      filaAj({ ic: '🧪', t: 'Modo de pruebas', s: modoPruebas ? 'ACTIVO · los datos no son reales' : 'Practicar sin tocar los datos reales', sw: modoPruebas, onclick: cambiarDeModo }),
-      filaAj({ ic: '🧹', t: 'Empezar de cero', s: 'Borra los datos de este dispositivo', peligro: true, onclick: empezarDeCero })
-    ];
-    raiz.append(
-      banda('Ajustes'),
-      modoPruebas ? h('p', { class: 'estado aviso' }, '🧪 Está en MODO DE PRUEBAS: los datos no son reales.') : null,
-      sUs ? grupo(filaAj({ ic: '👤', t: sUs.nombre, s: `${sUs.rol} · toque para cerrar sesión`, onclick: async () => {
-        if (await confirmar('Cerrar sesión', `Sesión de ${sUs.nombre} (${sUs.rol}).\n\n¿Cerrar la sesión?`, { si: 'Cerrar sesión' })) salir();
-      } })) : null,
-      grupo(
-        filaAj({ ic: '📋', t: 'Catálogo', s: `${co ? 'Cosecha ' + co : 'Sin cosecha todavía'} · ${ult}`, onclick: async () => { await actualizarCatalogo(true, alCatalogo); pintar(); } }),
-        fPend),
-      cp(grupo(...nombresCfg), 'config'),
-      cp(grupo(...datosCfg), 'config'),
-      cp(grupo(...pruebas), 'config'),
-      grupo(fAlm, filaAj({ ic: '🔄', t: 'Buscar actualización de la app', onclick: () => window.__buscarActualizacion && window.__buscarActualizacion() }))
-    );
-    infoAlmacenamiento(fAlm);
+    const fAct = filaAj({ ic: '🔄', t: 'Actualizar catálogo y usuarios', s: `${co ? 'Cosecha ' + co : 'Sin cosecha todavía'} · ${cat.actualizado ? 'actualizado ' + new Date(cat.actualizado).toLocaleString('es-CR', { dateStyle: 'short', timeStyle: 'short' }) : 'aún no se ha recibido'}`, onclick: actualizarTodo });
+    const fCuenta = sUs ? filaAj({ ic: '👤', t: sUs.nombre, s: `${sUs.rol} · toque para cerrar sesión`, onclick: async () => {
+      if (await confirmar('Cerrar sesión', `Sesión de ${sUs.nombre} (${sUs.rol}).\n\n¿Cerrar la sesión?`, { si: 'Cerrar sesión' })) salir();
+    } }) : null;
+    const fApar = filaAj({ ic: '🎨', t: 'Apariencia', s: 'Tema, tamaño de texto y pantalla de inicio', onclick: () => { vista = 'apariencia'; pintar(); } });
+    const fNov = filaAj({ ic: '✨', t: 'Novedades de la versión', s: `Qué hay de nuevo en ${VERSION}`, onclick: () => { vista = 'novedades'; pintar(); } });
+    const fBuscar = filaAj({ ic: '⬆', t: 'Buscar actualización de la app', onclick: () => window.__buscarActualizacion && window.__buscarActualizacion() });
+    const fDiag = filaAj({ ic: '📋', t: 'Copiar diagnóstico', s: 'Para enviarlo a quien da soporte', onclick: copiarDiagnostico });
+    const head = [banda('Ajustes'), modoPruebas ? h('p', { class: 'estado aviso' }, '🧪 Está en MODO DE PRUEBAS: los datos no son reales.') : null];
+    if (!esAdmin) {
+      // Lista simple para quien no administra.
+      raiz.append(...head, grupo(fCuenta, fAct, fPend), grupo(fApar, fNov, fBuscar, fAlm));
+      infoAlmacenamiento(fAlm);
+    } else {
+      const datos = [fAct, fPend, filaAj({ ic: '📚', t: 'Catálogo recibido', s: 'Cosechas, sociedades y fincas', onclick: () => { vista = 'catalogo'; pintar(); } }),
+        filaAj({ ic: '💾', t: 'Copia de seguridad', s: textoRespaldo() + (respaldoVencido() ? ' ⚠' : ''), onclick: () => { vista = 'copia'; pintar(); } })];
+      const conexion = [
+        filaAj({ ic: '🔌', t: 'Estado de conexiones', s: 'Probar Apps Script, usuarios, catálogo y reportes', onclick: () => { vista = 'conexiones'; pintar(); } }),
+        filaAj({ ic: '⚙', t: 'Sincronización con la hoja', s: configurado() ? 'Configurada' : 'Sin configurar: falta la URL y el token', onclick: () => { vista = 'sync'; desbloqueado = false; pintar(); } })
+      ];
+      const dispositivo = [fApar, esComputadora() ? filaAj({ ic: '🖨', t: 'Impresora de 80 mm', s: `Ancho ${anchoMm()} mm`, onclick: () => { vista = 'impresion'; pintar(); } }) : null, fNov, fBuscar, fDiag, fAlm];
+      const riesgo = [
+        filaAj({ ic: '🧪', t: 'Modo de pruebas', s: modoPruebas ? 'ACTIVO · los datos no son reales' : 'Practicar sin tocar los datos reales', sw: modoPruebas, onclick: cambiarDeModo }),
+        filaAj({ ic: '🧹', t: 'Empezar de cero', s: 'Borra los datos de este dispositivo', peligro: true, onclick: empezarDeCero })
+      ];
+      raiz.append(...head, tarjetaEstado(), fCuenta ? grupo(fCuenta) : null,
+        tituloGrupo('Datos'), cp(grupo(...datos), 'config'),
+        tituloGrupo('Conexión'), cp(grupo(...conexion), 'config'),
+        tituloGrupo('Este dispositivo'), grupo(...dispositivo),
+        tituloGrupo('Zona de riesgo'), cp(grupo(...riesgo), 'config'));
+      infoAlmacenamiento(fAlm);
+    }
     const quitar = alCambiarPendientes(() => { if (!raiz.isConnected || vista !== 'inicio') return quitar(); fPend.cambiarSub(textoPend(cuantosPendientes())); });
+  }
+
+  // ----- Estado de conexiones -----
+  function vistaConexiones() {
+    raiz.append(cabSub('Estado de conexiones', irInicio));
+    const items = [['ping', 'Apps Script'], ['usuarios', 'Lista de usuarios'], ['catalogo', 'Catálogo'], ['hist', 'Históricos'], ['exp', 'Exportaciones']];
+    const filas = {};
+    const lista = h('div', { class: 'grupo' });
+    items.forEach(([k, t]) => { filas[k] = filaAj({ ic: '•', t, s: 'Sin probar' }); filas[k].querySelector('.fl').textContent = ''; lista.append(filas[k]); });
+    const poner = (k, ok, texto, aviso) => { const f = filas[k]; f.querySelector('.ic').textContent = ok === null ? '⏳' : ok ? '✔' : '✖'; f.cambiarSub(texto + (aviso ? '\n⚠ ' + aviso : '')); f.querySelector('small').style.whiteSpace = 'pre-line'; f.classList.toggle('peligro', ok === false); };
+    const resumen = h('p', { class: 'nota' }, configurado() ? 'Toque «Probar todas las conexiones» para revisar cada enlace con Google.' : 'Falta configurar la URL y el token (Conexión > Sincronización con la hoja).');
+    let probando = false;
+    async function probarTodas() {
+      if (probando) return;
+      if (!configurado()) return toast('Primero configure la URL y el token.', 4000);
+      probando = true; btn.disabled = true;
+      items.forEach(([k]) => poner(k, null, 'Probando…'));
+      const { url, token } = syncCfg();
+      const r0 = await postJson(url, { action: 'ping', token }, 20000);
+      poner('ping', r0.ok, r0.ok ? 'Responde correctamente' : r0.message);
+      const u = await actualizarUsuarios(true);
+      const nu = (listaUsuarios() || []).length;
+      poner('usuarios', u.ok, u.ok ? (nu ? `${nu} ${nu === 1 ? 'usuario activo' : 'usuarios activos'}` : 'Sin usuarios: la app funciona sin control de acceso') : u.message);
+      const c = await descargarCatalogo(deviceName());
+      const nfil = c.ok ? c.estructura.length + c.personas.length + c.beneficios.length + c.diario.length + c.bolFichas.length : 0;
+      poner('catalogo', c.ok && nfil > 0, c.ok ? `${c.estructura.length} fincas/lotes · ${c.personas.length} personas · ${c.beneficios.length} beneficios · ${c.bolFichas.length} fichas` : c.message, c.ok && !nfil ? `No hay filas para el dispositivo «${deviceName()}»` : '');
+      const hi = await historicos();
+      poner('hist', !hi.error, hi.error ? hi.error : `${hi.filas.length} filas · cosechas ${hi.cosechas.join(', ')}`, !hi.error && !hi.filas.length ? 'El archivo no tiene filas' : '');
+      const ex = await exportaciones();
+      if (ex.error) poner('exp', false, ex.error);
+      else {
+        const d = parseExp(ex);
+        poner('exp', true, `${d.contratos.length} contratos · ${d.entregas.length} entregas · ${d.pagos.length} pagos`, d.alertas.sinContrato ? `${d.alertas.sinContrato} registros con «¿Contrato?» en Entregas o Pagos` : d.alertas.lista.length ? `${d.alertas.lista.length} alertas de seguimiento` : '');
+      }
+      const malas = items.filter(([k]) => filas[k].classList.contains('peligro')).length;
+      resumen.textContent = malas ? `${malas} ${malas === 1 ? 'conexión con problemas' : 'conexiones con problemas'}. Revise el mensaje de cada una.` : '✔ Todas las conexiones funcionan.';
+      probando = false; btn.disabled = false;
+    }
+    const btn = boton('Probar todas las conexiones', 'enviar', 'c-azul ancho-total', probarTodas);
+    raiz.append(resumen, lista, btn);
+  }
+
+  // ----- Apariencia -----
+  function vistaApariencia() {
+    raiz.append(cabSub('Apariencia', irInicio));
+    const etq = (lst, k) => (lst.find((x) => x[0] === ajuste(k, lst[0][0])) || lst[0])[1];
+    const sociedades = () => [...new Set(cat.cosechas.flatMap((c) => c.sociedades.map((s) => s.nombre)))].sort((a, b) => a.localeCompare(b, 'es'));
+    const fTema = filaAj({ ic: '🌓', t: 'Tema', s: etq(TEMAS, 'tema'), onclick: async () => {
+      const v = await elegir('Tema', TEMAS.map(([k, t]) => ({ etiqueta: t, valor: k })), { buscar: false });
+      if (v === undefined) return; guardarAjuste('tema', v); aplicarApariencia(); pintar();
+    } });
+    const fTexto = filaAj({ ic: '🔠', t: 'Tamaño de texto', s: etq(TEXTOS, 'texto'), onclick: async () => {
+      const v = await elegir('Tamaño de texto', TEXTOS.map(([k, t]) => ({ etiqueta: t, valor: k })), { buscar: false });
+      if (v === undefined) return; guardarAjuste('texto', v); aplicarApariencia(); pintar();
+    } });
+    const fTab = filaAj({ ic: '🏠', t: 'Pestaña de inicio', s: etq(TABS, 'tab_inicio'), onclick: async () => {
+      const v = await elegir('Pestaña de inicio', TABS.map(([k, t]) => ({ etiqueta: t, valor: k })), { buscar: false });
+      if (v === undefined) return; guardarAjuste('tab_inicio', v); pintar();
+    } });
+    const fSoc = filaAj({ ic: '🏢', t: 'Sociedad por defecto', s: ajuste('soc', '') || 'Ninguna (la elijo cada vez)', onclick: async () => {
+      const ops = [{ etiqueta: 'Ninguna (la elijo cada vez)', valor: '' }, ...sociedades().map((n) => ({ etiqueta: n, valor: n }))];
+      const v = await elegir('Sociedad por defecto', ops);
+      if (v === undefined) return; guardarAjuste('soc', v); pintar();
+    } });
+    raiz.append(grupo(fTema, fTexto), grupo(fTab, fSoc),
+      h('p', { class: 'nota' }, 'La sociedad por defecto se llena sola en Registro y Diario cuando todavía no ha elegido ninguna. Estos ajustes solo afectan a este dispositivo.'));
+  }
+
+  // ----- Novedades -----
+  function vistaNovedades() {
+    raiz.append(cabSub('Novedades de la versión', irInicio));
+    NOVEDADES.forEach((n) => raiz.append(tarjeta(h('h2', null, 'Versión ' + n.v + (n.v === VERSION ? ' · la que tiene' : '')), h('ul', { class: 'novedades' }, ...n.t.map((x) => h('li', null, x))))));
   }
 
   // ----- Impresora -----
@@ -284,6 +410,7 @@ export function crearAjustes(nav) {
     const blob = new Blob([JSON.stringify({ app: 'registro-cajuelas', version: VERSION, fecha: new Date().toISOString(), datos: db.todo() })], { type: 'application/json' });
     const r = await compartir([{ blob, nombre: `copia_cajuelas_${stampCorto()}.json` }], 'Copia de seguridad de Registro de Cajuelas');
     if (r === 'descargado') toast('Se descargó la copia de seguridad.');
+    if (r === 'descargado' || r === 'compartido') db.set('ultimo_respaldo', Date.now());
   }
   function importar() {
     const f = h('input', { type: 'file', accept: '.json,application/json' });
