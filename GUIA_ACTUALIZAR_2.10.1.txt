@@ -1,0 +1,16 @@
+ACTUALIZAR A LA VERSIÓN 2.10.1 (solo la app; el Google Sheet y el Apps Script NO cambian)
+
+NOVEDADES
+1. Resumen de Registro (solo administradores): ahora se escoge la sociedad y luego
+   Hoy / Ayer / Rango de fechas (y el usuario, si quiere uno en particular).
+   - Sale UN solo PDF y UN solo Excel con todos los días del rango (máximo 31 días).
+   - Cada persona aparece una sola vez con lo sumado de todos los días.
+   - Al final se agrega "Total a pagar por día" (en el PDF y en el Excel).
+2. Los demás usuarios siguen igual: solo su resumen del día, con sus propios comprobantes y sin rango.
+3. El ejemplo del buscador por finca (Registro y Diario) ahora dice: Ej. Los Patios, Montecristo.
+
+PASOS
+1. Descomprima RegistroCajuelas_Web_v2.10.1.zip.
+2. En su repositorio de GitHub suba/reemplace TODOS los archivos del zip (Add file > Upload files) y haga Commit.
+   La dirección de GitHub Pages NO cambia.
+3. Espere 1-2 minutos, abra la app y acepte "Hay una versión nueva". En Ajustes debe decir 2.10.1.

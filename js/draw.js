@@ -406,6 +406,10 @@ export function paginasResumenRegistro(d) {
   }
   y += 6;
   txt(c, `TOTAL GENERAL A PAGAR: ${fmtMoney(d.total)}`, margin, y, tit);
+  if (d.porDia && d.porDia.length) {
+    y += 20; txt(c, 'Total a pagar por día:', margin, y, bold);
+    d.porDia.forEach((x) => { if (y > pageH - 40) { nueva(true); } y += 14; txt(c, `${x.dia.slice(8, 10)}/${x.dia.slice(5, 7)}/${x.dia.slice(0, 4)}   ${fmtMoney(x.total)}`, margin + 12, y, normal); });
+  }
   if (d.personas.some((p) => p.provisional)) { y += 18; txt(c, 'PROVISIONAL = persona que no está en la base al emitir el tiquete (pendiente de verificar).', margin, y, normal); }
   if (d.anulados.length) {
     y += 28;

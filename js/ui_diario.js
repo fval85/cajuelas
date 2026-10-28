@@ -41,7 +41,7 @@ export function crearDiario(nav) {
 
   // Buscar por finca: al elegirla se llenan solas la sociedad y la finca.
   const buscaFinca = campoBusqueda({
-    placeholder: 'Ej. Caledonia', mayus: true,
+    placeholder: 'Ej. Los Patios, Montecristo', mayus: true,
     fuente: () => sociedades().flatMap((s) => s.fincas.map((f) => ({ etiqueta: f, valor: f, detalle: s.nombre, soc: s.nombre }))),
     alElegir: (v, o) => {
       if (normalizar(selSociedad) !== normalizar(o.soc)) { lote.input.value = ''; db.set('dia_lote', ''); }

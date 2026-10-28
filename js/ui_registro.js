@@ -8,7 +8,7 @@ import { xlsx } from './files.js';
 import { ajuste } from './apariencia.js';
 import { encolar, registroDelDia } from './sync.js';
 import { buscarComprobantesHoja, filtrarSociedades, itemComprobante, corregirFechaComprobante } from './ui_admin.js';
-import { tarjeta, etiqueta, banda, selector, boton, campoBusqueda, verDocumento, listaBuscable, pedirMotivo, icono, filtrosAdmin, usuarioCoincide } from './ui.js';
+import { tarjeta, etiqueta, banda, selector, boton, campoBusqueda, verDocumento, listaBuscable, pedirMotivo, icono, filtrosAdmin, usuarioCoincide, pedirPeriodo } from './ui.js';
 
 export function crearRegistro(nav) {
   const raiz = h('div', { class: 'pagina' });
@@ -32,7 +32,7 @@ export function crearRegistro(nav) {
   persona.input.addEventListener('input', () => {});
   // Buscar por finca: al elegirla se llenan solas la sociedad y la finca.
   const buscaFinca = campoBusqueda({
-    placeholder: 'Ej. Caledonia',
+    placeholder: 'Ej. Los Patios, Montecristo',
     fuente: () => ((cosecha() || { sociedades: [] }).sociedades).flatMap((s) => s.fincas.map((f) => ({ etiqueta: f, valor: f, detalle: s.nombre, soc: s.nombre }))),
     alElegir: (v, o) => {
       if (normalizar(selSociedad) !== normalizar(o.soc)) persona.input.value = '';
@@ -303,27 +303,40 @@ export function crearRegistro(nav) {
   async function resumenAdmin(co) {
     const cs = cosecha();
     if (!co || !cs || !cs.sociedades.length) return toast('Elija la cosecha activa en Ajustes y reciba el catálogo.');
-    const f = await filtrosAdmin({ titulo: 'Resumen de Registro', sociedades: cs.sociedades.map((x) => x.nombre), sociedad: selSociedad });
-    if (!f) return;
+    const nombresSoc = cs.sociedades.map((x) => x.nombre);
+    const socEl = await elegir('Sociedad del resumen', nombresSoc.map((x) => ({ etiqueta: x, valor: x })), { buscar: false });
+    if (socEl === undefined) return;
+    const p = await pedirPeriodo({ titulo: `Resumen de Registro · ${socEl}`, usuarios: true });
+    if (!p) return;
+    const f = { sociedad: socEl, usuario: p.usuario };
+    const dias = [];
+    for (let d = new Date(p.desde + 'T12:00:00'), fin = new Date(p.hasta + 'T12:00:00'); d <= fin; d.setDate(d.getDate() + 1)) dias.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+    if (dias.length > 31) return toast('Para Registro el rango máximo es de 31 días.', 5000);
     toast('Preparando el resumen…', 2500);
     const n = normalizar;
     const disp = deviceName();
-    const locales = lineas.todas().filter((l) => l.date === f.dia && l.comprobante && (!l.cosecha || n(l.cosecha) === n(co))).map((l) => ({ ...l, dispositivo: disp }));
-    let todas = locales, nota = 'Solo comprobantes de este dispositivo.';
-    if (configurado()) {
-      const r = await registroDelDia(f.dia);
-      if (!r.error) {
-        const propios = new Set(locales.map((l) => l.comprobante));
-        todas = [...r.lista.filter((l) => (!l.cosecha || n(l.cosecha) === n(co)) && !(n(l.dispositivo) === n(disp) && propios.has(l.comprobante))), ...locales];
-        nota = 'Datos de todos los dispositivos (Google Sheets).';
-      } else nota = `Sin conexión con la hoja (${r.error}). Solo comprobantes de este dispositivo.`;
+    let todas = [], nota = 'Solo comprobantes de este dispositivo.', conexion = configurado(), falla = '';
+    for (const dia of dias) {
+      const locales = lineas.todas().filter((l) => l.date === dia && l.comprobante && (!l.cosecha || n(l.cosecha) === n(co))).map((l) => ({ ...l, dispositivo: disp }));
+      let delDia = locales;
+      if (conexion) {
+        const r = await registroDelDia(dia);
+        if (!r.error) {
+          const propios = new Set(locales.map((l) => l.comprobante));
+          delDia = [...r.lista.filter((l) => (!l.cosecha || n(l.cosecha) === n(co)) && !(n(l.dispositivo) === n(disp) && propios.has(l.comprobante))), ...locales];
+        } else { conexion = false; falla = r.error; delDia = locales; }
+      }
+      todas = todas.concat(delDia);
     }
+    if (configurado()) nota = conexion ? 'Datos de todos los dispositivos (Google Sheets).' : `Sin conexión con la hoja (${falla}). Solo comprobantes de este dispositivo.`;
     const deSoc = todas.filter((l) => n(l.sociedad) === n(f.sociedad) && usuarioCoincide(l.usuario, f.usuario));
-    return armarResumen(co, f.dia, f.sociedad, deSoc, `${nota} Usuario: ${f.usuario || 'todos'}.`);
+    return armarResumen(co, p.desde, f.sociedad, deSoc, `${nota} Usuario: ${f.usuario || 'todos'}.`, p.hasta);
   }
-  async function armarResumen(co, dia, socNombre, deSoc, extra) {
+  async function armarResumen(co, dia, socNombre, deSoc, extra, hasta = dia) {
+    const rango = hasta !== dia;
+    const cuando = rango ? `del ${diaLegible(dia)} al ${diaLegible(hasta)}` : `el ${diaLegible(dia)}`;
     const hoyLineas = deSoc.filter((l) => !l.anulado);
-    if (!hoyLineas.length) return toast(!deSoc.length ? `No hay comprobantes registrados el ${diaLegible(dia)} para ${socNombre}.` : `Todos los comprobantes del ${diaLegible(dia)} para ${socNombre} están anulados.`, 6000);
+    if (!hoyLineas.length) return toast(!deSoc.length ? `No hay comprobantes registrados ${cuando} para ${socNombre}.` : `Todos los comprobantes ${rango ? cuando : 'del ' + diaLegible(dia)} para ${socNombre} están anulados.`, 6000);
     const anulados = [...deSoc.filter((l) => l.anulado).reduce((m, l) => { if (!m.has(l.comprobante)) m.set(l.comprobante, []); m.get(l.comprobante).push(l); return m; }, new Map()).entries()]
       .map(([num, ls]) => ({ numero: num, nombre: ls[0].personName, monto: ls.reduce((t, l) => t + montoLinea(l) - l.deduccion, 0), motivo: ls[0].motivo, fecha: ls[0].anuladoFecha }));
     const fincas = [...new Set(hoyLineas.map((l) => l.finca).filter(Boolean))].sort((a, b) => normalizar(a).localeCompare(normalizar(b)));
@@ -345,8 +358,9 @@ export function crearRegistro(nav) {
     const totalDed = hoyLineas.reduce((t, l) => t + (l.deduccion || 0), 0);
     const cantidadPorPrecio = {};
     precios.forEach((p) => { cantidadPorPrecio[p] = hoyLineas.filter((l) => l.price === p).reduce((t, l) => t + parseQty(l.quantity), 0); });
+    const porDia = rango ? [...hoyLineas.reduce((m, l) => { m.set(l.date, (m.get(l.date) || 0) + montoLinea(l) - (l.deduccion || 0)); return m; }, new Map()).entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([dd, v]) => ({ dia: dd, total: v })) : [];
     const d = {
-      fecha: fechaLarga(new Date(dia + 'T12:00:00')), cosecha: co, sociedad: socNombre, fincaTitulo: fincas.length === 1 ? 'Finca' : 'Fincas', fincasTxt: fincas.join(', '),
+      fecha: rango ? `del ${fechaLarga(new Date(dia + 'T12:00:00'))} al ${fechaLarga(new Date(hasta + 'T12:00:00'))}` : fechaLarga(new Date(dia + 'T12:00:00')), porDia, cosecha: co, sociedad: socNombre, fincaTitulo: fincas.length === 1 ? 'Finca' : 'Fincas', fincasTxt: fincas.join(', '),
       precios, personas, lineasOriginales: hoyLineas.length, cantidadPorPrecio, totalBruto, totalDed, total: totalBruto - totalDed, anulados
     };
     await cargarFuentes();
@@ -370,11 +384,12 @@ export function crearRegistro(nav) {
     f.push(['Personas', personas.length], ['Líneas originales', hoyLineas.length]);
     if (totalDed > 0) f.push(['Total bruto', totalBruto], ['Total deducciones', totalDed]);
     f.push(['TOTAL GENERAL A PAGAR', d.total]);
+    if (porDia.length) { f.push([], ['TOTAL A PAGAR POR DÍA']); porDia.forEach((x) => f.push([diaLegible(x.dia), x.total])); }
     if (anulados.length) {
       f.push([], ['COMPROBANTES ANULADOS (no incluidos en los totales)'], ['Comprobante', 'Nombre', 'Monto anulado', 'Fecha de anulación', 'Motivo']);
       anulados.forEach((a) => f.push([a.numero, a.nombre, a.monto, a.fecha, a.motivo]));
     }
-    const sello = dia.replace(/-/g, '');
+    const sello = rango ? `${dia.replace(/-/g, '')}_${hasta.replace(/-/g, '')}` : dia.replace(/-/g, '');
     const libro = new Blob([xlsx('Resumen', f)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     verDocumento({
       titulo: 'Resumen general', paginas, nombrePdf: `Resumen_General_de_Cajuelas_${sello}.pdf`, ancho: true,

@@ -1,5 +1,10 @@
 // Novedades de cada versión (se muestran en Ajustes > Novedades de la versión).
 export const NOVEDADES = [
+  { v: '2.10.1', t: [
+    'Resumen de Registro (administradores): ahora se puede escoger un rango de fechas; sale un solo PDF y un solo Excel con todos los días y el total a pagar por día.',
+    'Los demás usuarios siguen igual: solo su resumen del día.',
+    'El ejemplo del buscador por finca ahora dice «Los Patios, Montecristo».'
+  ] },
   { v: '2.10.0', t: [
     'Reportes: una sola tarjeta de Café recibido con cajuelas, adelantos en colones, comparación con la cosecha anterior y mini gráfico.',
     'Filtros nuevos: barra compacta, hoja de filtros, filtros guardados (★) y selector rápido Todos / Interno / Externo. «Agrupar por» quedó aparte.',
