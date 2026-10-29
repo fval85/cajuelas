@@ -9,6 +9,11 @@ import { encolar, movimientosBoletos } from './sync.js';
 import { tarjeta, etiqueta, banda, selector, boton, verDocumento, listaBuscable, pedirMotivo, usuarioCoincide, opcionesUsuarios } from './ui.js';
 import { normalizarMedida } from './store.js';
 
+/** Grupo de botones con título; si el usuario no puede usar ninguno, todo el grupo se oculta. */
+function grupoBotones(titulo, ...botones) {
+  return h('div', { class: 'grupo-botones' }, h('p', { class: 'grupo-titulo' }, titulo), h('div', { class: 'fila-botones acciones-g' }, ...botones));
+}
+
 export function crearBoletos(nav) {
   const raiz = h('div', { class: 'pagina' });
   let selOficina = db.get('bol_oficina', '');
@@ -254,11 +259,13 @@ export function crearBoletos(nav) {
     tarjeta(etiqueta('Oficina'), pickOf, etiqueta('Sociedad'), pickSoc, etiqueta('Fecha del movimiento'), inFecha),
     infoSaldo,
     tarjeta(etiqueta('Cantidad de fichas'), cajaFichas),
-    h('div', { class: 'acciones' },
+    grupoBotones('Movimientos del día',
       boton('Entrega de fichas', 'emitir', 'c-verde', () => emitir(BOL_ENTREGA), 'todos'), boton('Refuerzo', 'emitir', 'c-ambar', () => emitir(BOL_REFUERZO), 'todos'),
-      boton('Saldo', 'enviar', 'c-azul', () => emitir(BOL_SALDO)), boton('Conteo general', 'enviar', 'c-ambar', () => emitir(BOL_CONTEO), 'todos'),
-      boton('Reimprimir', 'imprimir', 'c-teal', reimprimir, 'reimprimir'), boton('Reportes', 'resumen', 'c-azul', reportes, 'resumenes'),
-      boton('Fichas dañadas', 'anular', 'c-rojo', () => emitir(BOL_PERDIDA)), boton('Anular', 'anular', 'c-rojo', anular, 'anular'))
+      boton('Saldo', 'enviar', 'c-azul', () => emitir(BOL_SALDO)), boton('Fichas dañadas', 'anular', 'c-rojo', () => emitir(BOL_PERDIDA))),
+    grupoBotones('Consultas',
+      boton('Reimprimir', 'imprimir', 'c-teal', reimprimir, 'reimprimir'), boton('Reportes', 'resumen', 'c-azul', reportes, 'resumenes')),
+    grupoBotones('Solo administración',
+      boton('Conteo general', 'enviar', 'c-ambar', () => emitir(BOL_CONTEO), 'todos'), boton('Anular', 'anular', 'c-rojo', anular, 'anular'))
   );
   refrescar();
   return { el: raiz, refrescar };

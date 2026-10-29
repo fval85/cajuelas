@@ -285,3 +285,9 @@ ul.novedades li { margin: 0 0 8px; line-height: 1.35; }
 .tarjeta.desc { border-color: var(--texto); animation: pulso 1.2s ease-in-out infinite; }
 .hub-menu svg { display: block; }
 @media (prefers-reduced-motion: reduce) { .hub-ref.gira, .hub-fuente.carga .hub-v, .tarjeta.desc { animation: none; } }
+
+/* ---- Boletos: botones por grupos (v2.10.5) ---- */
+.grupo-titulo { margin: 14px 2px 6px; font-size: 12px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--gris); }
+.acciones-g { grid-template-columns: 1fr 1fr !important; gap: 10px; margin-bottom: 4px; }
+.acciones-g > .btn { margin: 0; min-width: 0; }
+.grupo-botones:has(> .fila-botones[hidden]) { display: none; }

@@ -1,5 +1,8 @@
 // Novedades de cada versión (se muestran en Ajustes > Novedades de la versión).
 export const NOVEDADES = [
+  { v: '2.10.5', t: [
+    'Boletos: botones ordenados por grupos (Movimientos del día, Consultas y Solo administración). Los usuarios normales solo ven los grupos que pueden usar.'
+  ] },
   { v: '2.10.4', t: [
     'Boletos: los usuarios normales solo ven Saldo, Fichas dañadas, Reimprimir y Reportes. Entrega de fichas, Refuerzo, Conteo general y Anular son solo de administradores.',
     'Boletos: la fecha del movimiento queda fija en hoy para los usuarios normales; solo un administrador puede cambiarla.'
