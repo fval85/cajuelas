@@ -195,7 +195,7 @@ export function crearReportes(nav) {
     const cache = leerCache();
     if (!forzar && cache && Date.now() - cache.t < MIN_REFRESCO * 60000) { if (!datos) usar(cache); pintarTodo(); return; }
     if (cache && !datos) { usar(cache); pintarTodo(); }
-    cargando = true; pintarEstado();
+    cargando = true; pintarEstado(); pintarInicio();
     const r = await historicos();
     cargando = false;
     if (r.error) {
@@ -211,6 +211,7 @@ export function crearReportes(nav) {
   }
   function pintarEstado() {
     if (cargando) estado.textContent = 'Descargando datos de Históricos…';
+    else if (exp && exp.ocupado()) estado.textContent = 'Descargando datos de Exportaciones…';
     else if (datos) estado.textContent = `Históricos: ${datos.filas.length} filas · cosechas ${[...new Set(datos.filas.map((r) => r.cos))].sort().join(', ')}${datos.actualizado ? ' · actualizado ' + datos.actualizado : ''}${errorCarga ? '\n⚠ ' + errorCarga : ''}`;
     else estado.textContent = errorCarga ? '⚠ ' + errorCarga : 'Todavía no hay datos. Toque «Actualizar datos».';
     estado.style.whiteSpace = 'pre-line';
@@ -341,7 +342,7 @@ export function crearReportes(nav) {
   bandaInicio.append(btnMas);
   const cabDetalle = cabSub('Café recibido', () => ir('inicio'));
   cabDetalle.hidden = true;
-  const exp = crearVentasExp({ abrir: () => ir('exp'), volver: () => ir('inicio'), alCambiar: () => { if (pantalla === 'inicio') pintarInicio(); } });
+  const exp = crearVentasExp({ abrir: () => ir('exp'), volver: () => ir('inicio'), alCambiar: () => { if (pantalla === 'inicio') pintarInicio(); else syncProg(); } });
   exp.cab.hidden = true;
   function ir(p) { pantalla = p; mostrar(); window.scrollTo(0, 0); }
   function mostrar() {
@@ -371,10 +372,37 @@ export function crearReportes(nav) {
     const m = Math.max(0, Math.round((Date.now() - datos.t) / 60000));
     return m < 1 ? 'Actualizado ahora' : m < 60 ? `Actualizado hace ${m} min` : m < 1440 ? `Actualizado hace ${Math.round(m / 60)} h` : `Actualizado hace ${Math.round(m / 1440)} d`;
   }
+  // ---- Ojito: ocultar montos (se recuerda en este dispositivo) ----
+  let ocultar = false;
+  try { ocultar = localStorage.getItem('cajuelas.ocultar_montos') === '1'; } catch { /* nada */ }
+  const svgOjo = (tachado) => `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>${tachado ? '<path d="M3 3l18 18"/>' : ''}</svg>`;
+  const btnOjo = h('button', { type: 'button', class: 'hub-menu', onclick: () => { ocultar = !ocultar; try { localStorage.setItem('cajuelas.ocultar_montos', ocultar ? '1' : '0'); } catch { /* nada */ } pintarOjo(); pintarInicio(); } });
+  function pintarOjo() { btnOjo.innerHTML = svgOjo(ocultar); btnOjo.setAttribute('aria-label', ocultar ? 'Mostrar montos' : 'Ocultar montos'); btnOjo.title = ocultar ? 'Mostrar montos' : 'Ocultar montos'; }
+  pintarOjo();
+  bandaInicio.insertBefore(btnOjo, btnMas);
+  // ---- Avance de la descarga (estimado: sube hasta ~92 % y llega a 100 % al terminar) ----
+  const prog = { on: false, fin: false, pct: 0, t: 0 };
+  const barraProg = h('div', { class: 'barra-prog', role: 'progressbar', 'aria-label': 'Descargando datos' }, h('div', { class: 'bp-pista' }, h('i')), h('b', null, '0%'));
+  const ocupado = () => cargando || exp.ocupado();
+  const opcHub = { alRefrescar: actualizarTodo, ocultar: () => ocultar, gira: ocupado };
+  function dibujarBarra() { barraProg.querySelector('i').style.width = prog.pct.toFixed(0) + '%'; barraProg.querySelector('b').textContent = prog.pct.toFixed(0) + '%'; barraProg.setAttribute('aria-valuenow', prog.pct.toFixed(0)); }
+  function syncProg() {
+    tarjAcciones.classList.toggle('desc', ocupado());
+    pintarEstado();
+    if (ocupado()) {
+      if (prog.fin) { prog.fin = false; clearTimeout(prog.t2); }
+      if (!prog.on) { prog.on = true; prog.pct = 3; dibujarBarra(); clearInterval(prog.t); prog.t = setInterval(() => { prog.pct += (92 - prog.pct) * 0.06; dibujarBarra(); }, 250); }
+    } else if (prog.on && !prog.fin) {
+      prog.fin = true; clearInterval(prog.t); prog.pct = 100; dibujarBarra();
+      prog.t2 = setTimeout(() => { prog.on = false; prog.fin = false; if (pantalla === 'inicio') pintarInicio(); }, 600);
+    }
+  }
   function pintarInicio() {
+    syncProg();
     clear(inicio);
+    if (prog.on) inicio.append(barraProg);
     if (!datos || !f.cos) {
-      inicio.append(exp.tarjetaHub(actualizarTodo), tarjeta(h('p', { class: 'nota' }, cargando ? 'Descargando…' : datos ? 'El archivo Históricos no tiene datos.' : 'Para ver los reportes la app necesita leer el Google Sheet «Históricos». Revise que en la hoja Configuración del libro de Google Sheets esté el enlace en la fila «Históricos» y toque ↻.')), tarjAcciones);
+      inicio.append(exp.tarjetaHub(opcHub), tarjeta(h('p', { class: 'nota' }, cargando ? 'Descargando…' : datos ? 'El archivo Históricos no tiene datos.' : 'Para ver los reportes la app necesita leer el Google Sheet «Históricos». Revise que en la hoja Configuración del libro de Google Sheets esté el enlace en la fila «Históricos» y toque ↻.')), tarjAcciones);
       return;
     }
     const corte = f.corte || ref();
@@ -388,16 +416,16 @@ export function crearReportes(nav) {
       if (tp.caj > 0) { const d = t.caj / tp.caj - 1; pillNeg = d < -0.0005; pill = `${pctSigno(d)} vs ${ant}`; }
     }
     const subeBaja = pill ? h('p', { class: 'vs ' + (pillNeg ? 'baja' : 'sube') }, (pillNeg ? '▼ ' : '▲ ') + pill) : null;
-    const cafe = h('div', { class: 'fuente toque hub-fuente', role: 'button', tabindex: '0', onclick: () => ir('detalle') },
-      h('button', { type: 'button', class: 'hub-ref', 'aria-label': 'Actualizar todo', onclick: (e) => { e.stopPropagation(); actualizarTodo(); } }, '↻'),
+    const cafe = h('div', { class: 'fuente toque hub-fuente' + (ocupado() ? ' carga' : ''), role: 'button', tabindex: '0', onclick: () => ir('detalle') },
+      h('button', { type: 'button', class: 'hub-ref' + (ocupado() ? ' gira' : ''), 'aria-label': 'Actualizar todo', onclick: (e) => { e.stopPropagation(); actualizarTodo(); } }, '↻'),
       h('div', { class: 'fuente-cab' }, h('h3', null, '☕ Café recibido')),
       h('p', { class: 'hub-fecha' }, h('i'), `Cosecha ${f.cos} · hasta ${fmtFechaDMA(corte)}`),
       h('p', { class: 'hub-act' }, '↻ ' + (hace() || 'Sin actualizar') + (errorCarga ? ' · ⚠ sin conexión' : '')),
       h('div', { class: 'hub-dos' },
-        h('div', null, h('p', { class: 'hub-et' }, 'Cajuelas'), h('p', { class: 'hub-v' }, cajF(t.caj)), h('p', { class: 'sub' }, `${cajF(t.fan)} fanegas · ${t.n} recibos`)),
-        h('div', null, h('p', { class: 'hub-et' }, 'Adelantos'), h('p', { class: 'hub-v' }, colones(t.ade)), h('p', { class: 'sub' }, `Intereses ${colones(t.int)}`))),
+        h('div', null, h('p', { class: 'hub-et' }, 'Cajuelas'), h('p', { class: 'hub-v' }, ocultar ? '*** ***' : cajF(t.caj)), h('p', { class: 'sub' }, `${cajF(t.fan)} fanegas · ${t.n} recibos`)),
+        h('div', null, h('p', { class: 'hub-et' }, 'Adelantos'), h('p', { class: 'hub-v' }, ocultar ? '₡ ******' : colones(t.ade)), h('p', { class: 'sub' }, `Intereses ${ocultar ? '₡ ******' : colones(t.int)}`))),
       subeBaja, h('span', { class: 'hub-flecha', 'aria-hidden': 'true' }, '›'));
-    inicio.append(cafe, exp.tarjetaHub(actualizarTodo), tarjAcciones);
+    inicio.append(cafe, exp.tarjetaHub(opcHub), tarjAcciones);
   }
 
   raiz.append(bandaInicio, cabDetalle, exp.cab, inicio, detalle, exp.el);

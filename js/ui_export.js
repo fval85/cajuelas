@@ -306,7 +306,7 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
     const cache = leerCache();
     if (!forzar && cache && Date.now() - cache.t < MIN_REFRESCO * 60000) { if (!datos) usar(cache); redibujar(); return; }
     if (cache && !datos) { usar(cache); redibujar(); }
-    cargando = true; pintarEstado();
+    cargando = true; pintarEstado(); alCambiar();
     const r = await exportaciones();
     cargando = false;
     if (r.error) {
@@ -323,8 +323,10 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
   function redibujar() { pintarTabs(); pintarFiltros(); pintarChips(); pintarOpciones(); pintar(); alCambiar(); }
 
   // ---- Tarjeta de la pantalla inicial de Reportes ----
-  function tarjetaHub(alRefrescar) {
-    const refBtn = () => h('button', { type: 'button', class: 'hub-ref', 'aria-label': 'Actualizar todo', onclick: (e) => { e.stopPropagation(); if (alRefrescar) alRefrescar(); } }, '↻');
+  function tarjetaHub(opc = {}) {
+    const ocultar = !!(opc.ocultar && opc.ocultar());
+    const m = (v, mask) => (ocultar ? mask : v);
+    const refBtn = () => h('button', { type: 'button', class: 'hub-ref' + (opc.gira && opc.gira() ? ' gira' : ''), 'aria-label': 'Actualizar todo', onclick: (e) => { e.stopPropagation(); if (opc.alRefrescar) opc.alRefrescar(); } }, '↻');
     const cab3 = () => h('div', { class: 'fuente-cab' }, h('h3', null, '🚢 Ventas de exportación'));
     if (!datos) {
       return h('div', { class: 'fuente vacia hub-fuente' }, refBtn(), cab3(), h('p', { class: 'sub' }, cargando ? 'Descargando datos…' : error ? '⚠ ' + error : 'Toque ↻ para traer los contratos del archivo Exportaciones.'));
@@ -336,18 +338,18 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
     const nSem = (k) => rows.filter((r) => r.sem === k).length;
     const nAl = datos.alertas.lista.length;
     const ir = (t, v) => { tab = t; if (v) vista = v; detalleId = null; pintarChips(); redibujar(); abrir(); };
-    return h('div', { class: 'fuente toque hub-fuente', role: 'button', tabindex: '0', onclick: () => ir('contratos') }, refBtn(), cab3(),
+    return h('div', { class: 'fuente toque hub-fuente' + (opc.gira && opc.gira() ? ' carga' : ''), role: 'button', tabindex: '0', onclick: () => ir('contratos') }, refBtn(), cab3(),
       h('p', { class: 'sub' }, `${rows.length} ${rows.length === 1 ? 'contrato' : 'contratos'}${cosechas.length ? ' · cosecha ' + cosechas.join(', ') : ''}`),
       h('div', { class: 'hub-dos' },
-        h('div', null, h('p', { class: 'hub-v' }, `${ent0(S('sacP'))} sacos`), h('p', { class: 'hub-et' }, 'por entregar')),
-        h('div', null, h('p', { class: 'hub-v' }, dinero$(S('cobrar'))), h('p', { class: 'hub-et' }, 'por cobrar'))),
+        h('div', null, h('p', { class: 'hub-v' }, m(`${ent0(S('sacP'))} sacos`, '**** sacos')), h('p', { class: 'hub-et' }, 'por entregar')),
+        h('div', null, h('p', { class: 'hub-v' }, m(dinero$(S('cobrar')), '$ ******')), h('p', { class: 'hub-et' }, 'por cobrar'))),
       h('div', { class: 'progreso', role: 'img', 'aria-label': `${pct}% de los sacos entregados` }, h('i', { style: `width:${pct}%` })),
       h('p', { class: 'sub sem-resumen' }, ...['rojo', 'ambar', 'gris', 'verde'].filter((k) => nSem(k)).map((k) => h('span', null, punto(k), `${nSem(k)} `)), nAl ? `· ${nAl} ${nAl === 1 ? 'alerta' : 'alertas'}` : ''),
       h('span', { class: 'hub-flecha', 'aria-hidden': 'true' }, '›'));
   }
   pintarTabs(); pintarChips(); pintarOpciones(); pintarFiltros(); pintarEstado(); sembrar();
   return {
-    cab, el, tarjetaHub, cargar,
+    cab, el, tarjetaHub, cargar, ocupado: () => cargando,
     reiniciar() { f = { fl: {}, dims: ['comp'], med: [...MEDIDAS_INI], graf: grafIni() }; vista = 'contratos'; tab = 'contratos'; sub = 'entregar'; detalleId = null; sembrar(); const c = leerCache(); if (c) usar(c); redibujar(); cargar(false); },
     estado,
     estadoDatos() { return { ok: !!datos, contratos: datos ? datos.contratos.length : 0, entregas: datos ? datos.entregas.length : 0, pagos: datos ? datos.pagos.length : 0, alertas: datos ? datos.alertas.lista.length : 0, error, t: crudo ? crudo.t : 0 }; }

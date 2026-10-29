@@ -1,5 +1,10 @@
 // Novedades de cada versión (se muestran en Ajustes > Novedades de la versión).
 export const NOVEDADES = [
+  { v: '2.10.3', t: [
+    'Reportes: mientras se descarga, el ↻ gira, aparece una barra con porcentaje, las cifras brillan y la leyenda inferior se resalta.',
+    'Reportes: ojito 👁 en la barra para ocultar los montos de las tarjetas (se recuerda en el dispositivo).',
+    'Al arrastrar hacia abajo para actualizar, la app se queda en la pestaña donde estaba (ya no vuelve a Registro).'
+  ] },
   { v: '2.10.2', t: [
     'Reportes: tarjetas más pequeñas y limpias. Se toca la tarjeta para entrar; el botón ↻ de la esquina actualiza todo. La fecha de la cosecha y «Actualizado hace…» se leen mejor.',
     'El cambio contra la cosecha anterior sale en verde (sube) o rojo (baja).',

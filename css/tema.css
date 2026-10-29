@@ -271,3 +271,17 @@ ul.novedades li { margin: 0 0 8px; line-height: 1.35; }
 .vs.sube { color: var(--verde); }
 .vs.baja { color: #ef5b5b; }
 .hub-flecha { position: absolute; right: 14px; bottom: 10px; font-size: 20px; color: var(--gris); }
+
+/* ---- Descarga en curso (v2.10.3) ---- */
+@keyframes gira360 { to { transform: rotate(360deg); } }
+@keyframes pulso { 0%, 100% { opacity: .6; } 50% { opacity: 1; } }
+@keyframes brillo { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+.hub-ref.gira { animation: gira360 .9s linear infinite; background: rgba(127,127,127,.3); color: var(--texto); }
+.barra-prog { display: flex; align-items: center; gap: 8px; margin: 0 2px 10px; }
+.bp-pista { flex: 1; height: 7px; border-radius: 5px; background: rgba(127,127,127,.25); overflow: hidden; }
+.bp-pista i { display: block; height: 100%; width: 3%; border-radius: 5px; background: var(--texto); transition: width .25s linear; }
+.barra-prog b { font-size: 12px; min-width: 36px; text-align: right; color: var(--texto); font-variant-numeric: tabular-nums; }
+.hub-fuente.carga .hub-v { color: transparent; border-radius: 6px; background: linear-gradient(90deg, rgba(127,127,127,.18) 25%, rgba(127,127,127,.38) 50%, rgba(127,127,127,.18) 75%); background-size: 200% 100%; animation: brillo 1.3s linear infinite; min-height: 24px; }
+.tarjeta.desc { border-color: var(--texto); animation: pulso 1.2s ease-in-out infinite; }
+.hub-menu svg { display: block; }
+@media (prefers-reduced-motion: reduce) { .hub-ref.gira, .hub-fuente.carga .hub-v, .tarjeta.desc { animation: none; } }

@@ -15,6 +15,12 @@ import { hayControl, puede, necesitaLogin, pantallaLogin, cerrarLogin, alCambiar
 let conservar = false;
 try { conservar = sessionStorage.getItem('cajuelas.conservar') === '1'; sessionStorage.removeItem('cajuelas.conservar'); } catch { /* nada */ }
 if (!conservar) limpiarPantallas();
+// Al arrastrar hacia abajo para actualizar (recarga de la página) se queda en la misma pestaña.
+let tabRecarga = -1;
+try {
+  const nav0 = performance.getEntriesByType('navigation')[0];
+  if (nav0 && nav0.type === 'reload') { const g = parseInt(localStorage.getItem('cajuelas.tab'), 10); if (g >= 0 && g <= 4) tabRecarga = g; }
+} catch { /* nada */ }
 const LIMPIAR_TRAS_MIN = 5; // minutos fuera de la app para empezar de cero al volver
 let salioA = 0;
 document.addEventListener('visibilitychange', () => {
@@ -80,14 +86,14 @@ new MutationObserver(() => {
   programado = true;
   requestAnimationFrame(() => { programado = false; aplicarPermisos(); });
 }).observe(contenido, { childList: true, subtree: true });
-const tabArranque = () => { const t = tabInicio(); return t >= 0 && (!permisoTab[t] || puede(permisoTab[t])) ? t : primeraPermitida(); };
+const tabArranque = () => { const t = tabRecarga >= 0 ? tabRecarga : tabInicio(); tabRecarga = -1; return t >= 0 && (!permisoTab[t] || puede(permisoTab[t])) ? t : primeraPermitida(); };
 ir(0);
 alCambiarSesion(() => {
   revisarAcceso();
   if (sesion()) ir(tabArranque());
 });
 revisarAcceso();
-if (tabInicio() >= 0 && !necesitaLogin()) ir(tabArranque());
+if ((tabInicio() >= 0 || tabRecarga >= 0) && !necesitaLogin()) ir(tabArranque());
 actualizarUsuarios(true).then(() => revisarAcceso());
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') actualizarUsuarios().then(() => revisarAcceso()); });
 setInterval(() => actualizarUsuarios().then(() => revisarAcceso()), 5 * 60000);

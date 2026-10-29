@@ -1,5 +1,5 @@
 // Utilidades comunes: DOM, formatos, fechas, diálogos.
-export const VERSION = '2.10.2';
+export const VERSION = '2.10.3';
 
 export function h(tag, attrs, ...children) {
   const el = document.createElement(tag);
