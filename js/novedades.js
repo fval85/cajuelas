@@ -1,5 +1,10 @@
 // Novedades de cada versión (se muestran en Ajustes > Novedades de la versión).
 export const NOVEDADES = [
+  { v: '2.10.6', t: [
+    'Boletos: el administrador elige a qué dispositivo entrega las fichas («Entregar a»). La entrega le aparece al encargado como «Recibido» y puede registrar su saldo sin error.',
+    'La entrega y el refuerzo muestran «Entregado a:» en el comprobante.',
+    'Requiere actualizar también el Apps Script (columna nueva «Destino» en Boletos Movimientos).'
+  ] },
   { v: '2.10.5', t: [
     'Boletos: botones ordenados por grupos (Movimientos del día, Consultas y Solo administración). Los usuarios normales solo ven los grupos que pueden usar.'
   ] },

@@ -65,6 +65,7 @@ export async function actualizarCatalogo(manual, alCambiar) {
   }
   let { cambio, texto } = reemplazarDesdeHoja(r.estructura, r.personas, r.beneficios, r.diario);
   if (aplicarConfigHoja(r.config)) cambio = true;
+  if (r.bolDisp.length) db.set('boletos_disp', r.bolDisp);
   if (r.bolFichas.length || r.bolOficinas.length) { texto += '\n\n' + reemplazarBoletosDesdeHoja(r.bolFichas, r.bolOficinas); cambio = true; }
   if (alCambiar) alCambiar();
   if (manual) aviso('Catálogo actualizado', texto);

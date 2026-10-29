@@ -130,29 +130,31 @@ export function payloadBoleto(m, reportId, fechaHora, estado, motivo, negativo) 
   const s = negativo ? -1 : 1;
   return {
     formato: 'boleto', reportId, dia: m.dia, fechaHora, dispositivo: m.dispositivo, oficina: m.oficina, cosecha: m.cosecha, sociedad: m.sociedad,
-    comprobante: m.numero, tipo: m.tipo, usuario, estado, motivo: estado === 'ACTIVO' ? m.nota : motivo,
+    comprobante: m.numero, tipo: m.tipo, usuario, destino: m.para || '', estado, motivo: estado === 'ACTIVO' ? m.nota : motivo,
     lineas: m.lineas.map((l) => ({ ficha: l.color, medida: l.medida, cantidad: l.cantidad * s, cajuelas: l.cantidad * s * valorCajuelas(l.medida) }))
   };
 }
 
 const eq = (a, b) => normalizar(a) === normalizar(b);
+/** Dispositivo al que pertenecen las fichas del movimiento (el destino de una entrega del administrador, o el propio). */
+export const destinoMov = (m) => m.para || m.dispositivo;
 const vigentes = (movs, cosecha) => movs.filter((m) => !m.anulado && eq(m.cosecha, cosecha));
 
 /** Saldos por día, dispositivo, sociedad y ficha (misma lógica de la app Android). */
 export function filasSaldo(movs, cosecha, hasta, sociedad = null, dispositivo = null) {
   const base = vigentes(movs, cosecha).filter((m) => m.dia <= hasta && m.tipo !== BOL_CONTEO &&
-    (sociedad == null || eq(m.sociedad, sociedad)) && (dispositivo == null || eq(m.dispositivo, dispositivo)));
+    (sociedad == null || eq(m.sociedad, sociedad)) && (dispositivo == null || eq(destinoMov(m), dispositivo)));
   const grupos = new Map();
   base.forEach((m) => m.lineas.forEach((l) => {
-    const k = normalizar(m.dispositivo) + '#' + normalizar(m.sociedad) + '#' + claveLinea(l);
+    const k = normalizar(destinoMov(m)) + '#' + normalizar(m.sociedad) + '#' + claveLinea(l);
     if (!grupos.has(k)) grupos.set(k, []);
     grupos.get(k).push([m, l]);
   }));
-  const saldoDias = new Set(base.filter((m) => m.tipo === BOL_SALDO).map((m) => normalizar(m.dispositivo) + '#' + normalizar(m.sociedad) + '#' + m.dia));
+  const saldoDias = new Set(base.filter((m) => m.tipo === BOL_SALDO).map((m) => normalizar(destinoMov(m)) + '#' + normalizar(m.sociedad) + '#' + m.dia));
   const out = [];
   for (const lista of grupos.values()) {
     const [m0, l0] = lista[0];
-    const dispSoc = normalizar(m0.dispositivo) + '#' + normalizar(m0.sociedad);
+    const dispSoc = normalizar(destinoMov(m0)) + '#' + normalizar(m0.sociedad);
     const primero = lista.reduce((t, x) => (x[0].dia < t ? x[0].dia : t), lista[0][0].dia);
     const dias = new Set(lista.map((x) => x[0].dia));
     saldoDias.forEach((k) => { if (k.startsWith(dispSoc + '#')) { const d = k.slice(k.lastIndexOf('#') + 1); if (d >= primero) dias.add(d); } });
@@ -167,7 +169,7 @@ export function filasSaldo(movs, cosecha, hasta, sociedad = null, dispositivo = 
       const usadas = hayConteo ? esperado - saldo : 0;
       if (!items.length && ini === 0) continue;
       corriente = saldo;
-      out.push({ dia, dispositivo: m0.dispositivo, sociedad: m0.sociedad, color: l0.color, medida: l0.medida, inicial: ini, entregas: ent, refuerzos: ref, perdidas: per, saldo, conConteo: hayConteo, usadas, cajuelasUsadas: usadas * valorCajuelas(l0.medida) });
+      out.push({ dia, dispositivo: destinoMov(m0), sociedad: m0.sociedad, color: l0.color, medida: l0.medida, inicial: ini, entregas: ent, refuerzos: ref, perdidas: per, saldo, conConteo: hayConteo, usadas, cajuelasUsadas: usadas * valorCajuelas(l0.medida) });
     }
   }
   const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
@@ -183,7 +185,7 @@ export function saldoInicial(movs, cosecha, sociedad, dispositivo, dia) {
 }
 export function disponible(movs, cosecha, sociedad, dispositivo, dia) {
   const out = { ...saldoInicial(movs, cosecha, sociedad, dispositivo, dia) };
-  vigentes(movs, cosecha).filter((m) => m.dia === dia && eq(m.sociedad, sociedad) && eq(m.dispositivo, dispositivo)).forEach((m) => {
+  vigentes(movs, cosecha).filter((m) => m.dia === dia && eq(m.sociedad, sociedad) && eq(destinoMov(m), dispositivo)).forEach((m) => {
     const signo = m.tipo === BOL_ENTREGA || m.tipo === BOL_REFUERZO ? 1 : m.tipo === BOL_PERDIDA ? -1 : 0;
     if (signo) m.lineas.forEach((l) => { const k = claveLinea(l); out[k] = (out[k] || 0) + signo * l.cantidad; });
   });

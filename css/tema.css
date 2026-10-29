@@ -291,3 +291,5 @@ ul.novedades li { margin: 0 0 8px; line-height: 1.35; }
 .acciones-g { grid-template-columns: 1fr 1fr !important; gap: 10px; margin-bottom: 4px; }
 .acciones-g > .btn { margin: 0; min-width: 0; }
 .grupo-botones:has(> .fila-botones[hidden]) { display: none; }
+.selector[hidden], .etiqueta[hidden] { display: none; }
+.ficha-rec { color: var(--verde); }

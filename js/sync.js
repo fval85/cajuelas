@@ -70,7 +70,7 @@ export async function descargarCatalogo(device) {
   const f = (k) => (Array.isArray(r.json[k]) ? r.json[k].map((x) => (Array.isArray(x) ? x.map((y) => (y == null ? '' : String(y))) : [])) : []);
   return {
     ok: true, message: r.message, estructura: f('estructura'), personas: f('personas'), beneficios: f('beneficios'),
-    diario: f('diario'), bolFichas: f('boletosFichas'), bolOficinas: f('boletosOficinas'), config: r.json.config || null
+    diario: f('diario'), bolFichas: f('boletosFichas'), bolOficinas: f('boletosOficinas'), bolDisp: f('boletosDispositivos'), config: r.json.config || null
   };
 }
 
@@ -167,7 +167,7 @@ export async function movimientosBoletos(cosecha, hasta, normMedida) {
   if (!r.ok) return { error: r.message, lista: [] };
   const lista = (r.json.movimientos || []).map((o) => ({
     id: s(o.comprobante) + '|' + s(o.dispositivo) + '|' + s(o.dia), numero: s(o.comprobante), dia: s(o.dia), emitido: s(o.fechaHora),
-    cosecha: s(o.cosecha), sociedad: s(o.sociedad), oficina: s(o.oficina), dispositivo: s(o.dispositivo), usuario: s(o.usuario), tipo: s(o.tipo),
+    cosecha: s(o.cosecha), sociedad: s(o.sociedad), oficina: s(o.oficina), dispositivo: s(o.dispositivo), para: s(o.destino), usuario: s(o.usuario), tipo: s(o.tipo),
     lineas: (o.lineas || []).map((l) => ({ color: s(l.ficha), medida: normMedida(s(l.medida)), cantidad: parseInt(l.cantidad, 10) || 0 })),
     nota: s(o.motivo), anulado: false, motivoAnul: '', anuladoFecha: ''
   }));
