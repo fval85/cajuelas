@@ -323,10 +323,11 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
   function redibujar() { pintarTabs(); pintarFiltros(); pintarChips(); pintarOpciones(); pintar(); alCambiar(); }
 
   // ---- Tarjeta de la pantalla inicial de Reportes ----
-  function tarjetaHub() {
-    const cab3 = () => h('div', { class: 'fuente-cab' }, h('h3', null, '🚢 Ventas de exportación'), h('span', null, 'Exportaciones'));
+  function tarjetaHub(alRefrescar) {
+    const refBtn = () => h('button', { type: 'button', class: 'hub-ref', 'aria-label': 'Actualizar todo', onclick: (e) => { e.stopPropagation(); if (alRefrescar) alRefrescar(); } }, '↻');
+    const cab3 = () => h('div', { class: 'fuente-cab' }, h('h3', null, '🚢 Ventas de exportación'));
     if (!datos) {
-      return h('div', { class: 'fuente vacia' }, cab3(), h('p', { class: 'sub' }, cargando ? 'Descargando datos…' : error ? '⚠ ' + error : 'Toque ↻ para traer los contratos del archivo Exportaciones.'));
+      return h('div', { class: 'fuente vacia hub-fuente' }, refBtn(), cab3(), h('p', { class: 'sub' }, cargando ? 'Descargando datos…' : error ? '⚠ ' + error : 'Toque ↻ para traer los contratos del archivo Exportaciones.'));
     }
     const rows = filtrar(datos.contratos, {});
     const S = (k) => rows.reduce((t, r) => t + (r[k] || 0), 0);
@@ -335,18 +336,14 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
     const nSem = (k) => rows.filter((r) => r.sem === k).length;
     const nAl = datos.alertas.lista.length;
     const ir = (t, v) => { tab = t; if (v) vista = v; detalleId = null; pintarChips(); redibujar(); abrir(); };
-    return h('div', { class: 'fuente toque', onclick: () => ir('contratos') }, cab3(),
+    return h('div', { class: 'fuente toque hub-fuente', role: 'button', tabindex: '0', onclick: () => ir('contratos') }, refBtn(), cab3(),
       h('p', { class: 'sub' }, `${rows.length} ${rows.length === 1 ? 'contrato' : 'contratos'}${cosechas.length ? ' · cosecha ' + cosechas.join(', ') : ''}`),
-      h('p', { class: 'cifra' }, `${ent0(S('sacP'))} sacos por entregar`),
-      h('p', { class: 'sub' }, `Entregado ${dinero$(S('monE'))} · Por cobrar ${dinero$(S('cobrar'))}`),
+      h('div', { class: 'hub-dos' },
+        h('div', null, h('p', { class: 'hub-v' }, `${ent0(S('sacP'))} sacos`), h('p', { class: 'hub-et' }, 'por entregar')),
+        h('div', null, h('p', { class: 'hub-v' }, dinero$(S('cobrar'))), h('p', { class: 'hub-et' }, 'por cobrar'))),
       h('div', { class: 'progreso', role: 'img', 'aria-label': `${pct}% de los sacos entregados` }, h('i', { style: `width:${pct}%` })),
-      h('p', { class: 'sub' }, `${ent0(S('sacE'))} de ${ent0(S('sacC'))} sacos entregados (${pct}%)`),
-      h('p', { class: 'sub sem-resumen' }, ...['rojo', 'ambar', 'gris', 'verde'].filter((k) => nSem(k)).map((k) => h('span', null, punto(k), `${nSem(k)} `))),
-      h('div', { class: 'chips envuelve chicas' },
-        h('button', { type: 'button', class: 'chip', onclick: (e) => { e.stopPropagation(); ir('contratos'); } }, 'Contratos'),
-        h('button', { type: 'button', class: 'chip' + (nAl ? ' alerta-chip' : ''), onclick: (e) => { e.stopPropagation(); ir('seguimiento'); } }, nAl ? `Seguimiento · ${nAl} ${nAl === 1 ? 'alerta' : 'alertas'}` : 'Seguimiento'),
-        h('button', { type: 'button', class: 'chip', onclick: (e) => { e.stopPropagation(); ir('tablas', 'comprador'); } }, 'Por comprador'),
-        h('button', { type: 'button', class: 'chip', onclick: (e) => { e.stopPropagation(); ir('tablas', 'mes'); } }, 'Por mes')));
+      h('p', { class: 'sub sem-resumen' }, ...['rojo', 'ambar', 'gris', 'verde'].filter((k) => nSem(k)).map((k) => h('span', null, punto(k), `${nSem(k)} `)), nAl ? `· ${nAl} ${nAl === 1 ? 'alerta' : 'alertas'}` : ''),
+      h('span', { class: 'hub-flecha', 'aria-hidden': 'true' }, '›'));
   }
   pintarTabs(); pintarChips(); pintarOpciones(); pintarFiltros(); pintarEstado(); sembrar();
   return {

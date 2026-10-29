@@ -338,7 +338,7 @@ export function crearReportes(nav) {
   const bandaInicio = banda('Reportes');
   const btnRefrescar = h('button', { type: 'button', class: 'hub-menu', 'aria-label': 'Actualizar datos', onclick: actualizarTodo }, '↻');
   const btnMas = h('button', { type: 'button', class: 'hub-menu', 'aria-label': 'Más opciones', onclick: menuMas }, '⋯');
-  bandaInicio.append(btnRefrescar, btnMas);
+  bandaInicio.append(btnMas);
   const cabDetalle = cabSub('Café recibido', () => ir('inicio'));
   cabDetalle.hidden = true;
   const exp = crearVentasExp({ abrir: () => ir('exp'), volver: () => ir('inicio'), alCambiar: () => { if (pantalla === 'inicio') pintarInicio(); } });
@@ -374,30 +374,30 @@ export function crearReportes(nav) {
   function pintarInicio() {
     clear(inicio);
     if (!datos || !f.cos) {
-      inicio.append(exp.tarjetaHub(), tarjeta(h('p', { class: 'nota' }, cargando ? 'Descargando…' : datos ? 'El archivo Históricos no tiene datos.' : 'Para ver los reportes la app necesita leer el Google Sheet «Históricos». Revise que en la hoja Configuración del libro de Google Sheets esté el enlace en la fila «Históricos» y toque ↻.')), tarjAcciones);
+      inicio.append(exp.tarjetaHub(actualizarTodo), tarjeta(h('p', { class: 'nota' }, cargando ? 'Descargando…' : datos ? 'El archivo Históricos no tiene datos.' : 'Para ver los reportes la app necesita leer el Google Sheet «Históricos». Revise que en la hoja Configuración del libro de Google Sheets esté el enlace en la fila «Históricos» y toque ↻.')), tarjAcciones);
       return;
     }
     const corte = f.corte || ref();
     const rows = filtrar(datos.filas, f.cos, corte, {}, f.desde || '');
     const t = suma(rows);
     const todas = cosechasDe(datos.filas), ant = todas.filter((c) => inicioAnio(c) < inicioAnio(f.cos))[0];
-    let pill = null;
+    let pill = null, pillNeg = false;
     if (ant) {
       const dif = inicioAnio(ant) - inicioAnio(f.cos);
       const tp = suma(filtrar(datos.filas, ant, desplazar(corte, dif), {}, f.desde ? desplazar(f.desde, dif) : ''));
-      if (tp.caj > 0) { const d = t.caj / tp.caj - 1; pill = h('span', { class: 'pill' + (d < -0.0005 ? ' neg' : '') }, `${pctSigno(d)} vs ${ant}`); }
+      if (tp.caj > 0) { const d = t.caj / tp.caj - 1; pillNeg = d < -0.0005; pill = `${pctSigno(d)} vs ${ant}`; }
     }
-    const cafe = h('div', { class: 'fuente' },
-      h('div', { class: 'fuente-cab' }, h('h3', null, '☕ Café recibido'), h('span', null, 'Históricos')),
-      h('div', { class: 'chips chicas' }, h('button', { type: 'button', class: 'chip', onclick: pedirPer }, '📅 ' + textoPeriodo() + ' ▾')),
-      h('p', { class: 'sub' }, `Cosecha ${f.cos} · hasta ${fmtFechaDMA(corte)}`),
-      h('div', { class: 'cifra-fila' }, h('p', { class: 'cifra' }, `${cajF(t.caj)} cajuelas`), pill),
-      h('p', { class: 'sub' }, `${cajF(t.fan)} fanegas · ${t.n} recibos`),
-      h('p', { class: 'cifra2' }, `${colones(t.ade)} en adelantos`),
-      h('p', { class: 'sub' }, `Intereses a la fecha: ${colones(t.int)}`),
-      sparkline(serieAcumulada(rows)),
-      h('div', { class: 'chips envuelve chicas' }, ...VISTAS.map(([k, tx]) => h('button', { type: 'button', class: 'chip', onclick: () => { vista = k; pintarChips(); pintarFiltros(); pintar(); ir('detalle'); } }, tx))));
-    inicio.append(cafe, exp.tarjetaHub(), h('p', { class: 'nota actualizado' }, hace() + (errorCarga ? ' · ⚠ sin conexión con la hoja' : '')), tarjAcciones);
+    const subeBaja = pill ? h('p', { class: 'vs ' + (pillNeg ? 'baja' : 'sube') }, (pillNeg ? '▼ ' : '▲ ') + pill) : null;
+    const cafe = h('div', { class: 'fuente toque hub-fuente', role: 'button', tabindex: '0', onclick: () => ir('detalle') },
+      h('button', { type: 'button', class: 'hub-ref', 'aria-label': 'Actualizar todo', onclick: (e) => { e.stopPropagation(); actualizarTodo(); } }, '↻'),
+      h('div', { class: 'fuente-cab' }, h('h3', null, '☕ Café recibido')),
+      h('p', { class: 'hub-fecha' }, h('i'), `Cosecha ${f.cos} · hasta ${fmtFechaDMA(corte)}`),
+      h('p', { class: 'hub-act' }, '↻ ' + (hace() || 'Sin actualizar') + (errorCarga ? ' · ⚠ sin conexión' : '')),
+      h('div', { class: 'hub-dos' },
+        h('div', null, h('p', { class: 'hub-et' }, 'Cajuelas'), h('p', { class: 'hub-v' }, cajF(t.caj)), h('p', { class: 'sub' }, `${cajF(t.fan)} fanegas · ${t.n} recibos`)),
+        h('div', null, h('p', { class: 'hub-et' }, 'Adelantos'), h('p', { class: 'hub-v' }, colones(t.ade)), h('p', { class: 'sub' }, `Intereses ${colones(t.int)}`))),
+      subeBaja, h('span', { class: 'hub-flecha', 'aria-hidden': 'true' }, '›'));
+    inicio.append(cafe, exp.tarjetaHub(actualizarTodo), tarjAcciones);
   }
 
   raiz.append(bandaInicio, cabDetalle, exp.cab, inicio, detalle, exp.el);

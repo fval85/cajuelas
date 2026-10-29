@@ -393,7 +393,7 @@ export function crearRegistro(nav) {
     const libro = new Blob([xlsx('Resumen', f)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     verDocumento({
       titulo: 'Resumen general', paginas, nombrePdf: `Resumen_General_de_Cajuelas_${sello}.pdf`, ancho: true,
-      botonesAparte: [{ texto: 'Compartir Excel', archivo: { blob: libro, nombre: `Resumen_General_de_Cajuelas_${sello}.xlsx` } }], textoBoton: 'Compartir PDF',
+      botonesAparte: !puede('todos') ? [] : [{ texto: 'Compartir Excel', archivo: { blob: libro, nombre: `Resumen_General_de_Cajuelas_${sello}.xlsx` } }], textoBoton: 'Compartir PDF',
       textoCompartir: `Resumen de Registro · ${socNombre} · ${diaLegible(dia)}`,
       intro: `${socNombre} · ${personas.length} personas · Total a pagar ${fmtMoney(d.total)}${extra ? '\n' + extra : ''}`
     });

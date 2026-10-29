@@ -354,7 +354,7 @@ export function paginasTexto(lineasPorDoc) {
 export function paginasResumenRegistro(d) {
   // d: {fecha, cosecha, sociedad, fincaTitulo, fincasTxt, precios[], personas[], lineasOriginales, cantidadPorPrecio{}, totalBruto, totalDed, total, anulados[]}
   const margin = 24, pageH = 595;
-  const codeW = 38, cardW = 96, nameW = 130, dedW = 66, totalW = 84;
+  const codeW = 38, cardW = 108, nameW = 130, dedW = 66, totalW = 84;
   const nPre = Math.max(d.precios.length, 1);
   const priceW = 58;
   const pageW = Math.max(842, Math.ceil(margin * 2 + codeW + cardW + nameW + dedW + totalW + nPre * 2 * priceW));
@@ -385,7 +385,7 @@ export function paginasResumenRegistro(d) {
   d.personas.forEach((p) => {
     if (y > pageH - 65) nueva(true);
     txt(c, p.codigo.length > 7 ? p.codigo.slice(0, 7) : p.codigo, margin, y, normal);
-    txt(c, p.tarjeta || (p.provisional ? 'PROVISIONAL' : ''), xCard, y, normal);
+    txt(c, p.tarjeta ? tarjetaEnmascarada(p.tarjeta) : (p.provisional ? 'PROVISIONAL' : ''), xCard, y, normal);
     txt(c, recortar(p.name, normal, nameW - 6), xName, y, normal);
     let x = xPrices;
     d.precios.forEach((pr) => {

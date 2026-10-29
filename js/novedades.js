@@ -1,5 +1,10 @@
 // Novedades de cada versión (se muestran en Ajustes > Novedades de la versión).
 export const NOVEDADES = [
+  { v: '2.10.2', t: [
+    'Reportes: tarjetas más pequeñas y limpias. Se toca la tarjeta para entrar; el botón ↻ de la esquina actualiza todo. La fecha de la cosecha y «Actualizado hace…» se leen mejor.',
+    'El cambio contra la cosecha anterior sale en verde (sube) o rojo (baja).',
+    'Resumen de Registro: el PDF muestra el número de tarjeta enmascarado (el Excel lo trae completo). Los usuarios normales solo comparten el PDF; los administradores PDF y Excel.'
+  ] },
   { v: '2.10.1', t: [
     'Resumen de Registro (administradores): ahora se puede escoger un rango de fechas; sale un solo PDF y un solo Excel con todos los días y el total a pagar por día.',
     'Los demás usuarios siguen igual: solo su resumen del día.',
