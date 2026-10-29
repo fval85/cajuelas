@@ -35,7 +35,8 @@ export function crearBoletos(nav) {
     const s = socs.find((x) => normalizar(x.nombre) === normalizar(selSociedad));
     selSociedad = s ? s.nombre : '';
     pickOf.poner(selOficina); pickSoc.poner(selSociedad);
-    inFecha.value = fecha;
+    if (!puede('todos')) fecha = diaHoy(); // usuarios normales: siempre la fecha de hoy
+    inFecha.value = fecha; inFecha.disabled = !puede('todos');
     db.set('bol_oficina', selOficina); db.set('bol_sociedad', selSociedad);
     reconstruir();
   }
@@ -98,6 +99,8 @@ export function crearBoletos(nav) {
   }
 
   async function emitir(tipo) {
+    if ([BOL_ENTREGA, BOL_REFUERZO, BOL_CONTEO].includes(tipo) && !puede('todos')) return toast('Solo un administrador puede hacer este movimiento.');
+    if (!puede('todos') && fecha !== diaHoy()) { fecha = diaHoy(); inFecha.value = fecha; reconstruir(); }
     if (!cosechaNombre()) return toast('Primero elija la cosecha activa en Ajustes.');
     if (!selOficina) return toast('Seleccione la oficina.');
     const soc = socActual();
@@ -252,8 +255,8 @@ export function crearBoletos(nav) {
     infoSaldo,
     tarjeta(etiqueta('Cantidad de fichas'), cajaFichas),
     h('div', { class: 'acciones' },
-      boton('Entrega de fichas', 'emitir', 'c-verde', () => emitir(BOL_ENTREGA)), boton('Refuerzo', 'emitir', 'c-ambar', () => emitir(BOL_REFUERZO)),
-      boton('Saldo', 'enviar', 'c-azul', () => emitir(BOL_SALDO)), boton('Conteo general', 'enviar', 'c-ambar', () => emitir(BOL_CONTEO)),
+      boton('Entrega de fichas', 'emitir', 'c-verde', () => emitir(BOL_ENTREGA), 'todos'), boton('Refuerzo', 'emitir', 'c-ambar', () => emitir(BOL_REFUERZO), 'todos'),
+      boton('Saldo', 'enviar', 'c-azul', () => emitir(BOL_SALDO)), boton('Conteo general', 'enviar', 'c-ambar', () => emitir(BOL_CONTEO), 'todos'),
       boton('Reimprimir', 'imprimir', 'c-teal', reimprimir, 'reimprimir'), boton('Reportes', 'resumen', 'c-azul', reportes, 'resumenes'),
       boton('Fichas dañadas', 'anular', 'c-rojo', () => emitir(BOL_PERDIDA)), boton('Anular', 'anular', 'c-rojo', anular, 'anular'))
   );

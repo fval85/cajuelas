@@ -1,5 +1,9 @@
 // Novedades de cada versión (se muestran en Ajustes > Novedades de la versión).
 export const NOVEDADES = [
+  { v: '2.10.4', t: [
+    'Boletos: los usuarios normales solo ven Saldo, Fichas dañadas, Reimprimir y Reportes. Entrega de fichas, Refuerzo, Conteo general y Anular son solo de administradores.',
+    'Boletos: la fecha del movimiento queda fija en hoy para los usuarios normales; solo un administrador puede cambiarla.'
+  ] },
   { v: '2.10.3', t: [
     'Reportes: mientras se descarga, el ↻ gira, aparece una barra con porcentaje, las cifras brillan y la leyenda inferior se resalta.',
     'Reportes: ojito 👁 en la barra para ocultar los montos de las tarjetas (se recuerda en el dispositivo).',
