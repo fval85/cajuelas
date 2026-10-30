@@ -1,5 +1,10 @@
 // Novedades de cada versión (se muestran en Ajustes > Novedades de la versión).
 export const NOVEDADES = [
+  { v: '2.10.7', t: [
+    'Boletos: solo se permite UN saldo por día. Si se registran varios el mismo día, cuenta únicamente el último (ya no se suman).',
+    'El saldo pide confirmación y debe llevar todas las fichas (escriba 0 si no sobró).',
+    'Un usuario normal no puede repetir el saldo del día; si se equivocó, el administrador lo anula.'
+  ] },
   { v: '2.10.6', t: [
     'Boletos: el administrador elige a qué dispositivo entrega las fichas («Entregar a»). La entrega le aparece al encargado como «Recibido» y puede registrar su saldo sin error.',
     'La entrega y el refuerzo muestran «Entregado a:» en el comprobante.',

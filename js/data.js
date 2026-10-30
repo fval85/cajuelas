@@ -141,6 +141,12 @@ export const destinoMov = (m) => m.para || m.dispositivo;
 const vigentes = (movs, cosecha) => movs.filter((m) => !m.anulado && eq(m.cosecha, cosecha));
 
 /** Saldos por día, dispositivo, sociedad y ficha (misma lógica de la app Android). */
+// Orden cronológico de un movimiento: «dd/mm/yyyy hh:mm» + número (solo cuenta el ÚLTIMO saldo del día).
+function claveOrden(m) {
+  const r = /^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/.exec(m.emitido || '');
+  const t = r ? r[3] + r[2] + r[1] + r[4] + r[5] : '0';
+  return t + '#' + String(parseInt(String(m.numero || '').replace(/\D/g, ''), 10) || 0).padStart(8, '0');
+}
 export function filasSaldo(movs, cosecha, hasta, sociedad = null, dispositivo = null) {
   const base = vigentes(movs, cosecha).filter((m) => m.dia <= hasta && m.tipo !== BOL_CONTEO &&
     (sociedad == null || eq(m.sociedad, sociedad)) && (dispositivo == null || eq(destinoMov(m), dispositivo)));
@@ -165,7 +171,8 @@ export function filasSaldo(movs, cosecha, hasta, sociedad = null, dispositivo = 
       const ini = corriente, ent = suma(BOL_ENTREGA), ref = suma(BOL_REFUERZO), per = suma(BOL_PERDIDA);
       const esperado = ini + ent + ref - per;
       const hayConteo = saldoDias.has(dispSoc + '#' + dia);
-      const saldo = hayConteo ? suma(BOL_SALDO) : esperado;
+      const ultimo = items.filter((x) => x[0].tipo === BOL_SALDO).sort((a, b) => claveOrden(a[0]) < claveOrden(b[0]) ? 1 : -1)[0];
+      const saldo = hayConteo ? (ultimo ? ultimo[1].cantidad : 0) : esperado;
       const usadas = hayConteo ? esperado - saldo : 0;
       if (!items.length && ini === 0) continue;
       corriente = saldo;

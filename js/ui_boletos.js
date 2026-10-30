@@ -170,8 +170,8 @@ export function crearBoletos(nav) {
     if (esAdmin() && !entrega && entregaOtro()) return toast('Para este movimiento deje «Entregar a» en este dispositivo.', 5000);
     const textos = inputs.map((i) => i.value.trim());
     const todas = fichas.map((fi, i) => ({ color: fi.color, medida: fi.medida, cantidad: parseInt(textos[i], 10) || 0 }));
-    const ls = tipo === BOL_SALDO ? todas.filter((_, i) => textos[i] !== '') : todas.filter((l) => l.cantidad > 0 || tipo === BOL_CONTEO);
-    if (tipo === BOL_SALDO && !ls.length) return toast('Escriba el saldo de al menos una ficha (si no sobró ninguna, escriba 0).', 6000);
+    const ls = tipo === BOL_SALDO ? todas : todas.filter((l) => l.cantidad > 0 || tipo === BOL_CONTEO);
+    if (tipo === BOL_SALDO && textos.some((t) => t === '')) return aviso('Saldo incompleto', 'Escriba el saldo de TODAS las fichas. Si de alguna no sobró ninguna, escriba 0.');
     if (tipo !== BOL_SALDO && tipo !== BOL_CONTEO && !ls.length) return toast('Escriba la cantidad de al menos una ficha.');
     if (tipo === BOL_SALDO) {
       const disp = disponible(todosMovs(), cosechaNombre(), soc.nombre, deviceName(), fecha);
@@ -181,6 +181,15 @@ export function crearBoletos(nav) {
       });
       if (errores.length) return aviso('Revise el saldo', errores.join('\n') + '\n\nEl saldo no puede ser mayor a lo recibido (saldo inicial + entregas + refuerzos − fichas dañadas).');
     }
+    if (tipo === BOL_SALDO) {
+      const previo = boletos.items().find((x) => !x.anulado && x.tipo === BOL_SALDO && x.dia === fecha && eq2(x.sociedad, soc.nombre) && eq2(x.dispositivo, deviceName()));
+      if (previo && !esAdmin()) return aviso('Saldo ya registrado', `Hoy ya registró el saldo de «${soc.nombre}» (${previo.numero}). Solo se permite un saldo por día.\n\nSi se equivocó, pida al administrador que lo anule y luego lo vuelve a registrar.`);
+      const ok = await confirmar('Registrar saldo', previo
+        ? `Ya existe el saldo ${previo.numero} de hoy. Si registra este, el nuevo será el saldo válido del día. ¿Continuar?`
+        : `Solo puede registrar UN saldo por día. Revise bien las cantidades antes de continuar.\n\n¿Registrar el saldo de «${soc.nombre}»?`);
+      if (ok) guardar(tipo, ls, '');
+      return;
+    }
     if (tipo === BOL_PERDIDA) {
       const motivo = await pedirMotivo({ titulo: 'Fichas dañadas', etiquetaCampo: 'Motivo (obligatorio)', placeholder: 'Ej. Fichas dañadas o extraviadas', ok: 'Aceptar' });
       if (motivo) guardar(tipo, ls, motivo);
@@ -189,6 +198,7 @@ export function crearBoletos(nav) {
       if (ok) guardar(tipo, ls, '');
     } else guardar(tipo, ls, '', entrega && entregaOtro() ? selDest : '');
   }
+  const eq2 = (a, b) => normalizar(a) === normalizar(b);
   function guardar(tipo, ls, nota, para = '') {
     const m = { id: uuid(), numero: boletos.siguiente(), dia: fecha, emitido: ahoraTxt(), cosecha: cosechaNombre(), sociedad: selSociedad, oficina: selOficina,
       dispositivo: deviceName(), para, usuario: nombreUsuario(), tipo, lineas: ls, nota, anulado: false, motivoAnul: '', anuladoFecha: '' };
