@@ -1,5 +1,10 @@
 // Novedades de cada versión (se muestran en Ajustes > Novedades de la versión).
 export const NOVEDADES = [
+  { v: '2.10.8', t: [
+    'Boletos: nuevo movimiento «Devolución» (solo administradores): se registra lo que un encargado devuelve el día de cambio. Al elegir el dispositivo se ve cuántas fichas siguen «En circulación» (usadas − devueltas).',
+    'El administrador ve los movimientos de todos los dispositivos y puede anular uno de otro teléfono sin ir hasta él. El teléfono de esa persona lo marca ANULADO la próxima vez que abra la app con Internet.',
+    'El comprobante de devolución dice «Recibido de:». No requiere cambios en el Apps Script.'
+  ] },
   { v: '2.10.7', t: [
     'Boletos: solo se permite UN saldo por día. Si se registran varios el mismo día, cuenta únicamente el último (ya no se suman).',
     'El saldo pide confirmación y debe llevar todas las fichas (escriba 0 si no sobró).',

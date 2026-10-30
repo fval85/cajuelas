@@ -2,10 +2,10 @@
 import { h, clear, toast, aviso, confirmar, elegir, normalizar, fmtNum, diaHoy, diaLegible, ahoraTxt, uuid, stampCorto, dialogo } from './util.js';
 import { db, bol, bolCosecha, bolSociedad, cosechaActiva, deviceName, configurado, valorCajuelas, fichaKey } from './store.js';
 import { nombreUsuario, puede } from './users.js';
-import { boletos, payloadBoleto, tipoBoletoEtiqueta, totalFichas, totalCajuelasMov, filasSaldo, saldoInicial, disponible, inventario, claveLinea, etiquetaFicha,
-  BOL_ENTREGA, BOL_REFUERZO, BOL_SALDO, BOL_PERDIDA, BOL_CONTEO } from './data.js';
+import { boletos, payloadBoleto, tipoBoletoEtiqueta, totalFichas, totalCajuelasMov, filasSaldo, saldoInicial, disponible, inventario, claveLinea, etiquetaFicha, circulacion, claveOrden,
+  BOL_ENTREGA, BOL_REFUERZO, BOL_SALDO, BOL_PERDIDA, BOL_CONTEO, BOL_DEVOLUCION } from './data.js';
 import { cargarFuentes, paginasBoletos, paginasTablas, MODO } from './draw.js';
-import { encolar, movimientosBoletos } from './sync.js';
+import { encolar, movimientosBoletos, pendientes } from './sync.js';
 import { tarjeta, etiqueta, banda, selector, boton, verDocumento, listaBuscable, pedirMotivo, usuarioCoincide, opcionesUsuarios } from './ui.js';
 import { normalizarMedida } from './store.js';
 
@@ -29,7 +29,7 @@ export function crearBoletos(nav) {
   const pickOf = selector('Seleccione la oficina', () => elegirOficina());
   const pickSoc = selector('Seleccione la sociedad', () => elegirSociedad());
   const pickDest = selector('Seleccione el dispositivo', () => elegirDestino());
-  const etDest = etiqueta('Entregar a (dispositivo)');
+  const etDest = etiqueta('Entregar a / Recibido de (dispositivo)');
   const inFecha = h('input', { class: 'campo', type: 'date', value: fecha });
   inFecha.addEventListener('change', () => { if (inFecha.value) { fecha = inFecha.value; reconstruir(); } });
   const infoSaldo = h('div', { class: 'resumen' });
@@ -60,11 +60,33 @@ export function crearBoletos(nav) {
     if (!configurado() || !cosechaNombre()) return;
     if (!forzar && Date.now() - ultimaBajada < 20000) return;
     ultimaBajada = Date.now();
+    // Foto previa a la descarga: solo se juzgan los movimientos que ya estaban enviados antes de pedir la lista a la hoja.
+    const colaAntes = new Set(pendientes().map((q) => q.reportId));
+    const idsAntes = new Set(boletos.items().map((m) => m.id));
     const r = await movimientosBoletos(cosechaNombre(), diaHoy(), normalizarMedida);
     if (r.error) return;
     const yo = normalizar(miDisp());
-    const mias = r.lista.filter((m) => m.para && normalizar(m.para) === yo && normalizar(m.dispositivo) !== yo);
-    db.set('bol_remotos', mias);
+    const anuladasAqui = new Set(db.get('bol_anul_rem', []));
+    const clave = (m) => normalizar(m.numero) + '|' + normalizar(m.dispositivo) + '|' + m.dia;
+    // Administrador: baja los movimientos de TODOS los dispositivos (para ver las fichas en circulación y poder anular a distancia).
+    // Usuario normal: solo lo que el administrador le entregó.
+    const otros = r.lista.filter((m) => normalizar(m.dispositivo) !== yo && !anuladasAqui.has(clave(m)) &&
+      (esAdmin() || (m.para && normalizar(m.para) === yo)));
+    db.set('bol_remotos', otros);
+    // Si el administrador anuló desde otro teléfono un movimiento de este dispositivo, desaparece de la hoja: aquí se marca ANULADO.
+    if (r.lista.length) {
+      const enHoja = new Set(r.lista.map(clave));
+      const hoy = diaHoy();
+      const locales = boletos.items();
+      let cambio = false;
+      const nuevos = locales.map((m) => {
+        if (m.anulado || normalizar(m.dispositivo) !== yo || normalizar(m.cosecha) !== normalizar(cosechaNombre()) || m.dia > hoy) return m;
+        if (!idsAntes.has(m.id) || colaAntes.has('BOL_' + m.id) || enHoja.has(clave(m))) return m;
+        cambio = true;
+        return { ...m, anulado: true, motivoAnul: 'Anulado por el administrador', anuladoFecha: ahoraTxt(), anuladoPor: 'Administrador' };
+      });
+      if (cambio) boletos.guardar(nuevos);
+    }
     firma = ''; reconstruir();
   }
 
@@ -99,7 +121,8 @@ export function crearBoletos(nav) {
     const recibido = {};
     if (soc && !otro) todosMovs().filter((m) => !m.anulado && m.dia === fecha && normalizar(m.cosecha) === normalizar(cosechaNombre()) && normalizar(m.sociedad) === normalizar(soc.nombre) && m.para && normalizar(m.para) === normalizar(miDisp()) && normalizar(m.dispositivo) !== normalizar(miDisp()) && (m.tipo === BOL_ENTREGA || m.tipo === BOL_REFUERZO))
       .forEach((m) => m.lineas.forEach((l) => { const k = claveLinea(l); recibido[k] = (recibido[k] || 0) + l.cantidad; }));
-    const f = (soc ? soc.nombre : '') + '#' + fichas.map((x) => fichaKey(x.color, x.medida)).join(',') + '#' + fecha + '#' + selDest + '#' + JSON.stringify(saldo) + JSON.stringify(recibido);
+    const circ = soc && otro ? circulacion(todosMovs(), cosechaNombre(), soc.nombre, selDest) : {};
+    const f = (soc ? soc.nombre : '') + '#' + fichas.map((x) => fichaKey(x.color, x.medida)).join(',') + '#' + fecha + '#' + selDest + '#' + JSON.stringify(saldo) + JSON.stringify(recibido) + JSON.stringify(circ);
     if (f === firma) return;
     firma = f;
     const previo = db.get('bol_draft', { sociedad: '', vals: {} });
@@ -113,7 +136,7 @@ export function crearBoletos(nav) {
       return;
     }
     let totalIni = 0, cajIni = 0, totalRec = 0;
-    cajaFichas.append(h('p', { class: 'nota' }, otro ? `Fichas de ${soc.nombre} para ${selDest}` : `Fichas de ${soc.nombre}`));
+    cajaFichas.append(h('p', { class: 'nota' }, otro ? `Fichas de ${soc.nombre} · ${selDest}` : `Fichas de ${soc.nombre}`));
     fichas.forEach((fi) => {
       const key = fichaKey(fi.color, fi.medida);
       const ini = saldo[key] || 0;
@@ -125,9 +148,9 @@ export function crearBoletos(nav) {
       inp.addEventListener('input', () => { inp.value = inp.value.replace(/\D/g, ''); guardarBorrador(); });
       inp.addEventListener('focus', () => inp.select());
       inputs.push(inp);
-      cajaFichas.append(h('div', { class: 'ficha' }, h('span', { class: 'ficha-nombre' }, `${fi.color} · ${fi.medida}`.toUpperCase()), h('span', { class: 'ficha-ini' }, otro ? '' : rec ? h('span', null, `Inicial ${ini} · `, h('b', { class: 'ficha-rec' }, `Recibido ${rec}`)) : `Inicial ${ini}`), inp));
+      cajaFichas.append(h('div', { class: 'ficha' }, h('span', { class: 'ficha-nombre' }, `${fi.color} · ${fi.medida}`.toUpperCase()), h('span', { class: 'ficha-ini' }, otro ? `En circulación ${(circ[key] || { pendiente: 0 }).pendiente}` : rec ? h('span', null, `Inicial ${ini} · `, h('b', { class: 'ficha-rec' }, `Recibido ${rec}`)) : `Inicial ${ini}`), inp));
     });
-    infoSaldo.textContent = otro ? `Entrega para ${selDest}` : `Saldo inicial de ${diaLegible(fecha)}: ${totalIni} fichas · ${fmtNum(cajIni, 2)} cajuelas`;
+    infoSaldo.textContent = otro ? `Entrega o devolución con ${selDest}` : `Saldo inicial de ${diaLegible(fecha)}: ${totalIni} fichas · ${fmtNum(cajIni, 2)} cajuelas`;
     if (!otro && totalRec) infoSaldo.append(h('br'), h('b', null, `Recibido hoy del administrador: ${totalRec} fichas`));
   }
 
@@ -158,7 +181,7 @@ export function crearBoletos(nav) {
   }
 
   async function emitir(tipo) {
-    if ([BOL_ENTREGA, BOL_REFUERZO, BOL_CONTEO].includes(tipo) && !puede('todos')) return toast('Solo un administrador puede hacer este movimiento.');
+    if ([BOL_ENTREGA, BOL_REFUERZO, BOL_CONTEO, BOL_DEVOLUCION].includes(tipo) && !puede('todos')) return toast('Solo un administrador puede hacer este movimiento.');
     if (!puede('todos') && fecha !== diaHoy()) { fecha = diaHoy(); inFecha.value = fecha; reconstruir(); }
     if (!cosechaNombre()) return toast('Primero elija la cosecha activa en Ajustes.');
     if (!selOficina) return toast('Seleccione la oficina.');
@@ -166,8 +189,10 @@ export function crearBoletos(nav) {
     const fichas = fichasForm();
     if (!soc || !fichas.length) return toast('Seleccione una sociedad con fichas.');
     const entrega = tipo === BOL_ENTREGA || tipo === BOL_REFUERZO;
+    const devol = tipo === BOL_DEVOLUCION;
+    if (devol && !entregaOtro()) return toast('Seleccione el dispositivo que le devuelve las fichas («Recibido de»).', 5000);
     if (esAdmin() && entrega && !selDest) return toast('Seleccione a qué dispositivo entrega las fichas («Entregar a»).', 5000);
-    if (esAdmin() && !entrega && entregaOtro()) return toast('Para este movimiento deje «Entregar a» en este dispositivo.', 5000);
+    if (esAdmin() && !entrega && !devol && entregaOtro()) return toast('Para este movimiento deje «Entregar a» en este dispositivo.', 5000);
     const textos = inputs.map((i) => i.value.trim());
     const todas = fichas.map((fi, i) => ({ color: fi.color, medida: fi.medida, cantidad: parseInt(textos[i], 10) || 0 }));
     const ls = tipo === BOL_SALDO ? todas : todas.filter((l) => l.cantidad > 0 || tipo === BOL_CONTEO);
@@ -188,6 +213,14 @@ export function crearBoletos(nav) {
         ? `Ya existe el saldo ${previo.numero} de hoy. Si registra este, el nuevo será el saldo válido del día. ¿Continuar?`
         : `Solo puede registrar UN saldo por día. Revise bien las cantidades antes de continuar.\n\n¿Registrar el saldo de «${soc.nombre}»?`);
       if (ok) guardar(tipo, ls, '');
+      return;
+    }
+    if (devol) {
+      const circ = circulacion(todosMovs(), cosechaNombre(), soc.nombre, selDest);
+      const sobran = ls.filter((l) => l.cantidad > ((circ[claveLinea(l)] || {}).pendiente || 0)).map((l) => `${etiquetaFicha(l)}: recibe ${l.cantidad}, en circulación ${(circ[claveLinea(l)] || {}).pendiente || 0}`);
+      const ok = await confirmar('Devolución de fichas', `Recibe de «${selDest}» (${soc.nombre}): ${ls.reduce((t, l) => t + l.cantidad, 0)} fichas.` +
+        (sobran.length ? `\n\nOjo, es más de lo que figura en circulación:\n${sobran.join('\n')}\n(puede faltar un saldo de ese dispositivo)` : '') + '\n\n¿Registrar la devolución?');
+      if (ok) guardar(tipo, ls, '', selDest);
       return;
     }
     if (tipo === BOL_PERDIDA) {
@@ -225,19 +258,35 @@ export function crearBoletos(nav) {
     if (m) mostrar([{ m, modo: m.anulado ? MODO.NORMAL : MODO.REIMPRESION }], `Boletos ${m.numero}`, `boletos_${m.numero}.pdf`);
   }
   async function anular() {
-    const activos = boletos.items().filter((x) => !x.anulado).reverse().slice(0, 60);
+    const yo = normalizar(miDisp());
+    const locales = boletos.items().filter((x) => !x.anulado);
+    // El administrador también ve (y puede anular) los movimientos de los demás dispositivos que bajó de Google Sheets.
+    const claveL = (x) => normalizar(x.numero) + '|' + normalizar(x.dispositivo) + '|' + x.dia;
+    const propias = new Set(locales.map(claveL));
+    const ajenos = esAdmin() ? db.get('bol_remotos', []).filter((x) => normalizar(x.dispositivo) !== yo && !propias.has(claveL(x))) : [];
+    const activos = locales.concat(ajenos).sort((a, b) => (claveOrden(a) < claveOrden(b) ? 1 : -1)).slice(0, 80);
     if (!activos.length) return toast('No hay movimientos para anular.');
-    const m = await elegir('¿Qué movimiento desea anular?', activos.map((x) => ({ etiqueta: resumenMov(x) + ' · ' + diaLegible(x.dia), valor: x })), { buscar: false });
+    const etiq = (x) => resumenMov(x) + ' · ' + diaLegible(x.dia) + (normalizar(x.dispositivo) !== yo ? ' · de ' + x.dispositivo : '');
+    const m = await elegir('¿Qué movimiento desea anular?', activos.map((x) => ({ etiqueta: etiq(x), valor: x })), { buscar: false });
     if (!m) return;
+    const ajeno = normalizar(m.dispositivo) !== yo;
     const motivo = await pedirMotivo({
       titulo: 'Anular movimiento', placeholder: 'Ej. Se digitó una cantidad equivocada',
-      detalle: `${resumenMov(m)}\n${diaLegible(m.dia)} · ${totalFichas(m)} fichas (${fmtNum(totalCajuelasMov(m), 2)} cajuelas)`,
-      aviso: 'El movimiento quedará ANULADO y los saldos se recalculan. Esta acción no se puede deshacer.'
+      detalle: `${resumenMov(m)}${ajeno ? '\nDispositivo: ' + m.dispositivo : ''}\n${diaLegible(m.dia)} · ${totalFichas(m)} fichas (${fmtNum(totalCajuelasMov(m), 2)} cajuelas)`,
+      aviso: ajeno ? 'El movimiento quedará ANULADO en Google Sheets. El teléfono de esa persona lo marca anulado la próxima vez que abra la app con Internet. No se puede deshacer.'
+        : 'El movimiento quedará ANULADO y los saldos se recalculan. Esta acción no se puede deshacer.'
     });
     if (!motivo) return;
     const sello = ahoraTxt();
-    const a = boletos.anular(m.id, motivo, sello);
-    if (!a) return;
+    let a;
+    if (ajeno) {
+      a = { ...m, anulado: true, motivoAnul: motivo, anuladoFecha: sello, anuladoPor: nombreUsuario() };
+      const claves = new Set(db.get('bol_anul_rem', [])); claves.add(claveL(m)); db.set('bol_anul_rem', [...claves]);
+      db.set('bol_remotos', db.get('bol_remotos', []).filter((x) => claveL(x) !== claveL(m)));
+    } else {
+      a = boletos.anular(m.id, motivo, sello);
+      if (!a) return;
+    }
     encolar(payloadBoleto(a, 'ANUL_' + stampCorto() + '_' + m.numero, sello, 'ANULACIÓN', motivo, true));
     nav.pendientes();
     firma = ''; reconstruir();
@@ -333,7 +382,7 @@ export function crearBoletos(nav) {
     grupoBotones('Consultas',
       boton('Reimprimir', 'imprimir', 'c-teal', reimprimir, 'reimprimir'), boton('Reportes', 'resumen', 'c-azul', reportes, 'resumenes')),
     grupoBotones('Solo administración',
-      boton('Conteo general', 'enviar', 'c-ambar', () => emitir(BOL_CONTEO), 'todos'), boton('Anular', 'anular', 'c-rojo', anular, 'anular'))
+      boton('Devolución', 'emitir', 'c-teal', () => emitir(BOL_DEVOLUCION), 'todos'), boton('Conteo general', 'enviar', 'c-ambar', () => emitir(BOL_CONTEO), 'todos'), boton('Anular', 'anular', 'c-rojo', anular, 'anular'))
   );
   refrescar();
   return { el: raiz, refrescar };

@@ -213,7 +213,7 @@ function dibujarBoleto(c, m, modo) {
   blank();
   if (m.usuario) envolver(`Usuario: ${m.usuario}`, small, cw).forEach((t) => ln(t, small));
   if (modo === MODO.ANULACION && m.anuladoPor) envolver(`Anuló: ${m.anuladoPor}`, small, cw).forEach((t) => ln(t, small));
-  if (m.para && m.para !== m.dispositivo) envolver(`Entregado a: ${m.para}`, bold, cw).forEach((t) => ln(t, bold));
+  if (m.para && m.para !== m.dispositivo) envolver(`${m.tipo === 'DEVOLUCIÓN' ? 'Recibido de' : 'Entregado a'}: ${m.para}`, bold, cw).forEach((t) => ln(t, bold));
   envolver(`Dispositivo: ${m.dispositivo}`, small, cw).forEach((t) => ln(t, small));
   y += MARG;
   return Math.ceil(y);

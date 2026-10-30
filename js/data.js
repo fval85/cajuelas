@@ -102,9 +102,9 @@ export function payloadRecibo(r, reportId, fechaHora, estado, motivo, negativo) 
 }
 
 // ====================== BOLETOS ======================
-export const BOL_ENTREGA = 'ENTREGA', BOL_REFUERZO = 'REFUERZO', BOL_SALDO = 'SALDO', BOL_PERDIDA = 'PÉRDIDA', BOL_CONTEO = 'CONTEO';
+export const BOL_ENTREGA = 'ENTREGA', BOL_REFUERZO = 'REFUERZO', BOL_SALDO = 'SALDO', BOL_PERDIDA = 'PÉRDIDA', BOL_CONTEO = 'CONTEO', BOL_DEVOLUCION = 'DEVOLUCIÓN';
 export function tipoBoletoEtiqueta(t) {
-  return ({ [BOL_ENTREGA]: 'ENTREGA DE BOLETOS', [BOL_REFUERZO]: 'REFUERZO DE BOLETOS', [BOL_SALDO]: 'SALDO DE BOLETOS', [BOL_PERDIDA]: 'FICHAS DAÑADAS', [BOL_CONTEO]: 'CONTEO GENERAL' })[t] || t;
+  return ({ [BOL_ENTREGA]: 'ENTREGA DE BOLETOS', [BOL_REFUERZO]: 'REFUERZO DE BOLETOS', [BOL_SALDO]: 'SALDO DE BOLETOS', [BOL_PERDIDA]: 'FICHAS DAÑADAS', [BOL_CONTEO]: 'CONTEO GENERAL', [BOL_DEVOLUCION]: 'DEVOLUCIÓN DE FICHAS' })[t] || t;
 }
 export const etiquetaFicha = (l) => `${l.color} · ${l.medida}`;
 export const claveLinea = (l) => fichaKey(l.color, l.medida);
@@ -142,13 +142,13 @@ const vigentes = (movs, cosecha) => movs.filter((m) => !m.anulado && eq(m.cosech
 
 /** Saldos por día, dispositivo, sociedad y ficha (misma lógica de la app Android). */
 // Orden cronológico de un movimiento: «dd/mm/yyyy hh:mm» + número (solo cuenta el ÚLTIMO saldo del día).
-function claveOrden(m) {
+export function claveOrden(m) {
   const r = /^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/.exec(m.emitido || '');
   const t = r ? r[3] + r[2] + r[1] + r[4] + r[5] : '0';
   return t + '#' + String(parseInt(String(m.numero || '').replace(/\D/g, ''), 10) || 0).padStart(8, '0');
 }
 export function filasSaldo(movs, cosecha, hasta, sociedad = null, dispositivo = null) {
-  const base = vigentes(movs, cosecha).filter((m) => m.dia <= hasta && m.tipo !== BOL_CONTEO &&
+  const base = vigentes(movs, cosecha).filter((m) => m.dia <= hasta && m.tipo !== BOL_CONTEO && m.tipo !== BOL_DEVOLUCION &&
     (sociedad == null || eq(m.sociedad, sociedad)) && (dispositivo == null || eq(destinoMov(m), dispositivo)));
   const grupos = new Map();
   base.forEach((m) => m.lineas.forEach((l) => {
@@ -197,6 +197,19 @@ export function disponible(movs, cosecha, sociedad, dispositivo, dia) {
     if (signo) m.lineas.forEach((l) => { const k = claveLinea(l); out[k] = (out[k] || 0) + signo * l.cantidad; });
   });
   return out;
+}
+/**
+ * Fichas en circulación de un dispositivo: lo que ya usó (pagó a los recolectores, según sus saldos) menos lo que
+ * el administrador ya recibió de vuelta (DEVOLUCIÓN). Lo que queda son fichas por devolver o perdidas.
+ */
+export function circulacion(movs, cosecha, sociedad, dispositivo) {
+  const o = {};
+  const celda = (k) => (o[k] || (o[k] = { usadas: 0, devueltas: 0, pendiente: 0 }));
+  filasSaldo(movs, cosecha, '9999-12-31', sociedad, dispositivo).filter((f) => f.conConteo).forEach((f) => { celda(fichaKey(f.color, f.medida)).usadas += f.usadas; });
+  vigentes(movs, cosecha).filter((m) => m.tipo === BOL_DEVOLUCION && eq(m.sociedad, sociedad) && eq(destinoMov(m), dispositivo))
+    .forEach((m) => m.lineas.forEach((l) => { celda(claveLinea(l)).devueltas += l.cantidad; }));
+  Object.values(o).forEach((c) => { c.pendiente = c.usadas - c.devueltas; });
+  return o;
 }
 export function inventario(movs, cosecha, sociedad, hasta) {
   const vig = vigentes(movs, cosecha).filter((m) => eq(m.sociedad, sociedad.nombre) && m.dia <= hasta);
