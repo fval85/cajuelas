@@ -1,5 +1,8 @@
 // Novedades de cada versión (se muestran en Ajustes > Novedades de la versión).
 export const NOVEDADES = [
+  { v: '2.10.9', t: [
+    'Diario, reporte «Simple»: la columna «Flotes» ahora muestra solo los flotes maduros (igual que el tiquete y la planilla). Antes sumaba maduros + secos + broca y repetía los secos y la broca, que ya tienen su propia columna. El total del día también se corrige.'
+  ] },
   { v: '2.10.8', t: [
     'Boletos: nuevo movimiento «Devolución» (solo administradores): se registra lo que un encargado devuelve el día de cambio. Al elegir el dispositivo se ve cuántas fichas siguen «En circulación» (usadas − devueltas).',
     'El administrador ve los movimientos de todos los dispositivos y puede anular uno de otro teléfono sin ir hasta él. El teléfono de esa persona lo marca ANULADO la próxima vez que abra la app con Internet.',

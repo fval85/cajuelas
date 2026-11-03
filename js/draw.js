@@ -527,7 +527,7 @@ export function paginasResumenSimple(recibos, dia, hasta = dia) {
   const text = P(8.2, false, false), bold = P(8.2, true, false), head = P(7.6, true, false, '#fff');
   const filas = recibos.map((r) => {
     const k = rc(r);
-    return [diaLegible(r.dia), r.sociedad, r.finca, r.lote, fmtNum(r.muestraTotal, 2), fmtNum(r.verdes, 2), fmtNum(k.totalFlotes, 2), fmtNum(r.secos, 2), fmtNum(r.broca, 2), fmtNum(k.recibidoCajuelas, 2)];
+    return [diaLegible(r.dia), r.sociedad, r.finca, r.lote, fmtNum(r.muestraTotal, 2), fmtNum(r.verdes, 2), fmtNum(r.maduros, 2), fmtNum(r.secos, 2), fmtNum(r.broca, 2), fmtNum(k.recibidoCajuelas, 2)];
   });
   const total = totalesRecibos(recibos);
   const paginas = []; let pg, c, y;
@@ -561,7 +561,7 @@ export function paginasResumenSimple(recibos, dia, hasta = dia) {
   if (y + RH * 5 > PH - MG) nueva(false);
   rectLleno(c, MG, y + 4, W, RH, '#D7E6DB');
   { const et = rango ? 'TOTAL DEL PERÍODO' : 'TOTAL DEL DÍA'; txt(c, et, x[0] + (x[4] - x[0] - medir(bold, et)) / 2, y + 4 + RH - 5, bold); }
-  celdas(['', '', '', '', fmtNum(total.muestra, 2), fmtNum(total.verdes, 2), fmtNum(total.flotes, 2), fmtNum(total.secos, 2), fmtNum(total.broca, 2), fmtNum(total.cajuelas, 2)], bold, y + 4);
+  celdas(['', '', '', '', fmtNum(total.muestra, 2), fmtNum(total.verdes, 2), fmtNum(total.maduros, 2), fmtNum(total.secos, 2), fmtNum(total.broca, 2), fmtNum(total.cajuelas, 2)], bold, y + 4);
   y += 4 + RH + 26;
   const g = P(12, true, false);
   [['Total Cajuelas =', total.cajuelas], ['Total Fanegas =', total.fanegas]].forEach(([e, v]) => {
