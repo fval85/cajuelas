@@ -1,5 +1,11 @@
 // Novedades de cada versión (se muestran en Ajustes > Novedades de la versión).
 export const NOVEDADES = [
+  { v: '2.11.0', t: [
+    'Nueva pestaña «Planillas» (solo con el permiso «planillas»): el encargado registra tarea, horas y extras empleado por empleado, cada uno queda «Listo», y el día solo se envía cuando están todos (si falta alguien avisa quién). Antes de enviar pide confirmación y el día queda bloqueado; solo un administrador puede anularlo. Incluye el resumen semanal con el formato de la planilla actual y, para administradores, los montos de la semana.',
+    'Barra inferior por perfil: cada usuario ve solo sus módulos (hasta 4 y el resto en «Más»). Ajustes > «Mi barra de abajo» permite elegir y ordenar; el administrador puede definir y bloquear la barra de cada usuario en la hoja Usuarios (columnas «Barra» y «Bloquear barra»).',
+    'La app ya no se amplía con los dedos (evita zooms accidentales); los reportes y PDF tienen el botón «Ampliar». El tamaño del texto sigue en Ajustes > Apariencia.',
+    'Recordatorio: a partir de las 7:00 pm aparece un aviso si falta el saldo de boletos del día. Los administradores ven en Ajustes un panel «Pendientes» (envíos, actualización disponible, saldos sin registrar, catálogo viejo, respaldo).'
+  ] },
   { v: '2.10.9', t: [
     'Diario, reporte «Simple»: la columna «Flotes» ahora muestra solo los flotes maduros (igual que el tiquete y la planilla). Antes sumaba maduros + secos + broca y repetía los secos y la broca, que ya tienen su propia columna. El total del día también se corrige.'
   ] },

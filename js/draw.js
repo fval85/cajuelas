@@ -838,3 +838,77 @@ export function paginasReporte(rep, pie = '') {
   }
   return paginas;
 }
+
+
+// ====================== Planilla semanal (machote «Planilla Digital») ======================
+/** d: { sociedad, finca, encargado, desde, hasta, dias:[7 fechas vie→jue], empleados:[{num, nombre, porDia:{iso:{tarea,horas,tareaExtra,extras}}}], tareas:[texto] }.
+ *  Columnas en el orden Lunes→Domingo con la fecha de la semana viernes-jueves. Cada empleado: fila de horas normales y fila celeste de horas extra. */
+export function paginasPlanilla(d) {
+  const W = 842, H = 595, MG = 20, RH = 14;
+  const orden = [3, 4, 5, 6, 0, 1, 2].map((i) => d.dias[i]);
+  const nomDia = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+  const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  const dm = (iso) => `${Number(iso.slice(8, 10))}-${meses[Number(iso.slice(5, 7)) - 1]}`;
+  const cN = 16, cE = 36, cNom = 170, cT = 24, cH = 26, cX = 34, cO = 34;
+  const ancho = cN + cE + cNom + 7 * (cT + cH) + cX + cO;
+  const x0 = Math.max(MG, (W - ancho) / 2);
+  const px = { n: x0, e: x0 + cN, nom: x0 + cN + cE, d0: x0 + cN + cE + cNom };
+  const xDia = (i) => px.d0 + i * (cT + cH);
+  const xX = px.d0 + 7 * (cT + cH), xO = xX + cX, xFin = xO + cO;
+  const normal = P(7.2, false, false), neg = P(7.2, true, false), rojo = P(7.6, true, false, '#C00000'), peq = P(6.2, false, false, '#000');
+  const naranja = P(7.6, true, false, '#E36C09'), verde = P(6.8, true, false, '#1E7B34');
+  const paginas = [];
+  const centrado = (c, t, x, w, y, p) => { const tt = recortar(t, p, w - 2); txt(c, tt, x + (w - medir(p, tt)) / 2, y, p); };
+  const celda = (c, x, y, w, h, fondo) => { if (fondo) rectLleno(c, x, y, w, h, fondo); linea(c, x, y, x + w, y, 0.5); linea(c, x, y + h, x + w, y + h, 0.5); linea(c, x, y, x, y + h, 0.5); linea(c, x + w, y, x + w, y + h, 0.5); };
+  const porPag = Math.floor((H - 2 * MG - 72 - 34) / (2 * RH));
+  const emps = d.empleados.length ? d.empleados : [];
+  const nPag = Math.max(1, Math.ceil(emps.length / porPag));
+  for (let pg = 0; pg < nPag; pg++) {
+    const pagina = crearPagina(W, H, 2.2); const c = pagina.c; paginas.push({ ...pagina, ancho: W, alto: H });
+    let y = MG;
+    txt(c, d.sociedad, x0, y + 9, P(10, true, false));
+    txt(c, d.finca + (d.encargado ? ' · ' + d.encargado : ''), x0, y + 21, P(8, false, false));
+    txt(c, `Del ${d.desde.slice(8, 10)}/${d.desde.slice(5, 7)}/${d.desde.slice(0, 4)} al ${d.hasta.slice(8, 10)}/${d.hasta.slice(5, 7)}/${d.hasta.slice(0, 4)}`, x0, y + 33, P(9, true, false, '#C00000'));
+    const tit = 'Planilla Digital'; const pt = P(12, true, false);
+    txt(c, tit, xFin - medir(pt, tit), y + 14, pt);
+    if (nPag > 1) txt(c, `Página ${pg + 1} de ${nPag}`, xFin - medir(peq, `Página ${pg + 1} de ${nPag}`), y + 26, peq);
+    y += 42;
+    // Encabezado: días y fechas
+    celda(c, px.n, y, cN, RH * 2 + 12, null); celda(c, px.e, y, cE, RH * 2 + 12, null); celda(c, px.nom, y, cNom, RH * 2 + 12, null);
+    centrado(c, 'No. Empl.', px.e, cE, y + 18, peq); centrado(c, 'NOMBRE', px.nom, cNom, y + 18, neg);
+    nomDia.forEach((n, i) => {
+      const x = xDia(i);
+      celda(c, x, y, cT + cH, RH, i === 6 ? '#F79646' : null); centrado(c, n, x, cT + cH, y + 10, i === 6 ? P(7.4, true, false, '#fff') : neg);
+      celda(c, x, y + RH, cT + cH, 12, null); centrado(c, dm(orden[i]), x, cT + cH, y + RH + 9, verde);
+      celda(c, x, y + RH + 12, cT, RH, null); centrado(c, 'TAREA', x, cT, y + RH + 12 + 10, P(5.6, true, false, '#C00000'));
+      celda(c, x + cT, y + RH + 12, cH, RH, null); centrado(c, 'HORAS', x + cT, cH, y + RH + 12 + 10, P(4.6, true, false));
+    });
+    celda(c, xX, y, cX, RH * 2 + 12, null); centrado(c, 'Extra', xX, cX, y + 18, naranja);
+    celda(c, xO, y, cO, RH * 2 + 12, null); centrado(c, 'Ordina', xO, cO, y + 18, neg);
+    y += RH * 2 + 12;
+    emps.slice(pg * porPag, (pg + 1) * porPag).forEach((e, k) => {
+      const nro = pg * porPag + k + 1;
+      let sumN = 0, sumE = 0;
+      celda(c, px.n, y, cN, RH * 2, null); centrado(c, String(nro), px.n, cN, y + RH + 3, rojo);
+      celda(c, px.e, y, cE, RH * 2, null); centrado(c, String(e.num), px.e, cE, y + RH + 3, normal);
+      celda(c, px.nom, y, cNom, RH * 2, null); txt(c, recortar(e.nombre, normal, cNom - 4), px.nom + 2, y + RH + 3, normal);
+      orden.forEach((iso, i) => {
+        const v = (e.porDia || {})[iso] || {};
+        const x = xDia(i);
+        celda(c, x, y, cT, RH, null); celda(c, x + cT, y, cH, RH, null);
+        celda(c, x, y + RH, cT, RH, '#CCFFFF'); celda(c, x + cT, y + RH, cH, RH, '#CCFFFF');
+        if (v.horas > 0) { centrado(c, v.tarea || '', x, cT, y + 10, rojo); centrado(c, fmtCant(v.horas), x + cT, cH, y + 10, normal); sumN += v.horas; }
+        if (v.extras > 0) { centrado(c, v.tareaExtra || '', x, cT, y + RH + 10, rojo); centrado(c, fmtCant(v.extras), x + cT, cH, y + RH + 10, normal); sumE += v.extras; }
+      });
+      celda(c, xX, y, cX, RH * 2, '#FDE9D9'); if (sumE) centrado(c, fmtCant(sumE), xX, cX, y + RH + 3, naranja);
+      celda(c, xO, y, cO, RH * 2, null); if (sumN) centrado(c, fmtCant(sumN), xO, cO, y + RH + 3, neg);
+      y += RH * 2;
+    });
+    if (pg === nPag - 1 && d.tareas && d.tareas.length) {
+      y += 10;
+      const ls = envolver('TAREAS: ' + d.tareas.join('   '), peq, xFin - x0);
+      ls.slice(0, 5).forEach((l) => { txt(c, l, x0, y + 6, peq); y += 8; });
+    }
+  }
+  return paginas;
+}

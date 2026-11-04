@@ -293,3 +293,18 @@ ul.novedades li { margin: 0 0 8px; line-height: 1.35; }
 .grupo-botones:has(> .fila-botones[hidden]) { display: none; }
 .selector[hidden], .etiqueta[hidden] { display: none; }
 .ficha-rec { color: var(--verde); }
+
+button.interruptor { border: 0; padding: 0; cursor: pointer; }
+@media (prefers-color-scheme: dark) {
+  .mb-fila { background-color: var(--tarjeta); }
+  .mas-item.on { background: rgba(34, 197, 94, .18); }
+  .mb-fila.off { color: #6b7280; }
+}
+@media (prefers-color-scheme: dark) {
+  .pl-fila, .pl-pie { background-color: var(--tarjeta); }
+  .pl-tx small { color: #9ca3af; }
+  .pl-bloq { background: #1f2937; border-color: #374151; color: #d1d5db; }
+  .pl-barra { background: #374151; }
+  .pl-faltan { background: #422006; color: #fcd34d; }
+  .pl-chip.ok { background: #14532d; color: #dcfce7; } .pl-chip.pend { background: #422006; color: #fcd34d; }
+}

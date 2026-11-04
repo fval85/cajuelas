@@ -1,4 +1,4 @@
-import { h, VERSION, toast } from './util.js';
+import { h, VERSION, toast, clear, dialogo } from './util.js';
 import { cargarCatalogo, cargarBoletosCat, pedirAlmacenamientoPersistente, configurado, limpiarPantallas, modoPruebas } from './store.js';
 import { cargarFuentes } from './draw.js';
 import { cuantosPendientes, enviarPendientes, alCambiarPendientes, iniciarReintentos } from './sync.js';
@@ -6,6 +6,9 @@ import { crearRegistro } from './ui_registro.js';
 import { crearDiario } from './ui_diario.js';
 import { crearBoletos } from './ui_boletos.js';
 import { crearReportes } from './ui_reportes.js';
+import { crearPlanillas } from './ui_planillas.js';
+import { MODULOS, modulo, permitidos, distribucion } from './nav_barra.js';
+import { saldoPendienteHoy, HORA_SALDO } from './avisos.js';
 import { crearAjustes, actualizarCatalogo } from './ui_ajustes.js';
 import { icono } from './ui.js';
 import { aplicarApariencia, tabInicio } from './apariencia.js';
@@ -16,10 +19,10 @@ let conservar = false;
 try { conservar = sessionStorage.getItem('cajuelas.conservar') === '1'; sessionStorage.removeItem('cajuelas.conservar'); } catch { /* nada */ }
 if (!conservar) limpiarPantallas();
 // Al arrastrar hacia abajo para actualizar (recarga de la página) se queda en la misma pestaña.
-let tabRecarga = -1;
+let tabRecarga = null;
 try {
   const nav0 = performance.getEntriesByType('navigation')[0];
-  if (nav0 && nav0.type === 'reload') { const g = parseInt(localStorage.getItem('cajuelas.tab'), 10); if (g >= 0 && g <= 4) tabRecarga = g; }
+  if (nav0 && nav0.type === 'reload') { const g = localStorage.getItem('cajuelas.tab'); if (g && modulo(g)) tabRecarga = g; }
 } catch { /* nada */ }
 const LIMPIAR_TRAS_MIN = 5; // minutos fuera de la app para empezar de cero al volver
 let salioA = 0;
@@ -34,37 +37,60 @@ pedirAlmacenamientoPersistente();
 aplicarApariencia(); window.addEventListener('load', aplicarApariencia);
 const app = document.getElementById('app');
 const barra = h('div', { id: 'barra-estado', hidden: true });
+const barraSaldo = h('div', { id: 'barra-saldo', hidden: true, role: 'button' }, `🎟 Ya pasaron las ${HORA_SALDO - 12}:00 pm y falta registrar el saldo de boletos de hoy. Toque para hacerlo.`);
+barraSaldo.addEventListener('click', () => { barraSaldo.hidden = true; ir('boletos'); });
 const contenido = h('main', { id: 'contenido' });
 const tabs = h('nav', { id: 'tabs', role: 'tablist' });
-app.append(barra, contenido, tabs);
+app.append(barra, barraSaldo, contenido, tabs);
 if (modoPruebas) app.prepend(h('div', { id: 'banner-pruebas' }, '🧪 MODO DE PRUEBAS · los datos no son reales'));
 
+// Sin zoom con los dedos (solo se puede ampliar dentro de los reportes y PDF).
+['gesturestart', 'gesturechange'].forEach((ev) => document.addEventListener(ev, (e) => e.preventDefault(), { passive: false }));
+document.addEventListener('touchmove', (e) => { if (e.touches && e.touches.length > 1 && !e.target.closest('.visor')) e.preventDefault(); }, { passive: false });
 const nav = {
   pendientes() { pintarBarra(); },
-  catalogoCambio() { paginas.forEach((p) => p.refrescar && p.refrescar()); }
+  catalogoCambio() { Object.values(paginas).forEach((p) => p.refrescar && p.refrescar()); },
+  barraCambio() { pintarTabs(true); },
+  ir(k) { ir(k); }
 };
-const paginas = [crearRegistro(nav), crearDiario(nav), crearBoletos(nav), crearReportes(nav), crearAjustes(nav)];
-const nombres = [['Registro', 'registro'], ['Diario', 'diario'], ['Boletos', 'boletos'], ['Reportes', 'reportes'], ['Ajustes', 'ajustes']];
-const permisoTab = ['registro', 'diario', 'boletos', 'reportes', null];
-const TAB_AJUSTES = 4;
-let actual = 0;
-function ir(i) {
+const paginas = {
+  registro: crearRegistro(nav), diario: crearDiario(nav), boletos: crearBoletos(nav), reportes: crearReportes(nav),
+  planillas: crearPlanillas(nav), ajustes: crearAjustes(nav)
+};
+let actual = 'registro';
+const moduloPermitido = (k) => { const m = modulo(k); return !!m && (!m.permiso || puede(m.permiso)); };
+function primeraPermitida() { const d = distribucion(); const k = d.barra[0] || (permitidos()[0] || {}).k; return k || 'ajustes'; }
+function ir(k) {
   const actualAntes = actual;
-  if (permisoTab[i] && !puede(permisoTab[i])) i = primeraPermitida();
-  actual = i;
-  paginas.forEach((p, k) => { p.el.hidden = k !== i; });
-  [...tabs.children].forEach((b, k) => { b.classList.toggle('on', k === i); b.setAttribute('aria-selected', k === i); });
-  if (paginas[i].reiniciar && i !== actualAntes) paginas[i].reiniciar(); else if (paginas[i].refrescar) paginas[i].refrescar();
+  if (!moduloPermitido(k)) k = primeraPermitida();
+  actual = k;
+  Object.entries(paginas).forEach(([kk, p]) => { p.el.hidden = kk !== k; });
+  pintarTabs();
+  const pg = paginas[k];
+  if (pg.reiniciar && k !== actualAntes) pg.reiniciar(); else if (pg.refrescar) pg.refrescar();
   window.scrollTo(0, 0);
   aplicarPermisos();
-  if (!hayControl() || sesion()) { try { localStorage.setItem('cajuelas.tab', String(i)); } catch { /* nada */ } }
+  if (!hayControl() || sesion()) { try { localStorage.setItem('cajuelas.tab', k); } catch { /* nada */ } }
 }
-nombres.forEach(([t, ic], i) => tabs.append(h('button', { type: 'button', role: 'tab', class: 'tab', onclick: () => ir(i) }, icono(ic, 24), h('span', null, t))));
-paginas.forEach((p) => contenido.append(p.el));
-function primeraPermitida() { const k = permisoTab.findIndex((p) => !p || puede(p)); return k < 0 ? TAB_AJUSTES : k; }
-/** Muestra u oculta pestañas y botones según los permisos del usuario que entró. */
+// ----- Barra inferior: módulos de «distribucion()» (4 + «Más» cuando no caben) -----
+let firmaTabs = '';
+function abrirMas(claves) {
+  const caja = h('div', { class: 'mas-grid' }, ...claves.map((k) => { const m = modulo(k); return h('button', { type: 'button', class: 'mas-item' + (k === actual ? ' on' : ''), onclick: () => { api.cerrar(); ir(k); } }, icono(m.ic, 30), h('span', null, m.n)); }));
+  const api = dialogo({ titulo: 'Más', cuerpo: [caja], botones: [{ texto: 'Cerrar' }] });
+}
+function pintarTabs(forzar = false) {
+  const d = distribucion();
+  const firma = d.barra.join(',') + '|' + d.mas.join(',') + '|' + actual;
+  if (!forzar && firma === firmaTabs) return;
+  firmaTabs = firma;
+  clear(tabs);
+  d.barra.forEach((k) => { const m = modulo(k); tabs.append(h('button', { type: 'button', role: 'tab', class: 'tab' + (k === actual ? ' on' : ''), 'aria-selected': String(k === actual), onclick: () => ir(k) }, icono(m.ic, 24), h('span', null, m.n))); });
+  if (d.mas.length) tabs.append(h('button', { type: 'button', role: 'tab', class: 'tab' + (d.mas.includes(actual) ? ' on' : ''), onclick: () => abrirMas(d.mas) }, icono('mas', 24), h('span', null, 'Más')));
+}
+Object.values(paginas).forEach((p) => contenido.append(p.el));
+/** Muestra u oculta botones según los permisos del usuario que entró. */
 function aplicarPermisos() {
-  [...tabs.children].forEach((b, k) => { b.hidden = !!permisoTab[k] && !puede(permisoTab[k]); });
+  pintarTabs();
   document.querySelectorAll('[data-permiso]').forEach((el) => { el.hidden = !puede(el.dataset.permiso); });
   document.querySelectorAll('.fila-botones').forEach((f) => {
     const vis = [...f.children].filter((x) => !x.hidden).length;
@@ -72,12 +98,12 @@ function aplicarPermisos() {
     if (vis) f.style.gridTemplateColumns = `repeat(${vis}, 1fr)`;
   });
   document.querySelectorAll('.banda').forEach((b) => b.pintarUsuario && b.pintarUsuario());
-  if (permisoTab[actual] && !puede(permisoTab[actual])) ir(primeraPermitida());
+  if (!moduloPermitido(actual)) ir(primeraPermitida());
 }
 function revisarAcceso() {
   if (necesitaLogin()) pantallaLogin(); else cerrarLogin();
   aplicarPermisos();
-  paginas.forEach((p) => p.refrescar && p.refrescar());
+  Object.values(paginas).forEach((p) => p.refrescar && p.refrescar());
   aplicarPermisos();
 }
 let programado = false;
@@ -86,17 +112,24 @@ new MutationObserver(() => {
   programado = true;
   requestAnimationFrame(() => { programado = false; aplicarPermisos(); });
 }).observe(contenido, { childList: true, subtree: true });
-const tabArranque = () => { const t = tabRecarga >= 0 ? tabRecarga : tabInicio(); tabRecarga = -1; return t >= 0 && (!permisoTab[t] || puede(permisoTab[t])) ? t : primeraPermitida(); };
-ir(0);
+const tabArranque = () => { const t = tabRecarga || tabInicio(); tabRecarga = null; return t && moduloPermitido(t) ? t : primeraPermitida(); };
+ir(primeraPermitida());
 alCambiarSesion(() => {
   revisarAcceso();
   if (sesion()) ir(tabArranque());
 });
 revisarAcceso();
-if ((tabInicio() >= 0 || tabRecarga >= 0) && !necesitaLogin()) ir(tabArranque());
+if ((tabInicio() || tabRecarga) && !necesitaLogin()) ir(tabArranque());
 actualizarUsuarios(true).then(() => revisarAcceso());
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') actualizarUsuarios().then(() => revisarAcceso()); });
 setInterval(() => actualizarUsuarios().then(() => revisarAcceso()), 5 * 60000);
+
+// ----- Recordatorio del saldo (a partir de las 7:00 pm) -----
+function revisarSaldo() { barraSaldo.hidden = necesitaLogin() || !saldoPendienteHoy(); }
+revisarSaldo();
+setInterval(revisarSaldo, 5 * 60000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') revisarSaldo(); });
+alCambiarSesion(revisarSaldo);
 
 // ----- Barra de estado: envíos pendientes -----
 function pintarBarra() {

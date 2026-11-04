@@ -5,10 +5,11 @@ import { db, syncCfg, configurado } from './store.js';
 import { postJson } from './sync.js';
 
 export const ROLES = {
-  'Administrador': ['registro', 'diario', 'boletos', 'anular', 'reimprimir', 'resumenes', 'precios', 'config', 'provisional', 'reportes', 'todos'],
+  'Administrador': ['registro', 'diario', 'boletos', 'anular', 'reimprimir', 'resumenes', 'precios', 'config', 'provisional', 'reportes', 'planillas', 'todos'],
   'Recibidor de Café': ['diario', 'reimprimir', 'resumenes'],
   'Encargado de boletos': ['boletos', 'reimprimir', 'resumenes'],
-  'Digitador de registro': ['registro', 'reimprimir', 'resumenes']
+  'Digitador de registro': ['registro', 'reimprimir', 'resumenes'],
+  'Encargado de planillas': ['planillas']
 };
 const HORAS_SESION = 12;
 const oyentes = new Set();
@@ -36,7 +37,7 @@ export function sesion() {
   if (Date.now() - s.t > HORAS_SESION * 3600000) { db.del('sesion'); return null; }
   const u = entrada(s.nombre);
   if (!u || u.hash !== s.hash) { db.del('sesion'); return null; }
-  return { nombre: u.nombre, rol: u.rol, permisos: permisosDe(u) };
+  return { nombre: u.nombre, rol: u.rol, permisos: permisosDe(u), barra: u.barra || [], bloquear: !!u.bloquear, hash: u.hash };
 }
 export function permisosDe(u) {
   const extra = (u.permisos || []).map((p) => String(p).trim().toLowerCase()).filter(Boolean);
@@ -48,6 +49,7 @@ export function puede(clave) {
   const s = sesion();
   return !!s && (s.permisos.has(clave) || s.permisos.has('todo') || s.permisos.has('todos'));
 }
+export const barraDeUsuario = () => { const s = sesion(); return s ? { barra: s.barra || [], bloquear: !!s.bloquear } : { barra: [], bloquear: false }; };
 export const nombreUsuario = () => { const s = sesion(); return s ? s.nombre : ''; };
 export const necesitaLogin = () => hayControl() && !sesion();
 
@@ -74,7 +76,8 @@ export async function actualizarUsuarios(forzar = false) {
   if (!r.ok) return { ok: false, message: r.message };
   if (!Array.isArray(r.json.usuarios)) return { ok: false, message: 'Esta versión del Web App no entrega usuarios. Actualice el Apps Script.' };
   const nueva = r.json.usuarios.filter((u) => u && u.nombre && u.hash).map((u) => ({
-    nombre: String(u.nombre).trim(), hash: String(u.hash), rol: String(u.rol || '').trim(), permisos: Array.isArray(u.permisos) ? u.permisos : []
+    nombre: String(u.nombre).trim(), hash: String(u.hash), rol: String(u.rol || '').trim(), permisos: Array.isArray(u.permisos) ? u.permisos : [],
+    barra: Array.isArray(u.barra) ? u.barra.map((x) => String(x).trim()).filter(Boolean) : [], bloquear: u.bloquear === true
   }));
   const antes = JSON.stringify(lista());
   db.set('users_list', nueva);
