@@ -8,7 +8,7 @@ import { NOVEDADES } from './novedades.js';
 import { parseExp } from './exp_calc.js';
 import { compartir, descargar } from './files.js';
 import { tarjeta, etiqueta, banda, selector, boton, filaAj, grupo, tituloGrupo, cabSub } from './ui.js';
-import { hayControl, sesion, salir, actualizarUsuarios, puede, lista as listaUsuarios } from './users.js';
+import { hayControl, sesion, salir, actualizarUsuarios, puede, lista as listaUsuarios, cambiarPin } from './users.js';
 import { esComputadora, anchoMm, setAnchoMm, imprimirTiquetes } from './imprimir.js';
 import { crearPagina } from './draw.js';
 import { MODULOS, modulo, permitidos, listaExplicita, guardarBarraPersonal, borrarBarraPersonal, barraBloqueada, barraDelAdmin, distribucion } from './nav_barra.js';
@@ -72,7 +72,7 @@ export async function actualizarCatalogo(manual, alCambiar) {
   if (r.bolFichas.length || r.bolOficinas.length) { texto += '\n\n' + reemplazarBoletosDesdeHoja(r.bolFichas, r.bolOficinas); cambio = true; }
   if (alCambiar) alCambiar();
   if (manual) aviso('Catálogo actualizado', texto);
-  else if (cambio) toast('Catálogo actualizado desde Google Sheets.');
+  else if (cambio) toast('Catálogo actualizado.');
 }
 
 export function crearAjustes(nav) {
@@ -99,7 +99,7 @@ export function crearAjustes(nav) {
   const irInicio = () => { vista = 'inicio'; desbloqueado = false; pintar(); };
 
   // ----- Pantalla principal -----
-  const textoPend = (n) => (n ? `⏳ ${n} ${n === 1 ? 'registro pendiente' : 'registros pendientes'} de enviar` : '✔ Todo enviado a Google Sheets');
+  const textoPend = (n) => (n ? `⏳ ${n} ${n === 1 ? 'registro pendiente' : 'registros pendientes'} de enviar` : '✔ Todo enviado');
   const hace = (t) => { if (!t) return 'sin descargar'; const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 1 ? 'ahora' : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : `hace ${Math.round(m / 1440)} d`; };
   const cacheT = (k) => { try { const o = JSON.parse(localStorage.getItem(k + (modoPruebas ? '_t' : '')) || 'null'); return o && o.t ? o.t : 0; } catch { return 0; } };
   const diasSinRespaldo = () => { const t = db.get('ultimo_respaldo', 0); return t ? Math.floor((Date.now() - t) / 86400000) : null; };
@@ -156,11 +156,23 @@ export function crearAjustes(nav) {
     const co = cosechaActiva();
     const nPend = cuantosPendientes();
     const esAdmin = puede('config');
-    const fPend = filaAj({ ic: '☁', t: 'Envíos a Google Sheets', s: textoPend(nPend), onclick: enviarAhora });
+    const fPend = filaAj({ ic: '☁', t: 'Envíos al servidor', s: textoPend(nPend), onclick: enviarAhora });
     const fAlm = filaAj({ ic: 'ℹ', t: `Versión ${VERSION}`, s: `Dispositivo: ${deviceName()}`, onclick: () => toast(`Versión ${VERSION} · ${deviceName()}`) });
     const fAct = filaAj({ ic: '🔄', t: 'Actualizar catálogo y usuarios', s: `${co ? 'Cosecha ' + co : 'Sin cosecha todavía'} · ${cat.actualizado ? 'actualizado ' + new Date(cat.actualizado).toLocaleString('es-CR', { dateStyle: 'short', timeStyle: 'short' }) : 'aún no se ha recibido'}`, onclick: actualizarTodo });
     const fCuenta = sUs ? filaAj({ ic: '👤', t: sUs.nombre, s: `${sUs.rol} · toque para cerrar sesión`, onclick: async () => {
       if (await confirmar('Cerrar sesión', `Sesión de ${sUs.nombre} (${sUs.rol}).\n\n¿Cerrar la sesión?`, { si: 'Cerrar sesión' })) salir();
+    } }) : null;
+    const fPin = sUs ? filaAj({ ic: '🔑', t: 'Cambiar mi PIN', s: 'Solo usted conoce su PIN', onclick: async () => {
+      const v = await formulario('Cambiar mi PIN', [
+        { etiqueta: 'PIN actual', tipo: 'password', inputmode: 'numeric' },
+        { etiqueta: 'PIN nuevo (4 a 12 números)', tipo: 'password', inputmode: 'numeric' },
+        { etiqueta: 'Repita el PIN nuevo', tipo: 'password', inputmode: 'numeric' }
+      ], { ok: 'Cambiar PIN', validar: async (x) => {
+        if (!x[0] || !x[1]) return 'Escriba el PIN actual y el nuevo.';
+        if (x[1] !== x[2]) return 'El PIN nuevo no coincide en las dos casillas.';
+        return cambiarPin(x[0], x[1]);
+      } });
+      if (v) toast('Listo: su PIN se cambió. Úselo la próxima vez que entre.', 5000);
     } }) : null;
     const fApar = filaAj({ ic: '🎨', t: 'Apariencia', s: 'Tema, tamaño de texto y pantalla de inicio', onclick: () => { vista = 'apariencia'; pintar(); } });
     const fBarra = filaAj({ ic: '🧭', t: 'Mi barra de abajo', s: barraBloqueada() ? '🔒 Definida por el administrador' : 'Elija qué módulos ver y en qué orden', onclick: () => { vista = 'mibarra'; pintar(); } });
@@ -170,7 +182,7 @@ export function crearAjustes(nav) {
     const head = [banda('Ajustes'), modoPruebas ? h('p', { class: 'estado aviso' }, '🧪 Está en MODO DE PRUEBAS: los datos no son reales.') : null];
     if (!esAdmin) {
       // Lista simple para quien no administra.
-      raiz.append(...head, grupo(fCuenta, fAct, fPend), grupo(fApar, fBarra, fNov, fBuscar, fAlm));
+      raiz.append(...head, grupo(fCuenta, fPin, fAct, fPend), grupo(fApar, fBarra, fNov, fBuscar, fAlm));
       infoAlmacenamiento(fAlm);
     } else {
       const datos = [fAct, fPend, filaAj({ ic: '📚', t: 'Catálogo recibido', s: 'Cosechas, sociedades y fincas', onclick: () => { vista = 'catalogo'; pintar(); } }),
@@ -188,7 +200,7 @@ export function crearAjustes(nav) {
       const tarjetaPend = pend.length ? h('section', { class: 'tarjeta pl-pendientes' }, h('b', null, `Pendientes (${pend.length})`),
         ...pend.map((p) => h('button', { type: 'button', class: 'pend-fila', onclick: () => { if (p.accion === 'enviar') enviarAhora(); else if (p.accion === 'actualizar') window.__buscarActualizacion && window.__buscarActualizacion(); else if (p.accion === 'catalogo') actualizarTodo(); } },
           h('span', { 'aria-hidden': 'true' }, p.ic), h('span', null, p.texto), p.accion ? h('span', { class: 'fl' }, '›') : null))) : null;
-      raiz.append(...head, tarjetaPend, tarjetaEstado(), fCuenta ? grupo(fCuenta) : null,
+      raiz.append(...head, tarjetaPend, tarjetaEstado(), fCuenta ? grupo(fCuenta, fPin) : null,
         tituloGrupo('Datos'), cp(grupo(...datos), 'config'),
         tituloGrupo('Conexión'), cp(grupo(...conexion), 'config'),
         tituloGrupo('Este dispositivo'), grupo(...dispositivo),

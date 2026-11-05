@@ -14,6 +14,7 @@ import { icono } from './ui.js';
 import { aplicarApariencia, tabInicio } from './apariencia.js';
 import { hayControl, puede, necesitaLogin, pantallaLogin, cerrarLogin, alCambiarSesion, actualizarUsuarios, sesion } from './users.js';
 
+window.addEventListener('cajuelas-sesion-invalida', () => { toast('La sesión venció. Vuelva a entrar.', 4000); setTimeout(() => location.reload(), 1200); });
 window.addEventListener('cajuelas-url', () => toast('La dirección de la hoja se actualizó sola.', 5000));
 // Cada vez que se abre la app las pantallas empiezan limpias (salvo al actualizar o restaurar una copia).
 let conservar = false;
@@ -136,12 +137,12 @@ alCambiarSesion(revisarSaldo);
 function pintarBarra() {
   const n = cuantosPendientes();
   barra.hidden = n === 0;
-  barra.textContent = n ? `⏳ ${n} ${n === 1 ? 'registro pendiente' : 'registros pendientes'} de enviar a Google Sheets. Toque para enviar ahora.` : '';
+  barra.textContent = n ? `⏳ ${n} ${n === 1 ? 'registro pendiente' : 'registros pendientes'} de enviar. Toque para enviar ahora.` : '';
 }
 barra.addEventListener('click', async () => {
   if (!configurado()) return toast('Configure la URL y el token en Ajustes > Administración.', 5000);
   const r = await enviarPendientes();
-  if (r.error) toast(`Quedan ${r.restantes} pendientes. ${r.error}`, 6000); else toast('Todo enviado a Google Sheets.');
+  if (r.error) toast(`Quedan ${r.restantes} pendientes. ${r.error}`, 6000); else toast('Todo enviado.');
 });
 alCambiarPendientes(pintarBarra);
 pintarBarra();

@@ -1,5 +1,6 @@
 // Sincronización con el Web App de Google Apps Script (misma hoja que usa la app Android).
 import { db, syncCfg, configurado } from './store.js';
+import { SUPA } from './config_supa.js';
 
 let enVuelo = false;
 const oyentes = new Set();
@@ -29,7 +30,37 @@ function adoptarNuevaUrl(urlUsada, nueva) {
 }
 
 /** POST al Web App. Se manda como text/plain para evitar la consulta previa (CORS) que Apps Script no responde. */
+/** Servidor nuevo (Supabase): una sola función «api» recibe la misma petición que antes recibía el Apps Script. */
+export async function rpcSupa(fn, args, ms = 30000) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ms);
+  try {
+    const resp = await fetch(`${SUPA.url}/rest/v1/rpc/${fn}`, {
+      method: 'POST', signal: ctl.signal,
+      headers: { 'Content-Type': 'application/json', apikey: SUPA.key },
+      body: JSON.stringify(args)
+    });
+    const texto = await resp.text();
+    let json = null;
+    try { json = JSON.parse(texto); } catch { /* no era JSON */ }
+    return { http: resp.status, json };
+  } catch (e) {
+    return { http: 0, json: null, abort: e && e.name === 'AbortError' };
+  } finally { clearTimeout(t); }
+}
+async function postSupa(payload, ms) {
+  const ses = db.get('sesion', null) || {};
+  const resto = { ...payload }; delete resto.token; delete resto.hash;
+  const r = await rpcSupa('api', { p_token: ses.token || '', p: resto }, ms);
+  if (!r.json) return { ok: false, sinRed: r.http === 0, json: null, message: r.http === 0 ? (r.abort ? 'El servidor tardó demasiado en responder.' : 'Sin conexión con el servidor.') : `Respuesta inesperada del servidor (HTTP ${r.http}).` };
+  const j = r.json;
+  if (j.sesionInvalida && ses.token) { try { db.del('sesion'); } catch { /* nada */ } window.dispatchEvent(new CustomEvent('cajuelas-sesion-invalida')); }
+  if (j.success === true) return { ok: true, message: j.message || 'OK', json: j };
+  return { ok: false, message: j.message || 'El servidor rechazó la petición.', json: j };
+}
+
 export async function postJson(url, payload, ms = 30000) {
+  if (SUPA) return postSupa(payload, ms);
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), ms);
   try {
@@ -52,6 +83,7 @@ export async function postJson(url, payload, ms = 30000) {
 
 export async function probar() {
   const { url, token } = syncCfg();
+  if (SUPA) { const r = await postJson(url, { action: 'ping' }); return r.ok ? 'Conexión correcta: ' + r.message : 'No se pudo conectar: ' + r.message; }
   if (!url.startsWith('https://script.google.com/')) return 'La URL debe empezar con https://script.google.com/ y terminar en /exec.';
   if (!token.trim()) return 'Escriba el token secreto.';
   const r = await postJson(url, { action: 'ping', token });

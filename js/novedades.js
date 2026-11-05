@@ -1,5 +1,12 @@
 // Novedades de cada versión (se muestran en Ajustes > Novedades de la versión).
 export const NOVEDADES = [
+  { v: '2.12.0', t: [
+    'Servidor nuevo: toda la información (registros, diario, boletos, históricos y exportaciones) vive ahora en una sola base de datos propia, fuera de Google. Ya no hay hojas de Excel separadas para cada cosa.',
+    'Ingreso con usuario y PIN verificado en el servidor, con bloqueo temporal tras varios intentos fallidos. Los permisos de cada usuario se validan en el servidor.',
+    'La primera vez hay que entrar de nuevo con su usuario y PIN. Lo que estaba pendiente de enviar se envía solo al servidor nuevo.',
+    'Cada usuario puede cambiar su propio PIN en Ajustes > «Cambiar mi PIN».',
+    'Excel queda solo para exportar.'
+  ] },
   { v: '2.11.1', t: [
     'Cambio automático de dirección: si la hoja de Google se traslada a otra cuenta (nueva dirección /exec), el administrador la anota una sola vez en el Apps Script y cada teléfono se pasa solo la próxima vez que sincronice. Ya no hay que cambiarla teléfono por teléfono.'
   ] },

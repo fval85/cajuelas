@@ -63,13 +63,16 @@ export const TIPO_INTERNO = 'Interno';
 export const TIPO_EXTERNO = 'Externo';
 export const normalizarTipo = (t) => (normalizar(t).startsWith('ext') ? TIPO_EXTERNO : TIPO_INTERNO);
 
+import { SUPA } from './config_supa.js';
 export function syncCfg() {
+  if (SUPA) return { url: 'supabase', token: 'supabase', device: db.get('device_name', '') };
   return { url: db.get('sheets_url', ''), token: db.get('sheets_token', ''), device: db.get('device_name', '') };
 }
 export function guardarSyncCfg(url, token, device) {
   db.set('sheets_url', url.trim()); db.set('sheets_token', token.trim()); db.set('device_name', device.trim());
 }
 export function configurado() {
+  if (SUPA) return true;
   const { url, token } = syncCfg();
   return url.startsWith('https://script.google.com/') && token.trim() !== '';
 }

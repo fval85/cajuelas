@@ -2,7 +2,8 @@
 // por el Web App) y se guarda en el dispositivo para poder entrar sin conexión.
 import { h, clear } from './util.js';
 import { db, syncCfg, configurado } from './store.js';
-import { postJson } from './sync.js';
+import { postJson, rpcSupa } from './sync.js';
+import { SUPA } from './config_supa.js';
 
 export const ROLES = {
   'Administrador': ['registro', 'diario', 'boletos', 'anular', 'reimprimir', 'resumenes', 'precios', 'config', 'provisional', 'reportes', 'planillas', 'todos'],
@@ -24,7 +25,7 @@ export async function huella(nombre, pin) {
 
 export const lista = () => db.get('users_list', null);          // null = nunca se ha recibido
 /** Hay control de acceso solo si la hoja tiene al menos un usuario activo. */
-export const hayControl = () => { const l = lista(); return Array.isArray(l) && l.length > 0; };
+export const hayControl = () => { if (SUPA) return true; const l = lista(); return Array.isArray(l) && l.length > 0; };
 
 function entrada(nombre) {
   const l = lista() || [];
@@ -35,6 +36,11 @@ export function sesion() {
   const s = db.get('sesion', null);
   if (!s) return null;
   if (Date.now() - s.t > HORAS_SESION * 3600000) { db.del('sesion'); return null; }
+  if (SUPA) {
+    const p = s.perfil;
+    if (!p || !p.nombre) { db.del('sesion'); return null; }
+    return { nombre: p.nombre, rol: p.rol || '', permisos: permisosDe(p), barra: p.barra || [], bloquear: !!p.bloquear, hash: '' };
+  }
   const u = entrada(s.nombre);
   if (!u || u.hash !== s.hash) { db.del('sesion'); return null; }
   return { nombre: u.nombre, rol: u.rol, permisos: permisosDe(u), barra: u.barra || [], bloquear: !!u.bloquear, hash: u.hash };
@@ -54,7 +60,51 @@ export const nombreUsuario = () => { const s = sesion(); return s ? s.nombre : '
 export const necesitaLogin = () => hayControl() && !sesion();
 
 let bloqueo = 0, fallos = 0;
+const llaveVerif = (n) => 'verif_' + String(n).trim().toLowerCase();
+async function verificador(nombre, hash) {
+  let sal = db.get('device_auto', '');
+  if (!sal) { sal = Array.from(crypto.getRandomValues(new Uint8Array(8))).map((b) => b.toString(16).padStart(2, '0')).join(''); db.set('device_auto', sal); }
+  const b = await crypto.subtle.digest('SHA-256', enc.encode(`v|${sal}|${String(nombre).trim().toLowerCase()}|${hash}`));
+  return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('');
+}
+/** Cambia el PIN del usuario que tiene la sesión abierta. Devuelve null si salió bien o el texto del error. */
+export async function cambiarPin(actual, nuevo) {
+  const ses = db.get('sesion', null);
+  if (!ses || !ses.nombre) return 'No hay una sesión abierta.';
+  if (!/^\d{4,12}$/.test(String(nuevo))) return 'El PIN nuevo debe tener de 4 a 12 números.';
+  if (String(nuevo) === String(actual)) return 'El PIN nuevo debe ser distinto al actual.';
+  const hA = await huella(ses.nombre, actual), hN = await huella(ses.nombre, nuevo);
+  const r = await postJson('', { action: 'cambiarPin', actual: hA, nuevo: hN }, 20000);
+  if (!r.ok) return r.message || 'No se pudo cambiar el PIN.';
+  db.set(llaveVerif(ses.nombre), { v: await verificador(ses.nombre, hN), perfil: ses.perfil });
+  return null;
+}
+/** Entrada con el servidor nuevo: el PIN se verifica en el servidor. Sin Internet solo entra quien ya entró antes en este teléfono. */
+async function entrarSupa(nombre, pin) {
+  const nom = String(nombre).trim();
+  const h = await huella(nom, pin);
+  const r = await rpcSupa('login', { p_nombre: nom, p_hash: h, p_dispositivo: db.get('device_name', '') || db.get('device_auto', '') }, 20000);
+  if (r.json && r.json.success === true) {
+    const perfil = r.json.usuario;
+    db.set('sesion', { nombre: perfil.nombre, token: r.json.token, perfil, t: Date.now() });
+    db.set(llaveVerif(nom), { v: await verificador(nom, h), perfil });
+    fallos = 0; avisar();
+    return { ok: true };
+  }
+  if (r.json && r.json.espera) return { ok: false, espera: r.json.espera };
+  if (r.json && r.json.success === false) return { ok: false };
+  // sin conexión: solo con verificador guardado en este teléfono
+  const g = db.get(llaveVerif(nom), null);
+  if (g && g.v === (await verificador(nom, h))) {
+    const previa = db.get('sesion', null);
+    db.set('sesion', { nombre: g.perfil.nombre, token: previa && previa.nombre === g.perfil.nombre ? previa.token : '', perfil: g.perfil, t: Date.now() });
+    avisar();
+    return { ok: true };
+  }
+  return { ok: false, sinRed: true };
+}
 export async function entrar(nombre, pin) {
+  if (SUPA) return entrarSupa(nombre, pin);
   if (Date.now() < bloqueo) return { ok: false, espera: Math.ceil((bloqueo - Date.now()) / 1000) };
   const u = entrada(nombre);
   const ok = !!u && (await huella(u.nombre, pin)) === u.hash;
@@ -71,6 +121,15 @@ export async function actualizarUsuarios(forzar = false) {
   if (!configurado()) return { ok: false, message: 'Sin configurar' };
   if (!forzar && Date.now() - ultima < 120000) return { ok: true, saltado: true };
   ultima = Date.now();
+  if (SUPA) {
+    const r0 = await rpcSupa('lista_usuarios', {}, 20000);
+    if (!Array.isArray(r0.json)) return { ok: false, message: 'Sin conexión con el servidor.' };
+    const nuevaS = r0.json.filter((u) => u && u.nombre).map((u) => ({ nombre: String(u.nombre).trim() }));
+    const antesS = JSON.stringify(lista());
+    db.set('users_list', nuevaS);
+    if (JSON.stringify(nuevaS) !== antesS) avisar();
+    return { ok: true };
+  }
   const { url, token } = syncCfg();
   const r = await postJson(url, { action: 'usuarios', token }, 20000);
   if (!r.ok) return { ok: false, message: r.message };
@@ -123,11 +182,12 @@ export function pantallaLogin() {
     if (!selUsuario.value) { lblEstado.textContent = 'Seleccione su usuario.'; return; }
     const r = await entrar(selUsuario.value, pin.value);
     if (r.ok) return;
-    lblEstado.textContent = r.espera ? `Demasiados intentos. Espere ${r.espera} s.` : 'PIN incorrecto.';
+    lblEstado.textContent = r.espera ? `Demasiados intentos. Espere ${Math.ceil(r.espera / 60)} min.` : (r.sinRed ? 'Sin conexión: solo pueden entrar sin Internet quienes ya entraron antes en este teléfono.' : 'Usuario o PIN incorrecto.');
     pin.value = '';
   }
   pin.addEventListener('keydown', (e) => { if (e.key === 'Enter') ingresar(); });
   pintar();
+  if (SUPA && !(lista() || []).length) reintentar();
 }
 export function cerrarLogin() {
   if (!velo) return;
