@@ -14,6 +14,7 @@ import { icono } from './ui.js';
 import { aplicarApariencia, tabInicio } from './apariencia.js';
 import { hayControl, puede, necesitaLogin, pantallaLogin, cerrarLogin, alCambiarSesion, actualizarUsuarios, sesion } from './users.js';
 
+window.addEventListener('cajuelas-url', () => toast('La dirección de la hoja se actualizó sola.', 5000));
 // Cada vez que se abre la app las pantallas empiezan limpias (salvo al actualizar o restaurar una copia).
 let conservar = false;
 try { conservar = sessionStorage.getItem('cajuelas.conservar') === '1'; sessionStorage.removeItem('cajuelas.conservar'); } catch { /* nada */ }

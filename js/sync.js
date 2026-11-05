@@ -14,6 +14,20 @@ export function encolar(payload) {
 }
 export function descartarPendientes() { db.set('pending_sends', []); avisar(); }
 
+const URL_VALIDA = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/;
+/** Si el Web App avisa una dirección nueva (propiedad NUEVA_URL), este teléfono se pasa solo, una vez. */
+function adoptarNuevaUrl(urlUsada, nueva) {
+  try {
+    if (typeof nueva !== 'string') return;
+    nueva = nueva.trim();
+    const actual = (db.get('sheets_url', '') || '').trim();
+    if (!URL_VALIDA.test(nueva) || nueva === actual || urlUsada !== actual) return;
+    db.set('sheets_url', nueva);
+    db.set('sheets_url_anterior', actual);
+    window.dispatchEvent(new CustomEvent('cajuelas-url', { detail: { de: actual, a: nueva } }));
+  } catch { /* nada */ }
+}
+
 /** POST al Web App. Se manda como text/plain para evitar la consulta previa (CORS) que Apps Script no responde. */
 export async function postJson(url, payload, ms = 30000) {
   const ctl = new AbortController();
@@ -27,6 +41,7 @@ export async function postJson(url, payload, ms = 30000) {
     const texto = await resp.text();
     let json = null;
     try { json = JSON.parse(texto); } catch { /* no era JSON */ }
+    if (json) adoptarNuevaUrl(url, json.nuevaUrl);
     if (resp.ok && json && json.success === true) return { ok: true, message: json.message || 'OK', json };
     return { ok: false, message: (json && json.message) || `Respuesta inesperada (HTTP ${resp.status}). Revise la URL del Web App y que esté publicada para «Cualquier persona».`, json };
   } catch (e) {

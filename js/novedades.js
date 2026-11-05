@@ -1,5 +1,8 @@
 // Novedades de cada versión (se muestran en Ajustes > Novedades de la versión).
 export const NOVEDADES = [
+  { v: '2.11.1', t: [
+    'Cambio automático de dirección: si la hoja de Google se traslada a otra cuenta (nueva dirección /exec), el administrador la anota una sola vez en el Apps Script y cada teléfono se pasa solo la próxima vez que sincronice. Ya no hay que cambiarla teléfono por teléfono.'
+  ] },
   { v: '2.11.0', t: [
     'Nueva pestaña «Planillas» (solo con el permiso «planillas»): el encargado registra tarea, horas y extras empleado por empleado, cada uno queda «Listo», y el día solo se envía cuando están todos (si falta alguien avisa quién). Antes de enviar pide confirmación y el día queda bloqueado; solo un administrador puede anularlo. Incluye el resumen semanal con el formato de la planilla actual y, para administradores, los montos de la semana.',
     'Barra inferior por perfil: cada usuario ve solo sus módulos (hasta 4 y el resto en «Más»). Ajustes > «Mi barra de abajo» permite elegir y ordenar; el administrador puede definir y bloquear la barra de cada usuario en la hoja Usuarios (columnas «Barra» y «Bloquear barra»).',
