@@ -175,6 +175,10 @@ export async function historicos() {
   return { error: null, filas: r.json.filas, cosechas: r.json.cosechas || [], usadas: r.json.usadas || [], actualizado: s(r.json.actualizado) };
 }
 
+/** Administración (solo administradores; el servidor lo valida): Exportaciones y Usuarios. Devuelve {ok, message, json}. */
+export async function expAdmin(op, datos, extra = {}) { return postJson('', { action: 'expAdmin', op, datos, ...extra }, 30000); }
+export async function usuariosAdmin(op, datos) { return postJson('', { action: 'usuariosAdmin', op, datos }, 30000); }
+
 /** Hojas Resumen, Contratos, Entregas y Pagos del Google Sheet «Exportaciones» (ventas de exportación y consumo nacional). */
 export async function exportaciones() {
   if (!configurado()) return { error: 'Falta configurar la URL y el token en Ajustes > Administración.' };
@@ -182,7 +186,7 @@ export async function exportaciones() {
   const r = await postJson(url, { action: 'exportaciones', token }, 60000);
   if (!r.ok) return { error: r.message };
   if (!r.json.resumen || !Array.isArray(r.json.resumen.filas)) return { error: 'El Apps Script no está actualizado (falta la acción exportaciones).' };
-  return { error: null, resumen: r.json.resumen, contratos: r.json.contratos, entregas: r.json.entregas, pagos: r.json.pagos, actualizado: s(r.json.actualizado) };
+  return { error: null, resumen: r.json.resumen, contratos: r.json.contratos, entregas: r.json.entregas, pagos: r.json.pagos, actualizado: s(r.json.actualizado), listas: r.json.listas || {}, diasAlertaGuia: Number.isFinite(Number(r.json.diasAlertaGuia)) ? Number(r.json.diasAlertaGuia) : 3 };
 }
 
 /** Pasa a Históricos el total de un día de Diario (una línea por sociedad + finca). Solo administradores (lo valida el servidor). */

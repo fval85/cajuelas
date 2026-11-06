@@ -109,6 +109,9 @@ export function verDocumento({ titulo, paginas, nombrePdf, intro, adicionales = 
   });
   const barra = dlg.caja.querySelector('.dialogo-botones');
   barra.prepend(btn);
+  // En computadora, además de compartir, se puede bajar el PDF directo a la carpeta de descargas.
+  const btnBajar = esComputadora() ? h('button', { type: 'button', class: 'btn-texto', disabled: true, onclick: () => { if (archivos) { descargar(archivos[0].blob, archivos[0].nombre); toast('Se descargó ' + archivos[0].nombre); } } }, '⬇ Descargar PDF') : null;
+  if (btnBajar) btn.after(btnBajar);
   barra.prepend(h('button', { type: 'button', class: 'btn-texto', onclick: (e) => { const on = zona.classList.toggle('amp'); e.currentTarget.textContent = on ? '🔍 Reducir' : '🔍 Ampliar'; } }, '🔍 Ampliar'));
   botonesAparte.slice().reverse().forEach((b) => barra.prepend(h('button', { type: 'button', class: 'btn-texto', onclick: async () => {
     const r = await compartir([b.archivo], titulo, textoCompartir || titulo);
@@ -127,7 +130,7 @@ export function verDocumento({ titulo, paginas, nombrePdf, intro, adicionales = 
     try {
       const pdf = await pdfDePaginas((paginasPdf || paginas).map((p) => ({ canvas: p.canvas, ancho: p.ancho, alto: p.alto })));
       archivos = [{ blob: pdf, nombre: nombrePdf }, ...adicionales];
-      btn.textContent = textoBoton; btn.disabled = false;
+      btn.textContent = textoBoton; btn.disabled = false; if (btnBajar) btnBajar.disabled = false;
     } catch (e) { btn.textContent = 'No se pudo preparar'; toast('No se pudo generar el PDF: ' + (e.message || e)); }
   })();
   return dlg;

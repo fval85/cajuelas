@@ -251,3 +251,24 @@ body { touch-action: manipulation; }
 .pend-fila { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: transparent; border: 0; border-top: 1px solid #fde68a; padding: 10px 2px; font: inherit; color: var(--texto); }
 .pend-fila:first-of-type { border-top: 0; }
 .pend-fila span:nth-child(2) { flex: 1; font-size: 14px; }
+
+/* ---- Formularios de administración (2.12.1) ---- */
+.campo-caja { margin-bottom: 8px; }
+.campo-caja .etiqueta { display: block; margin-bottom: 3px; }
+.dos-col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.calc-nota { white-space: pre-line; background: #ecfdf5; border: 1.5px dashed var(--verde); border-radius: 10px; padding: 8px 10px; color: var(--verde); font-weight: 700; font-size: 14px; margin: 4px 0 10px; }
+details.mas-datos { margin: 6px 0; }
+details.mas-datos summary { font-weight: 700; color: var(--verde); padding: 8px 0; cursor: pointer; }
+.acciones-exp { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 6px 0 10px; }
+.acciones-exp button { min-height: 46px; font-weight: 700; border-radius: 12px; border: 0; background: var(--verde); color: #fff; font-size: 14px; }
+.ev-acciones { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.ev-acciones button { border: 1.5px solid var(--verde); background: #fff; color: var(--verde); font-weight: 700; border-radius: 10px; padding: 6px 10px; font-size: 13px; }
+.btn-mini { border: 0; background: none; color: var(--verde); font-weight: 700; font-size: 16px; padding: 0 6px; }
+.fila-usuario { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.fila-usuario.inactivo { opacity: .6; }
+.chip-est { font-size: 12px; font-weight: 700; border-radius: 99px; padding: 3px 10px; border: 0; white-space: nowrap; }
+.chip-est.verde { background: #dcfce7; color: var(--verde); } .chip-est.ambar { background: #fef3c7; color: #92400e; } .chip-est.gris { background: #e5e7eb; color: #374151; }
+.casilla { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-weight: 600; }
+.casilla input { width: 20px; height: 20px; }
+/* En computadora, los reportes anchos se ajustan al ancho de la ventana (en el teléfono siguen con desplazamiento lateral). */
+@media (pointer: fine) and (min-width: 700px) { .visor.ancho:not(.amp) .hoja { width: 100%; max-width: 900px; margin: 0 auto 10px; } }

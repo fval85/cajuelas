@@ -8,6 +8,8 @@ import { NOVEDADES } from './novedades.js';
 import { parseExp } from './exp_calc.js';
 import { compartir, descargar } from './files.js';
 import { tarjeta, etiqueta, banda, selector, boton, filaAj, grupo, tituloGrupo, cabSub } from './ui.js';
+import { pintarUsuarios } from './ui_usuarios.js';
+import { configurarAlertaGuia } from './ui_exp_admin.js';
 import { hayControl, sesion, salir, actualizarUsuarios, puede, lista as listaUsuarios, cambiarPin } from './users.js';
 import { esComputadora, anchoMm, setAnchoMm, imprimirTiquetes } from './imprimir.js';
 import { crearPagina } from './draw.js';
@@ -94,6 +96,7 @@ export function crearAjustes(nav) {
     if (vista === 'apariencia') return vistaApariencia();
     if (vista === 'mibarra') return vistaMiBarra();
     if (vista === 'novedades') return vistaNovedades();
+    if (vista === 'usuarios') return pintarUsuarios({ raiz, irInicio });
     vistaInicio();
   }
   const irInicio = () => { vista = 'inicio'; desbloqueado = false; pintar(); };
@@ -201,6 +204,9 @@ export function crearAjustes(nav) {
         ...pend.map((p) => h('button', { type: 'button', class: 'pend-fila', onclick: () => { if (p.accion === 'enviar') enviarAhora(); else if (p.accion === 'actualizar') window.__buscarActualizacion && window.__buscarActualizacion(); else if (p.accion === 'catalogo') actualizarTodo(); } },
           h('span', { 'aria-hidden': 'true' }, p.ic), h('span', null, p.texto), p.accion ? h('span', { class: 'fl' }, '›') : null))) : null;
       raiz.append(...head, tarjetaPend, tarjetaEstado(), fCuenta ? grupo(fCuenta, fPin) : null,
+        tituloGrupo('Administración'), cp(grupo(
+          filaAj({ ic: '👥', t: 'Usuarios', s: 'Crear, permisos, PIN y desactivar', onclick: () => { vista = 'usuarios'; pintar(); } }),
+          filaAj({ ic: '⏰', t: 'Alertas de exportación', s: 'Días sin guía del comprador para avisar', onclick: async () => { const x = await exportaciones(); await configurarAlertaGuia(x && x.diasAlertaGuia); } })), 'todos'),
         tituloGrupo('Datos'), cp(grupo(...datos), 'config'),
         tituloGrupo('Conexión'), cp(grupo(...conexion), 'config'),
         tituloGrupo('Este dispositivo'), grupo(...dispositivo),

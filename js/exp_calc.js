@@ -8,6 +8,11 @@ const numN = (v) => (v === '' || v == null ? null : num(v));
 const txt = (v) => String(v ?? '').trim();
 const mesDe = (v) => { const m = txt(v).match(/^(\d{4})-(\d{2})/); return m ? `${m[1]}-${m[2]}` : ''; };
 export const mesTxt = (m) => (m ? `${MESES[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}` : '');
+const MES3 = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+/** «nov-26» a partir de «2026-11» o «2026-11-01». */
+export const mesCorto = (x) => (x && /^\d{4}-\d{2}/.test(x) ? `${MES3[Number(x.slice(5, 7)) - 1]}-${x.slice(2, 4)}` : '');
+/** Último día del mes de una fecha «yyyy-mm-dd». */
+export const finDeMes = (x) => { const y = Number(x.slice(0, 4)), m = Number(x.slice(5, 7)); return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10); };
 
 function objetos(t) {
   const enc = (t && t.enc) || [];
@@ -23,23 +28,27 @@ export function parseExp(resp) {
     const qqC = num(c['quintales']) || sacC * 1.5;
     return {
       id: txt(o['no. contrato']), cos: txt(o['cosecha']), tipo: txt(o['tipo']), comp: txt(o['comprador']), est: txt(o['estado del contrato']),
-      fin: txt(c['financiamiento']), cert: txt(c['certificacion']), cal: txt(c['calidad']), prep: txt(c['preparacion']), tcafe: txt(c['tipo cafe']), cat: txt(c['categoria']),
+      dbId: c['id'] ?? null, ica: txt(c['no. icafe']), obs: txt(c['observaciones']), fin: txt(c['financiamiento']), cert: txt(c['certificacion']), cal: txt(c['calidad']), prep: txt(c['preparacion']), tcafe: txt(c['tipo cafe']), cat: txt(c['categoria']),
       ent: txt(o['estado de entrega']), cob: txt(o['estado de cobro']), mes: mesDe(o['fecha entrega']), fent: txt(o['fecha entrega']).slice(0, 10), prom: numN(o['promedio kg por saco']),
       sacC, sacE, sacP: num(o['sacos por entregar']), kgC: num(o['kilos del contrato']), kgE: num(o['kilos entregados']), kgP: num(o['kilos por entregar']),
       fav: numN(o['kilos a favor / contra']), sug: numN(o['sacos sugeridos para cerrar']), precio: num(o['precio rieles']),
       qqC, qqE: sacC ? qqC * sacE / sacC : 0,
       monC: num(o['monto del contrato $']), monE: num(o['monto entregado $']), monP: num(o['monto por entregar $']),
-      efe: numN(o['efecto kilos a favor / contra $']), pag: num(o['monto pagado $']), cobrar: num(o['monto por cobrar $']), con: 1
+      efe: numN(o['efecto kilos a favor / contra $']), pag: num(o['monto pagado $']), cobrar: num(o['monto por cobrar $']), con: 1,
+      // Financiado: el banco recibe todo y nos devuelve solo nuestro % (30 por defecto). «Por cobrar» ya viene calculado sobre ese %.
+      finan: o['financiado'] === true, pct: o['financiado'] === true ? (numN(o['pct nuestro']) ?? 30) : 100, pctC: numN(c['pct nuestro']),
+      monN: num(o['monto entregado nuestro $']), monB: num(o['monto entregado banco $'])
     };
   });
   const entregas = objetos(resp.entregas).map((o) => ({
     id: txt(o['no. contrato']), comp: txt(o['comprador']), cos: txt(o['cosecha']), fecha: txt(o['fecha salida']), boleta: txt(o['boleta']), conf: txt(o['confirmacion de salida']),
     sacos: num(o['sacos']), kg: num(o['kilos']), romana: numN(o['kilos romana origen']), neto: numN(o['kilos neto entregado']),
     sob: numN(o['sobrantes kg']), fal: numN(o['faltantes kg']), dif: numN(o['diferencia romana vs comprador']), fav: numN(o['kilos a favor / contra']),
-    tot: numN(o['total $']), real: numN(o['monto real $']), guia: txt(o['estado de guia']), est: txt(o['confirmacion de salida'])
+    tot: numN(o['total $']), real: numN(o['monto real $']), guia: txt(o['estado de guia']), est: txt(o['confirmacion de salida']),
+    dbId: o['id'] ?? null, boletaN: txt(o['boleta nuestra']), guiaC: txt(o['guia comprador']), obs: txt(o['observaciones'])
   }));
-  const pagos = objetos(resp.pagos).map((o) => ({ id: txt(o['no. contrato']), fecha: txt(o['fecha pago']), monto: num(o['monto pagado $']), nota: txt(o['referencia / nota']) }));
-  const d = { contratos, entregas, pagos };
+  const pagos = objetos(resp.pagos).map((o) => ({ dbId: o['id'] ?? null, id: txt(o['no. contrato']), fecha: txt(o['fecha pago']), monto: num(o['monto pagado $']), nota: txt(o['referencia / nota']) }));
+  const d = { contratos, entregas, pagos, listas: resp.listas || {}, diasGuia: Number.isFinite(Number(resp.diasAlertaGuia)) ? Number(resp.diasAlertaGuia) : 3 };
   d.alertas = alertasDe(d);
   contratos.forEach((c) => { c.sem = semaforo(c, d.alertas.por.get(c.id) || []); c.semTxt = SEM_TXT[c.sem]; });
   return d;
@@ -56,12 +65,18 @@ export function alertasDe(d, hoy = hoyIso()) {
   const add = (id, t, nivel) => { if (!por.has(id)) por.set(id, []); por.get(id).push({ t, nivel }); lista.push({ id, t, nivel }); };
   const activos = d.contratos.filter((c) => normalizar(c.est) !== 'anulado');
   activos.forEach((c) => {
-    const sg = d.entregas.filter((e) => e.id === c.id && normalizar(e.guia) === 'entregado sin guia').length;
-    if (sg) add(c.id, `${sg} ${sg === 1 ? 'entrega sin guía' : 'entregas sin guía'}`, 'ambar');
+    const sinGuia = d.entregas.filter((e) => e.id === c.id && normalizar(e.guia) === 'entregado sin guia');
+    let leves = 0;
+    sinGuia.forEach((e) => {
+      const n = e.fecha ? difDias(hoy, e.fecha.slice(0, 10)) : 0;
+      if (e.fecha && n >= (d.diasGuia ?? 3)) add(c.id, `Salida del ${e.fecha.slice(8, 10)}/${e.fecha.slice(5, 7)} sin guía hace ${n} ${n === 1 ? 'día' : 'días'}`, 'roja'); else leves++;
+    });
+    if (leves) add(c.id, `${leves} ${leves === 1 ? 'entrega sin guía' : 'entregas sin guía'}`, 'ambar');
     if (c.fent && abierto(c)) {
-      const n = difDias(c.fent, hoy);
-      if (n < 0) add(c.id, `Fecha de entrega vencida hace ${-n} ${-n === 1 ? 'día' : 'días'}`, 'roja');
-      else if (n <= 7) add(c.id, n === 0 ? 'Entrega prevista para hoy' : `Entrega prevista en ${n} ${n === 1 ? 'día' : 'días'}`, 'ambar');
+      // La entrega prevista es un mes entero: solo vence cuando el mes termina.
+      const n = difDias(finDeMes(c.fent), hoy), mc = mesCorto(c.fent);
+      if (n < 0) add(c.id, `Entrega de ${mc} vencida hace ${-n} ${-n === 1 ? 'día' : 'días'}`, 'roja');
+      else if (n <= 7) add(c.id, n === 0 ? `Hoy vence el plazo de entrega (${mc})` : `Quedan ${n} ${n === 1 ? 'día' : 'días'} del plazo de entrega (${mc})`, 'ambar');
     }
     if (c.pag > c.monE + 0.01) add(c.id, `Pagos mayores que lo entregado (${dinero$(c.pag - c.monE)})`, 'roja');
   });
@@ -121,6 +136,7 @@ export const MEDIDAS = [
   { k: 'kgC', t: 'Kilos Del Contrato', tipo: 'dec' }, { k: 'kgE', t: 'Kilos Entregados', tipo: 'dec' }, { k: 'kgP', t: 'Kilos Por Entregar', tipo: 'dec' },
   { k: 'fav', t: 'Kilos A Favor / Contra', tipo: 'dec', neg: true },
   { k: 'monC', t: 'Monto Del Contrato $', tipo: 'usd' }, { k: 'monE', t: 'Monto Entregado $', tipo: 'usd' }, { k: 'monP', t: 'Monto Por Entregar $', tipo: 'usd' },
+  { k: 'monN', t: 'Monto Entregado Que Nos Toca $', tipo: 'usd' }, { k: 'monB', t: 'Monto Entregado Del Banco $', tipo: 'usd' },
   { k: 'pag', t: 'Monto Pagado $', tipo: 'usd' }, { k: 'cobrar', t: 'Monto Por Cobrar $', tipo: 'usd', neg: true }, { k: 'efe', t: 'Efecto Kilos A Favor / Contra $', tipo: 'usd', neg: true }
 ];
 export const MEDIDAS_INI = ['sacC', 'sacE', 'sacP', 'monE', 'pag', 'cobrar'];
@@ -230,7 +246,9 @@ export function armarReporte(vista, d, f) {
     datos.push(`Entrega: ${cuenta('ent')}.`);
     datos.push(`Cobro: ${cuenta('cob')}.`);
     const fav = sumar(filas, 'fav'), efe = sumar(filas, 'efe');
-    if (fav != null) datos.push(`Kilos a favor / contra en contratos cerrados: ${dec2(fav)} kg${efe != null ? ' (' + dinero$(efe) + ')' : ''}.`);
+    if (fav != null) datos.push(`Kilos a favor / contra hasta hoy: ${dec2(fav)} kg${efe != null ? ' (' + dinero$(efe) + ')' : ''}.`);
+    const fi = filas.filter((r) => r.finan);
+    if (fi.length) datos.push(`Financiados: ${fi.length} ${fi.length === 1 ? 'contrato' : 'contratos'} · del monto entregado nos tocan ${dinero$(sumar(fi, 'monN'))} y ${dinero$(sumar(fi, 'monB'))} son del banco.`);
     if (tot('kgP') > 0) datos.push(`Faltan por entregar ${dec2(tot('kgP'))} kg (${ent0(tot('sacP'))} sacos).`);
   }
   const etqs = grupos.map((g) => g.etq.join(' · '));
@@ -292,6 +310,7 @@ export function reporteContrato(d, c) {
     `Monto del contrato ${dinero$(c.monC)} · entregado ${dinero$(c.monE)} · pagado ${dinero$(c.pag)} · por cobrar ${dinero$(c.cobrar)}.`
   ];
   if (c.fav != null) datos.push(`Kilos a favor / contra: ${dec2(c.fav)} kg${c.efe != null ? ' (efecto ' + dinero$(c.efe) + ')' : ''}.`);
+  if (c.finan) datos.push(`Financiado: nos toca el ${dec2(c.pct)} % (${dinero$(c.monC * c.pct / 100)} del contrato); el resto (${dinero$(c.monC * (100 - c.pct) / 100)}) es del banco. De lo entregado nos tocan ${dinero$(c.monN)}.`);
   if (c.sug != null || c.prom != null) datos.push(`Para cerrar el contrato: ${c.sug == null ? '—' : ent0(c.sug) + ' sacos sugeridos'}${c.prom != null ? ' · promedio ' + dec2(c.prom) + ' kg por saco' : ''}.`);
   if (pagos.length) datos.push('Pagos: ' + pagos.map((p) => `${p.fecha ? p.fecha.slice(8, 10) + '/' + p.fecha.slice(5, 7) + '/' + p.fecha.slice(0, 4) : 's/f'} ${dinero$(p.monto)}${p.nota ? ' (' + p.nota + ')' : ''}`).join(' · ') + '.');
   else datos.push('Pagos: todavía no hay pagos registrados.');

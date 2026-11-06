@@ -1,5 +1,20 @@
 // Novedades de cada versión (se muestran en Ajustes > Novedades de la versión).
 export const NOVEDADES = [
+  { v: '2.12.3', t: [
+    'En computadora, la vista del PDF (contratos, reportes, tiquetes) tiene el botón «⬇ Descargar PDF» para guardarlo directo en Descargas, y el reporte ancho se ve completo en la ventana.',
+    'En el teléfono todo sigue igual.'
+  ] },
+  { v: '2.12.2', t: [
+    'Contratos de exportación: la entrega prevista es un mes (por ejemplo nov-26). La alerta de «entrega vencida» solo sale cuando el mes termina.',
+    'Financiamiento solo SI o NO. En los contratos financiados el banco recibe todo y nos devuelve un porcentaje (30 % por defecto, editable por contrato): el contrato, cada entrega y «Por cobrar» muestran lo que nos toca y lo que es del banco.',
+    'Kilos a favor / contra y su efecto en $ se ven en vivo en el detalle del contrato, entrega por entrega, sin esperar al cierre.',
+    'Listas del contrato sin guiones ni opciones repetidas (Certificación, Financiamiento y demás).'
+  ] },
+  { v: '2.12.1', t: [
+    'Ajustes › Usuarios (administradores): crear usuarios con PIN temporal, cambiar rol, personalizar qué ve y qué puede hacer cada uno, restablecer el PIN, desactivar y volver a activar. Nadie puede desactivarse a sí mismo y siempre queda un administrador.',
+    'Exportaciones (administradores): ＋ Contrato (con todas las listas del Excel y «Agregar opción nueva»), 🚚 Salida en dos pasos —nuestra boleta al despachar y después la guía del comprador con sus kilos neto—, 💵 Pago, y editar o anular lo que se digitó mal. Todo queda en la auditoría.',
+    'Alerta de salidas sin guía del comprador: por defecto a los 3 días; se cambia en Ajustes › Alertas de exportación.'
+  ] },
   { v: '2.12.0', t: [
     'Servidor nuevo: toda la información (registros, diario, boletos, históricos y exportaciones) vive ahora en una sola base de datos propia, fuera de Google. Ya no hay hojas de Excel separadas para cada cosa.',
     'Ingreso con usuario y PIN verificado en el servidor, con bloqueo temporal tras varios intentos fallidos. Los permisos de cada usuario se validan en el servidor.',

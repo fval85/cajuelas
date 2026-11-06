@@ -128,6 +128,15 @@ export async function actualizarUsuarios(forzar = false) {
     const antesS = JSON.stringify(lista());
     db.set('users_list', nuevaS);
     if (JSON.stringify(nuevaS) !== antesS) avisar();
+    // Permisos al día: si el administrador cambió el rol o los permisos de esta persona, llega aquí.
+    const ses = db.get('sesion', null);
+    if (ses && ses.token) {
+      const rp = await postJson('', { action: 'perfil' }, 20000);
+      if (rp.ok && rp.json && rp.json.usuario && rp.json.usuario.nombre) {
+        const antesP = JSON.stringify(ses.perfil);
+        if (JSON.stringify(rp.json.usuario) !== antesP) { db.set('sesion', { ...ses, perfil: rp.json.usuario }); avisar(); }
+      }
+    }
     return { ok: true };
   }
   const { url, token } = syncCfg();
