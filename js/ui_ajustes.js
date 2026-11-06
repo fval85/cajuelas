@@ -9,6 +9,7 @@ import { parseExp } from './exp_calc.js';
 import { compartir, descargar } from './files.js';
 import { tarjeta, etiqueta, banda, selector, boton, filaAj, grupo, tituloGrupo, cabSub } from './ui.js';
 import { pintarUsuarios } from './ui_usuarios.js';
+import { pintarPersonas } from './ui_personas.js';
 import { configurarAlertaGuia } from './ui_exp_admin.js';
 import { hayControl, sesion, salir, actualizarUsuarios, puede, lista as listaUsuarios, cambiarPin } from './users.js';
 import { esComputadora, anchoMm, setAnchoMm, imprimirTiquetes } from './imprimir.js';
@@ -97,6 +98,7 @@ export function crearAjustes(nav) {
     if (vista === 'mibarra') return vistaMiBarra();
     if (vista === 'novedades') return vistaNovedades();
     if (vista === 'usuarios') return pintarUsuarios({ raiz, irInicio });
+    if (vista === 'personas') return pintarPersonas({ raiz, irInicio });
     vistaInicio();
   }
   const irInicio = () => { vista = 'inicio'; desbloqueado = false; pintar(); };
@@ -206,6 +208,7 @@ export function crearAjustes(nav) {
       raiz.append(...head, tarjetaPend, tarjetaEstado(), fCuenta ? grupo(fCuenta, fPin) : null,
         tituloGrupo('Administración'), cp(grupo(
           filaAj({ ic: '👥', t: 'Usuarios', s: 'Crear, permisos, PIN y desactivar', onclick: () => { vista = 'usuarios'; pintar(); } }),
+          filaAj({ ic: '💳', t: 'Personas con tarjeta', s: 'Agregar, pegar desde Excel o subir archivo', onclick: () => { vista = 'personas'; pintar(); } }),
           filaAj({ ic: '⏰', t: 'Alertas de exportación', s: 'Días sin guía del comprador para avisar', onclick: async () => { const x = await exportaciones(); await configurarAlertaGuia(x && x.diasAlertaGuia); } })), 'todos'),
         tituloGrupo('Datos'), cp(grupo(...datos), 'config'),
         tituloGrupo('Conexión'), cp(grupo(...conexion), 'config'),
