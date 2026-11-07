@@ -1,5 +1,16 @@
 // Novedades de cada versión (se muestran en Ajustes > Novedades de la versión).
 export const NOVEDADES = [
+  { v: '2.16.0', t: [
+    'Reportes › Café en fruta VOLCAFE: «＋ Cargar» (a mano, pegar o subir archivo) y «⬇ Excel» arriba, el avance contra el máximo, un gráfico de entregas por día (toque una columna para ver sus recibos) y reportes de Avance por tipo, Fincas, Días y Recibos. Todas las fanegas con 2 decimales.',
+    'Diario (administradores): «Anular» ahora permite anular un recibo de cualquier día o de otro usuario. Al anularlo ofrece actualizar Históricos de esa fecha (se restan los recibos anulados, con vista previa).',
+    'Ajustes › Administración › Precios del registro: el administrador cambia el precio de la cajuela (hoy ₡1 800) sin tocar el servidor. Elige si vale ahora o mañana a las 6:00 a. m. y si reemplaza al anterior o salen los dos. Los recibos ya hechos no cambian. Hay historial.',
+    'Ajustes más limpio: se quitaron Modo de pruebas, Sincronización con la hoja, la clave de esa pantalla, Copia de seguridad y Empezar de cero, que ya no hacen falta con el servidor nuevo. «Descartar envíos pendientes» quedó junto a Envíos.'
+  ] },
+  { v: '2.15.0', t: [
+    'Reportes › Café en fruta · VOLCAFE (administradores): control simple de lo entregado. Muestra las fanegas entregadas por tipo contra el máximo del contrato («Faltan …») y las fanegas de cada finca.',
+    'Cada recibo lleva Fecha, Tipo, Recibo, Finca, Sociedad y Cajuelas; las fanegas se calculan solas (cajuelas ÷ 20). Se agregan a mano, pegando desde Excel o subiendo la plantilla, siempre con vista previa. Un mismo recibo puede repartirse entre fincas.',
+    'El máximo de fanegas de cada tipo se puede cambiar si Capris amplía el contrato. Los recibos se pueden editar o anular.'
+  ] },
   { v: '2.14.0', t: [
     'Personas con tarjeta: el administrador puede asignar una persona a más usuarios o quitársela a alguno (dentro de la persona, «Usuarios que la tienen»).',
     'En la lista de un usuario, «Seleccionar varias» permite copiar o pasar varias personas a otro usuario de una vez; reciben código nuevo y los recibos anteriores se conservan.'

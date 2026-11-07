@@ -5,7 +5,9 @@ import { normalizar, soloDigitos, toast } from './util.js';
 // totalmente separado del real. Solo se comparten la clave de administrador, el nombre del dispositivo y la impresión.
 const P = 'cajuelas.', PT = 'cajuelas.t.';
 const COMPARTIDAS = new Set(['admin_salt', 'admin_hash', 'admin_recovery_hash', 'device_name', 'device_auto', 'print_mm']);
-export const modoPruebas = (() => { try { return localStorage.getItem('cajuelas_modo') === 'pruebas'; } catch { return false; } })();
+// El modo de pruebas ya no existe (el servidor es uno solo): si algún dispositivo lo tenía activado, se apaga.
+try { localStorage.removeItem('cajuelas_modo'); } catch { /* nada */ }
+export const modoPruebas = false;
 export function cambiarModo(pruebas) {
   try { if (pruebas) localStorage.setItem('cajuelas_modo', 'pruebas'); else localStorage.removeItem('cajuelas_modo'); } catch { /* nada */ }
   try { sessionStorage.removeItem('cajuelas.conservar'); } catch { /* nada */ }

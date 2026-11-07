@@ -36,7 +36,7 @@ const xml = (t) => new DOMParser().parseFromString(t, 'application/xml');
 const colIdx = (ref) => { let n = 0; for (const ch of ref.replace(/[0-9]/g, '')) n = n * 26 + ch.charCodeAt(0) - 64; return n - 1; };
 
 /** Devuelve las filas (arreglos de texto) de la hoja que parezca ser la de datos. */
-async function filasXlsx(buf) {
+async function filasXlsx(buf, opc = {}) {
   const zip = await leerZip(buf);
   const wb = xml(await zip.leer('xl/workbook.xml'));
   const rels = xml(await zip.leer('xl/_rels/workbook.xml.rels'));
@@ -63,9 +63,9 @@ async function filasXlsx(buf) {
     });
     return filas;
   };
-  let elegida = hojas.find((h) => /personas nuevas/i.test(h.nombre));
+  let elegida = hojas.find((h) => (opc.hoja || /personas nuevas/i).test(h.nombre));
   if (elegida) return leerHoja(elegida);
-  for (const h of hojas) { const f = await leerHoja(h); if (f.slice(0, 5).some((r) => r.some((c) => /tarjeta/i.test(c)))) return f; }
+  for (const h of hojas) { const f = await leerHoja(h); if (f.slice(0, 5).some((r) => r.some((c) => (opc.clave || /tarjeta/i).test(c)))) return f; }
   return hojas.length ? leerHoja(hojas[0]) : [];
 }
 
@@ -87,11 +87,11 @@ function filasCsv(texto) {
 }
 
 /** Lee un archivo (.xlsx, .csv, .txt) y devuelve las filas como arreglos de texto. */
-export async function leerArchivoTabla(archivo) {
+export async function leerArchivoTabla(archivo, opc = {}) {
   const buf = await archivo.arrayBuffer();
   if (/\.xlsx$/i.test(archivo.name) || (new Uint8Array(buf, 0, 2)[0] === 0x50 && new Uint8Array(buf, 0, 2)[1] === 0x4b)) {
     if (typeof DecompressionStream === 'undefined') throw new Error('Este navegador no puede abrir Excel. Guarde el archivo como CSV o use «Pegar desde Excel».');
-    return filasXlsx(buf);
+    return filasXlsx(buf, opc);
   }
   if (/\.xls$/i.test(archivo.name)) throw new Error('El formato .xls viejo no se puede leer. Guárdelo como .xlsx o CSV.');
   return filasCsv(dec.decode(buf));

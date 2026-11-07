@@ -5,9 +5,11 @@ import { nombreUsuario, puede } from './users.js';
 import { recibos, rc, payloadRecibo } from './data.js';
 import { cargarFuentes, paginasRecibos, paginasResumenDiario, paginasResumenSimple, MODO } from './draw.js';
 import { pdfDePaginas } from './files.js';
-import { encolar, recibosDelDia, recibosDelRango } from './sync.js';
+import { encolar, enviarPendientes, cuantosPendientes, recibosDelDia, recibosDelRango } from './sync.js';
+import { pasarDiaFlujo } from './ui_pasar_hist.js';
 import { ajuste } from './apariencia.js';
 import { buscarRecibosHoja, filtrarSociedades, itemRecibo, corregirFechaComprobante } from './ui_admin.js';
+import { confirmar } from './util.js';
 import { tarjeta, etiqueta, banda, selector, boton, campoBusqueda, verDocumento, listaBuscable, pedirMotivo, pedirPeriodo, usuarioCoincide } from './ui.js';
 
 export function crearDiario(nav) {
@@ -195,7 +197,41 @@ export function crearDiario(nav) {
     await corregirFechaComprobante('recibo', { numero: r.numero, dispositivo: r.dispositivo, dia: r.dia, detalle: `${r.sociedad} · ${r.finca}${r.lote ? ' · ' + r.lote : ''}` });
   }
 
+  /** Administrador: anular un recibo de cualquier día o de otro usuario y actualizar Históricos de esa fecha. */
+  async function anularOtroDia() {
+    const bus = await buscarRecibosHoja('Buscar el recibo a anular');
+    if (!bus) return;
+    const r = await listaBuscable({ titulo: 'Recibo a anular', placeholder: 'Buscar: número, sociedad, finca, usuario...', texto: 'recibos', items: bus.lista.map(itemRecibo) });
+    if (!r) return;
+    const k = rc(r);
+    const motivo = await pedirMotivo({
+      titulo: 'Anular recibo', placeholder: 'Ej. Se digitó una cantidad equivocada',
+      detalle: `Recibo ${r.numero} · ${diaLegible(r.dia)}\n${r.sociedad}\n${r.finca}${r.lote ? ' · ' + r.lote : ''}\nUsuario: ${r.usuario || '—'} · ${r.dispositivo}\nRecibido: ${fmtNum(k.recibidoCajuelas, 2)} cajuelas (${fmtNum(k.fanegas, 2)} fanegas)`,
+      aviso: 'El recibo quedará marcado como ANULADO y se generará un comprobante de anulación. Esta acción no se puede deshacer.'
+    });
+    if (!motivo) return;
+    const sello = ahoraTxt();
+    const a = { ...r, anulado: true, motivo, anuladoFecha: sello, anuladoPor: nombreUsuario() };
+    encolar(payloadRecibo(a, 'ANUL_' + stampCorto() + '_' + r.numero, sello, 'ANULACIÓN', motivo, true));
+    if (r.dispositivo === deviceName()) recibos.anular(r.numero, r.dia, motivo, sello);
+    nav.pendientes();
+    toast('Enviando la anulación…', 2500);
+    let env = await enviarPendientes();
+    for (let i = 0; env.ocupado && i < 10; i++) { await new Promise((ok) => setTimeout(ok, 1200)); env = await enviarPendientes(); }
+    nav.pendientes();
+    if (env.error || env.restantes) toast(`La anulación quedó pendiente de enviar (${env.error || 'sin conexión'}). Cuando se envíe, actualice Históricos de esa fecha.`, 7000);
+    else if (await confirmar('Recibo anulado', `El recibo ${r.numero} del ${diaLegible(r.dia)} quedó anulado en el servidor.\n\n¿Actualizar ahora Históricos de ese día? Se restan los recibos anulados.`, { si: 'Actualizar Históricos', no: 'Ahora no' })) {
+      await pasarDiaFlujo(r.dia, { titulo: 'Actualizar Históricos', intro: `Se anuló el recibo ${r.numero}.` });
+    }
+    mostrar([{ r: a, modo: MODO.ANULACION }], `Anulación ${a.numero}`, `anulacion_${a.numero}.pdf`, 'Recibo anulado.');
+  }
+
   async function anular() {
+    if (puede('todos')) {
+      const op = await elegir('¿Qué recibo desea anular?', [{ etiqueta: 'Uno de hoy (de este teléfono)', valor: 'hoy' }, { etiqueta: 'De otro día o de otro usuario', valor: 'otro' }], { buscar: false });
+      if (!op) return;
+      if (op === 'otro') return anularOtroDia();
+    }
     const activos = recibos.items().filter((r) => r.dia === diaHoy() && !r.anulado).reverse();
     if (!activos.length) return toast('No hay recibos de hoy para anular.');
     const r = await elegir('¿Qué recibo desea anular?', activos.map((x) => ({ etiqueta: `${x.numero} · ${x.sociedad} · ${fmtNum(rc(x).recibidoCajuelas, 2)} cajuelas`, valor: x })), { buscar: false });

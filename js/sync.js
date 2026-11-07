@@ -179,6 +179,8 @@ export async function historicos() {
 export async function expAdmin(op, datos, extra = {}) { return postJson('', { action: 'expAdmin', op, datos, ...extra }, 30000); }
 export async function usuariosAdmin(op, datos) { return postJson('', { action: 'usuariosAdmin', op, datos }, 30000); }
 export async function personasAdmin(op, datos) { return postJson('', { action: 'personasAdmin', op, datos }, 60000); }
+export async function cafeFruta(op, datos) { return postJson('', { action: 'cafeFruta', op, datos }, 60000); }
+export async function preciosAdmin(op, datos) { return postJson('', { action: 'preciosAdmin', op, datos }, 30000); }
 
 /** Hojas Resumen, Contratos, Entregas y Pagos del Google Sheet «Exportaciones» (ventas de exportación y consumo nacional). */
 export async function exportaciones() {

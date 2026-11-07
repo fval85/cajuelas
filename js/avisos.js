@@ -33,12 +33,10 @@ export function saldosFaltantes() {
 export function pendientesAdmin() {
   const out = [];
   const n = cuantosPendientes();
-  if (n) out.push({ ic: '⏳', texto: `${n} ${n === 1 ? 'envío pendiente' : 'envíos pendientes'} de enviar a Google Sheets`, accion: 'enviar' });
+  if (n) out.push({ ic: '⏳', texto: `${n} ${n === 1 ? 'envío pendiente' : 'envíos pendientes'} de enviar al servidor`, accion: 'enviar' });
   if (document.getElementById('aviso-act')) out.push({ ic: '⬆', texto: 'Hay una versión nueva de la aplicación', accion: 'actualizar' });
   const falt = saldosFaltantes();
   if (falt.length) out.push({ ic: '🎟', texto: `Saldo de boletos sin registrar hoy: ${falt.join(', ')}` });
   if (!cat.actualizado || Date.now() - cat.actualizado > 24 * 3600000) out.push({ ic: '📚', texto: 'El catálogo lleva más de un día sin actualizarse', accion: 'catalogo' });
-  const resp = db.get('ultimo_respaldo', 0);
-  if (!resp || Date.now() - resp > 7 * 86400000) out.push({ ic: '💾', texto: 'Hace más de 7 días que no hace una copia de seguridad' });
   return out;
 }

@@ -10,6 +10,7 @@ import { compartir, descargar } from './files.js';
 import { tarjeta, etiqueta, banda, selector, boton, filaAj, grupo, tituloGrupo, cabSub } from './ui.js';
 import { pintarUsuarios } from './ui_usuarios.js';
 import { pintarPersonas } from './ui_personas.js';
+import { pintarPrecios, textoPrecioHoy } from './ui_precios.js';
 import { configurarAlertaGuia } from './ui_exp_admin.js';
 import { hayControl, sesion, salir, actualizarUsuarios, puede, lista as listaUsuarios, cambiarPin } from './users.js';
 import { esComputadora, anchoMm, setAnchoMm, imprimirTiquetes } from './imprimir.js';
@@ -19,39 +20,6 @@ import { icono } from './ui.js';
 import { pendientesAdmin } from './avisos.js';
 
 const cp = (el, permiso) => { el.dataset.permiso = permiso; return el; };
-
-// ---------- Clave de administrador ----------
-const enc = new TextEncoder();
-const hex = (b) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('');
-async function derivar(sal, secreto) {
-  const k = await crypto.subtle.importKey('raw', enc.encode(secreto), 'PBKDF2', false, ['deriveBits']);
-  return hex(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: enc.encode(sal), iterations: 150000, hash: 'SHA-256' }, k, 256));
-}
-const aleatorio = (n) => hex(crypto.getRandomValues(new Uint8Array(n)));
-const admin = {
-  fallos: 0, bloqueadoHasta: 0,
-  puesta: () => !!db.get('admin_hash', ''),
-  espera() { const r = this.bloqueadoHasta - Date.now(); return r > 0 ? Math.ceil(r / 1000) : 0; },
-  falla() { this.fallos++; if (this.fallos >= 5) { this.fallos = 0; this.bloqueadoHasta = Date.now() + 30000; } },
-  async revisar(clave) {
-    if (this.espera() > 0) return false;
-    const ok = (await derivar(db.get('admin_salt', ''), clave)) === db.get('admin_hash', '');
-    if (ok) this.fallos = 0; else this.falla();
-    return ok;
-  },
-  async revisarRecuperacion(codigo) {
-    if (this.espera() > 0) return false;
-    const limpio = codigo.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-    const ok = (await derivar(db.get('admin_salt', '') + 'R', limpio)) === db.get('admin_recovery_hash', '');
-    if (ok) this.fallos = 0; else this.falla();
-    return ok;
-  },
-  async poner(clave) {
-    const sal = aleatorio(16), crudo = aleatorio(6).toUpperCase();
-    db.set('admin_salt', sal); db.set('admin_hash', await derivar(sal, clave)); db.set('admin_recovery_hash', await derivar(sal + 'R', crudo));
-    return crudo.match(/.{4}/g).join('-');
-  }
-};
 
 // ---------- Catálogo desde la hoja ----------
 let ultimaRevision = 0;
@@ -67,7 +35,7 @@ export async function actualizarCatalogo(manual, alCambiar) {
   const av = (t, x) => { if (manual) aviso(t, x); };
   if (!r.ok) return av('No se pudo actualizar', r.message + '\n\nEl catálogo del dispositivo no se modificó.');
   if (![r.estructura, r.personas, r.beneficios, r.diario, r.bolFichas, r.bolOficinas].some((a) => a.length)) {
-    return av('La hoja no tiene datos', `No hay filas para el dispositivo «${device}» (ni filas con la columna Dispositivo vacía). El catálogo no se modificó. Revise que el nombre del dispositivo coincida con el de la hoja.`);
+    return av('El servidor no tiene datos', `No hay filas para el dispositivo «${device}» (ni filas con la columna Dispositivo vacía). El catálogo no se modificó. Revise que el nombre del dispositivo coincida con el de la hoja.`);
   }
   let { cambio, texto } = reemplazarDesdeHoja(r.estructura, r.personas, r.beneficios, r.diario);
   if (aplicarConfigHoja(r.config)) cambio = true;
@@ -89,16 +57,15 @@ export function crearAjustes(nav) {
 
   function pintar() {
     clear(raiz);
-    if (vista === 'sync') return vistaSync();
     if (vista === 'catalogo') return vistaCatalogo();
     if (vista === 'impresion') return vistaImpresion();
-    if (vista === 'copia') return vistaCopia();
     if (vista === 'conexiones') return vistaConexiones();
     if (vista === 'apariencia') return vistaApariencia();
     if (vista === 'mibarra') return vistaMiBarra();
     if (vista === 'novedades') return vistaNovedades();
     if (vista === 'usuarios') return pintarUsuarios({ raiz, irInicio });
     if (vista === 'personas') return pintarPersonas({ raiz, irInicio });
+    if (vista === 'precios') return pintarPrecios({ raiz, irInicio, alGuardar: async () => { const r = await descargarCatalogo(deviceName()); if (r.ok && aplicarConfigHoja(r.config)) alCatalogo(); } });
     vistaInicio();
   }
   const irInicio = () => { vista = 'inicio'; desbloqueado = false; pintar(); };
@@ -107,9 +74,6 @@ export function crearAjustes(nav) {
   const textoPend = (n) => (n ? `⏳ ${n} ${n === 1 ? 'registro pendiente' : 'registros pendientes'} de enviar` : '✔ Todo enviado');
   const hace = (t) => { if (!t) return 'sin descargar'; const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 1 ? 'ahora' : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : `hace ${Math.round(m / 1440)} d`; };
   const cacheT = (k) => { try { const o = JSON.parse(localStorage.getItem(k + (modoPruebas ? '_t' : '')) || 'null'); return o && o.t ? o.t : 0; } catch { return 0; } };
-  const diasSinRespaldo = () => { const t = db.get('ultimo_respaldo', 0); return t ? Math.floor((Date.now() - t) / 86400000) : null; };
-  const textoRespaldo = () => { const d = diasSinRespaldo(); return d === null ? 'Aún no ha hecho ninguna copia de seguridad' : d === 0 ? 'Último respaldo: hoy' : `Último respaldo: hace ${d} ${d === 1 ? 'día' : 'días'}`; };
-  const respaldoVencido = () => { const d = diasSinRespaldo(); return d === null || d > 7; };
   async function enviarAhora() {
     if (!configurado()) return toast('Falta configurar la sincronización (pida ayuda al administrador).', 5000);
     if (!cuantosPendientes()) return toast('No hay envíos pendientes.');
@@ -127,13 +91,17 @@ export function crearAjustes(nav) {
     if (!u.ok) toast('Usuarios: ' + u.message, 5000);
     pintar();
   }
+  async function descartarEnvios() {
+    const n = cuantosPendientes();
+    if (!n) return toast('No hay envíos pendientes.');
+    if (await confirmar('Descartar envíos pendientes', `Se borrarán ${n} registros que aún no llegaron al servidor. No se pueden recuperar.\n\n¿Descartarlos?`, { si: 'Descartar', peligro: true })) { descartarPendientes(); pintar(); toast('Pendientes descartados.'); }
+  }
   async function copiarDiagnostico() {
     const e = db.get('ultimo_error', null);
     const sUs = hayControl() ? sesion() : null;
     const txt = ['Diagnóstico · Registro de Cajuelas', `Versión: ${VERSION}${modoPruebas ? ' (modo de pruebas)' : ''}`, `Dispositivo: ${deviceName()}`, `Usuario: ${sUs ? sUs.nombre + ' (' + sUs.rol + ')' : 'sin control de acceso'}`,
       `En línea: ${navigator.onLine ? 'sí' : 'no'}`, `Envíos pendientes: ${cuantosPendientes()}`, `Cosecha activa: ${cosechaActiva() || '—'}`,
       `Catálogo: ${cat.actualizado ? new Date(cat.actualizado).toLocaleString('es-CR') : 'sin recibir'}`, `Históricos: ${hace(cacheT('cajuelas_hist'))} · Exportaciones: ${hace(cacheT('cajuelas_exp'))}`,
-      `Último respaldo: ${diasSinRespaldo() === null ? 'nunca' : 'hace ' + diasSinRespaldo() + ' d'}`,
       `Último error de envío: ${e ? new Date(e.t).toLocaleString('es-CR') + ' · ' + e.m : 'ninguno'}`, `Navegador: ${navigator.userAgent}`].join('\n');
     try { await navigator.clipboard.writeText(txt); toast('Diagnóstico copiado. Péguelo en un mensaje.', 4000); }
     catch { aviso('Diagnóstico', txt); }
@@ -152,7 +120,6 @@ export function crearAjustes(nav) {
       fila(n ? '⏳' : '✔', n ? `${n} ${n === 1 ? 'envío pendiente' : 'envíos pendientes'}` : 'Sin envíos pendientes', !n),
       fila('📋', `Catálogo: ${co ? 'cosecha ' + co : 'sin cosecha'} · ${cat.actualizado ? hace(cat.actualizado) : 'sin recibir'}`),
       fila('📊', `Históricos ${hace(cacheT('cajuelas_hist'))} · Exportaciones ${hace(cacheT('cajuelas_exp'))}`),
-      fila(respaldoVencido() ? '⚠' : '💾', textoRespaldo() + (respaldoVencido() ? ' · haga una copia hoy' : ''), !respaldoVencido()),
       fila('✔', `Versión ${VERSION} · al día`),
       h('small', { class: 'nota' }, 'Toque para ver el estado de las conexiones'));
   }
@@ -184,23 +151,18 @@ export function crearAjustes(nav) {
     const fNov = filaAj({ ic: '✨', t: 'Novedades de la versión', s: `Qué hay de nuevo en ${VERSION}`, onclick: () => { vista = 'novedades'; pintar(); } });
     const fBuscar = filaAj({ ic: '⬆', t: 'Buscar actualización de la app', onclick: () => window.__buscarActualizacion && window.__buscarActualizacion() });
     const fDiag = filaAj({ ic: '📋', t: 'Copiar diagnóstico', s: 'Para enviarlo a quien da soporte', onclick: copiarDiagnostico });
-    const head = [banda('Ajustes'), modoPruebas ? h('p', { class: 'estado aviso' }, '🧪 Está en MODO DE PRUEBAS: los datos no son reales.') : null];
+    const head = [banda('Ajustes')];
     if (!esAdmin) {
       // Lista simple para quien no administra.
       raiz.append(...head, grupo(fCuenta, fPin, fAct, fPend), grupo(fApar, fBarra, fNov, fBuscar, fAlm));
       infoAlmacenamiento(fAlm);
     } else {
       const datos = [fAct, fPend, filaAj({ ic: '📚', t: 'Catálogo recibido', s: 'Cosechas, sociedades y fincas', onclick: () => { vista = 'catalogo'; pintar(); } }),
-        filaAj({ ic: '💾', t: 'Copia de seguridad', s: textoRespaldo() + (respaldoVencido() ? ' ⚠' : ''), onclick: () => { vista = 'copia'; pintar(); } })];
+        nPend ? filaAj({ ic: '🗑', t: 'Descartar envíos pendientes', s: `${nPend} ${nPend === 1 ? 'registro' : 'registros'} que no llegaron al servidor`, peligro: true, onclick: descartarEnvios }) : null];
       const conexion = [
-        filaAj({ ic: '🔌', t: 'Estado de conexiones', s: 'Probar Apps Script, usuarios, catálogo y reportes', onclick: () => { vista = 'conexiones'; pintar(); } }),
-        filaAj({ ic: '⚙', t: 'Sincronización con la hoja', s: configurado() ? 'Configurada' : 'Sin configurar: falta la URL y el token', onclick: () => { vista = 'sync'; desbloqueado = false; pintar(); } })
+        filaAj({ ic: '🔌', t: 'Estado de conexiones', s: 'Probar el servidor, usuarios, catálogo y reportes', onclick: () => { vista = 'conexiones'; pintar(); } })
       ];
       const dispositivo = [fApar, fBarra, esComputadora() ? filaAj({ ic: '🖨', t: 'Impresora de 80 mm', s: `Ancho ${anchoMm()} mm`, onclick: () => { vista = 'impresion'; pintar(); } }) : null, fNov, fBuscar, fDiag, fAlm];
-      const riesgo = [
-        filaAj({ ic: '🧪', t: 'Modo de pruebas', s: modoPruebas ? 'ACTIVO · los datos no son reales' : 'Practicar sin tocar los datos reales', sw: modoPruebas, onclick: cambiarDeModo }),
-        filaAj({ ic: '🧹', t: 'Empezar de cero', s: 'Borra los datos de este dispositivo', peligro: true, onclick: empezarDeCero })
-      ];
       const pend = pendientesAdmin();
       const tarjetaPend = pend.length ? h('section', { class: 'tarjeta pl-pendientes' }, h('b', null, `Pendientes (${pend.length})`),
         ...pend.map((p) => h('button', { type: 'button', class: 'pend-fila', onclick: () => { if (p.accion === 'enviar') enviarAhora(); else if (p.accion === 'actualizar') window.__buscarActualizacion && window.__buscarActualizacion(); else if (p.accion === 'catalogo') actualizarTodo(); } },
@@ -208,12 +170,12 @@ export function crearAjustes(nav) {
       raiz.append(...head, tarjetaPend, tarjetaEstado(), fCuenta ? grupo(fCuenta, fPin) : null,
         tituloGrupo('Administración'), cp(grupo(
           filaAj({ ic: '👥', t: 'Usuarios', s: 'Crear, permisos, PIN y desactivar', onclick: () => { vista = 'usuarios'; pintar(); } }),
+          filaAj({ ic: '💲', t: 'Precios del registro', s: textoPrecioHoy(), onclick: () => { vista = 'precios'; pintar(); } }),
           filaAj({ ic: '💳', t: 'Personas con tarjeta', s: 'Agregar, pegar desde Excel o subir archivo', onclick: () => { vista = 'personas'; pintar(); } }),
           filaAj({ ic: '⏰', t: 'Alertas de exportación', s: 'Días sin guía del comprador para avisar', onclick: async () => { const x = await exportaciones(); await configurarAlertaGuia(x && x.diasAlertaGuia); } })), 'todos'),
         tituloGrupo('Datos'), cp(grupo(...datos), 'config'),
         tituloGrupo('Conexión'), cp(grupo(...conexion), 'config'),
-        tituloGrupo('Este dispositivo'), grupo(...dispositivo),
-        tituloGrupo('Zona de riesgo'), cp(grupo(...riesgo), 'config'));
+        tituloGrupo('Este dispositivo'), grupo(...dispositivo));
       infoAlmacenamiento(fAlm);
     }
     const quitar = alCambiarPendientes(() => { if (!raiz.isConnected || vista !== 'inicio') return quitar(); fPend.cambiarSub(textoPend(cuantosPendientes())); });
@@ -222,12 +184,12 @@ export function crearAjustes(nav) {
   // ----- Estado de conexiones -----
   function vistaConexiones() {
     raiz.append(cabSub('Estado de conexiones', irInicio));
-    const items = [['ping', 'Apps Script'], ['usuarios', 'Lista de usuarios'], ['catalogo', 'Catálogo'], ['hist', 'Históricos'], ['exp', 'Exportaciones']];
+    const items = [['ping', 'Servidor'], ['usuarios', 'Lista de usuarios'], ['catalogo', 'Catálogo'], ['hist', 'Históricos'], ['exp', 'Exportaciones']];
     const filas = {};
     const lista = h('div', { class: 'grupo' });
     items.forEach(([k, t]) => { filas[k] = filaAj({ ic: '•', t, s: 'Sin probar' }); filas[k].querySelector('.fl').textContent = ''; lista.append(filas[k]); });
     const poner = (k, ok, texto, aviso) => { const f = filas[k]; f.querySelector('.ic').textContent = ok === null ? '⏳' : ok ? '✔' : '✖'; f.cambiarSub(texto + (aviso ? '\n⚠ ' + aviso : '')); f.querySelector('small').style.whiteSpace = 'pre-line'; f.classList.toggle('peligro', ok === false); };
-    const resumen = h('p', { class: 'nota' }, configurado() ? 'Toque «Probar todas las conexiones» para revisar cada enlace con Google.' : 'Falta configurar la URL y el token (Conexión > Sincronización con la hoja).');
+    const resumen = h('p', { class: 'nota' }, configurado() ? 'Toque «Probar todas las conexiones» para revisar cada conexión con el servidor.' : 'Sin conexión con el servidor.');
     let probando = false;
     async function probarTodas() {
       if (probando) return;
@@ -352,112 +314,19 @@ export function crearAjustes(nav) {
         }))));
   }
 
-  // ----- Copia de seguridad -----
-  function vistaCopia() {
-    raiz.append(cabSub('Copia de seguridad', irInicio), tarjeta(
-      h('p', { class: 'nota' }, 'Los datos de este dispositivo (comprobantes, recibos, movimientos y pendientes) se guardan solo en este navegador. La copia contiene el token de la hoja: guárdela en un lugar seguro.'),
-      h('div', { class: 'pila' }, boton('Guardar copia de seguridad', 'compartir', 'c-verde ancho-total', exportar), boton('Restaurar una copia', 'enviar', 'c-rojo ancho-total', importar))));
-  }
 
-  async function cambiarDeModo() {
-    if (admin.puesta() && !(await pedirClaveAdmin())) return;
-    const aPruebas = !modoPruebas;
-    const ok = await confirmar(aPruebas ? 'Entrar al modo de pruebas' : 'Volver al modo real',
-      aPruebas ? 'La app se reiniciará en MODO DE PRUEBAS, con datos separados de los reales. En ese modo debe configurar la hoja de pruebas (Administración > Configurar sincronización).\n\n¿Continuar?'
-        : 'La app se reiniciará en el modo REAL, con sus datos de siempre.\n\n¿Continuar?', { si: 'Continuar' });
-    if (ok) cambiarModo(aPruebas);
-  }
-  async function empezarDeCero() {
-    if (admin.puesta() && !(await pedirClaveAdmin())) return;
-    const pend = cuantosPendientes();
-    const r = await formulario('Empezar de cero', [{ etiqueta: 'Para confirmar escriba BORRAR', placeholder: 'BORRAR', autocapitalize: 'characters' }], {
-      ok: 'Borrar todo', validar: (v) => (v[0].trim().toUpperCase() !== 'BORRAR' ? 'Escriba la palabra BORRAR para confirmar.' : null),
-      detalle: `Se borrarán los comprobantes, recibos y movimientos de este dispositivo${pend ? ` y ${pend} envíos pendientes que NO han llegado a la hoja` : ''}. No se puede deshacer. Si necesita conservar algo, haga primero una copia de seguridad.`
-    });
-    if (!r) return;
-    borrarDatosOperativos();
-    try { sessionStorage.setItem('cajuelas.conservar', '1'); } catch { /* nada */ }
-    toast('Listo: datos borrados y numeración reiniciada.', 4000);
-    setTimeout(() => location.reload(), 900);
-  }
-  async function pedirClaveAdmin() {
-    const r = await formulario('Clave de administrador', [{ etiqueta: 'Clave', tipo: 'password' }], { ok: 'Verificar' });
-    if (!r) return false;
-    if (admin.espera() > 0) { toast(`Demasiados intentos. Espere ${admin.espera()} s.`); return false; }
-    if (await admin.revisar(r[0])) return true;
-    toast('Clave incorrecta.'); return false;
-  }
   async function infoAlmacenamiento(fila) {
     try {
       const persistente = navigator.storage && navigator.storage.persisted ? await navigator.storage.persisted() : null;
-      if (persistente === false && fila && fila.isConnected) fila.cambiarSub(`Dispositivo: ${deviceName()} · almacenamiento sin protección (haga copias de seguridad)`);
+      if (persistente === false && fila && fila.isConnected) fila.cambiarSub(`Dispositivo: ${deviceName()} · almacenamiento sin protección (mantenga la app instalada y envíe los pendientes)`);
     } catch { /* nada */ }
   }
 
-  // ----- Sincronización -----
-  function vistaSync() {
-    const volver = irInicio;
-    raiz.append(cabSub('Sincronización', volver));
-    if (admin.puesta() && !desbloqueado) return vistaBloqueo(volver);
-    const c = syncCfg();
-    const url = h('input', { class: 'campo', type: 'url', value: c.url, placeholder: 'https://script.google.com/macros/s/…/exec', autocomplete: 'off', autocapitalize: 'none', spellcheck: 'false' });
-    const token = h('input', { class: 'campo', type: 'text', value: c.token, placeholder: 'Token secreto', autocomplete: 'off', autocapitalize: 'none', spellcheck: 'false' });
-    const disp = h('input', { class: 'campo', type: 'text', value: c.device, placeholder: deviceName(), autocomplete: 'off' });
-    const salida = h('p', { class: 'pre nota' }, '');
-    raiz.append(
-      tarjeta(etiqueta('URL del Web App (termina en /exec)'), url, etiqueta('Token secreto'), token, etiqueta('Nombre de este dispositivo'), disp,
-        h('p', { class: 'nota' }, 'Este nombre identifica al dispositivo en la hoja de Google. Debe coincidir con la columna «Dispositivo» del catálogo.')),
-      h('div', { class: 'pila' },
-        boton('Guardar', 'emitir', 'c-verde ancho-total', () => { guardarSyncCfg(url.value, token.value, disp.value); salida.textContent = 'Guardado.'; toast('Guardado.'); }),
-        boton('Probar conexión', 'enviar', 'c-azul ancho-total', async () => {
-          guardarSyncCfg(url.value, token.value, disp.value);
-          salida.textContent = 'Probando…'; salida.textContent = await probar();
-        })),
-      salida,
-      tarjeta(h('h2', null, 'Clave de administrador'),
-        h('p', { class: 'nota' }, admin.puesta() ? 'Protege esta pantalla (URL, token y nombre del dispositivo).' : 'Opcional: proteja esta pantalla con una clave para que nadie cambie la configuración por error.'),
-        boton(admin.puesta() ? 'Cambiar la clave' : 'Crear una clave', 'ajustes', 'c-teal ancho-total', crearClave)),
-      tarjeta(h('h2', null, 'Envíos pendientes'), h('p', { class: 'nota' }, `Pendientes: ${cuantosPendientes()}`),
-        boton('Descartar los pendientes', 'borrar', 'c-rojo ancho-total', async () => {
-          if (!cuantosPendientes()) return toast('No hay envíos pendientes.');
-          if (await confirmar('Descartar pendientes', `Se borrarán ${cuantosPendientes()} registros que aún no llegaron a la hoja. No se pueden recuperar.\n\n¿Descartarlos?`, { si: 'Descartar', peligro: true })) { descartarPendientes(); pintar(); }
-        }))
-    );
-  }
-  function vistaBloqueo(volver) {
-    const clave = h('input', { class: 'campo', type: 'password', placeholder: 'Clave de administrador', autocomplete: 'off', inputmode: 'numeric' });
-    const msg = h('p', { class: 'nota' }, '');
-    const probarClave = async () => {
-      const e = admin.espera();
-      if (e > 0) { msg.textContent = `Demasiados intentos. Espere ${e} segundos.`; return; }
-      if (await admin.revisar(clave.value)) { desbloqueado = true; pintar(); }
-      else { const e2 = admin.espera(); msg.textContent = e2 > 0 ? `Clave incorrecta. Espere ${e2} segundos.` : 'Clave incorrecta.'; clave.value = ''; }
-    };
-    clave.addEventListener('keydown', (e) => { if (e.key === 'Enter') probarClave(); });
-    raiz.append(tarjeta(h('p', { class: 'nota' }, 'Esta pantalla está protegida. Escriba la clave de administrador.'), clave, msg),
-      boton('Entrar', 'emitir', 'c-verde ancho-total', probarClave),
-      h('button', { type: 'button', class: 'btn-texto', onclick: recuperar }, 'Olvidé la clave'));
-    async function recuperar() {
-      const r = await formulario('Recuperar acceso', [{ etiqueta: 'Código de recuperación (XXXX-XXXX-XXXX)', placeholder: 'XXXX-XXXX-XXXX' }], { ok: 'Verificar' });
-      if (!r) return;
-      if (await admin.revisarRecuperacion(r[0])) { desbloqueado = true; toast('Acceso concedido. Cree una clave nueva.'); pintar(); crearClave(); }
-      else toast(admin.espera() > 0 ? `Código incorrecto. Espere ${admin.espera()} segundos.` : 'Código incorrecto.');
-    }
-  }
-  async function crearClave() {
-    const r = await formulario(admin.puesta() ? 'Cambiar la clave' : 'Crear una clave', [
-      { etiqueta: 'Clave nueva (mínimo 4 caracteres)', tipo: 'password' }, { etiqueta: 'Repita la clave', tipo: 'password' }
-    ], { ok: 'Guardar', validar: (v) => (v[0].length < 4 ? 'La clave debe tener al menos 4 caracteres.' : v[0] !== v[1] ? 'Las claves no coinciden.' : null) });
-    if (!r) return;
-    const codigo = await admin.poner(r[0]);
-    dialogo({ titulo: 'Código de recuperación', cuerpo: [h('p', { class: 'pre' }, 'Anote este código y guárdelo en un lugar seguro. Solo se muestra una vez y sirve para recuperar el acceso si olvida la clave.'), h('p', { class: 'codigo' }, codigo)], botones: [{ texto: 'Ya lo anoté', clase: 'primario' }] });
-    pintar();
-  }
 
   // ----- Catálogo (solo lectura) -----
   function vistaCatalogo() {
     raiz.append(cabSub('Catálogo recibido', irInicio));
-    if (!cat.cosechas.length && !bol.cosechas.length) { raiz.append(tarjeta(h('p', { class: 'nota' }, 'Todavía no se ha recibido el catálogo. Use «Recibir catálogo de Google Sheets».'))); return; }
+    if (!cat.cosechas.length && !bol.cosechas.length) { raiz.append(tarjeta(h('p', { class: 'nota' }, 'Todavía no se ha recibido el catálogo. Use «Actualizar catálogo y usuarios».'))); return; }
     const detalle = (resumen, ...hijos) => h('details', null, h('summary', null, resumen), ...hijos);
     const lis = (a) => h('ul', null, ...a.map((x) => h('li', null, x)));
     const socDet = (s, conPersonas) => detalle(`${s.nombre}${s.tipo && !conPersonas ? ' · ' + s.tipo : ''} (${s.fincas.length} fincas${conPersonas ? ', ' + s.personas.length + ' personas' : ''})`,
@@ -476,28 +345,6 @@ export function crearAjustes(nav) {
     });
   }
 
-  // ----- Copia de seguridad -----
-  async function exportar() {
-    const blob = new Blob([JSON.stringify({ app: 'registro-cajuelas', version: VERSION, fecha: new Date().toISOString(), datos: db.todo() })], { type: 'application/json' });
-    const r = await compartir([{ blob, nombre: `copia_cajuelas_${stampCorto()}.json` }], 'Copia de seguridad de Registro de Cajuelas');
-    if (r === 'descargado') toast('Se descargó la copia de seguridad.');
-    if (r === 'descargado' || r === 'compartido') db.set('ultimo_respaldo', Date.now());
-  }
-  function importar() {
-    const f = h('input', { type: 'file', accept: '.json,application/json' });
-    f.addEventListener('change', async () => {
-      const file = f.files && f.files[0]; if (!file) return;
-      try {
-        const o = JSON.parse(await file.text());
-        if (!o || o.app !== 'registro-cajuelas' || !o.datos) throw new Error('Este archivo no es una copia de seguridad de la aplicación.');
-        if (!(await confirmar('Restaurar copia', 'Se reemplazarán TODOS los datos de este dispositivo por los de la copia. Lo que haya hecho después de la copia se perderá.\n\n¿Restaurar?', { si: 'Restaurar', peligro: true }))) return;
-        if (!db.reemplazarTodo(o.datos)) throw new Error('No se pudo guardar en este dispositivo.');
-        try { sessionStorage.setItem('cajuelas.conservar', '1'); } catch { /* nada */ }
-        location.reload();
-      } catch (e) { aviso('No se pudo restaurar', e.message || String(e)); }
-    });
-    f.click();
-  }
 
   pintar();
   return { el: raiz, refrescar: pintar, reiniciar() { vista = 'inicio'; desbloqueado = false; pintar(); } };

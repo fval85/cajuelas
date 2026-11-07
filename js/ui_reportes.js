@@ -2,11 +2,13 @@
 import { h, clear, toast, elegir, normalizar, diaHoy, ahoraTxt, confirmar, dialogo } from './util.js';
 import { puede } from './users.js';
 import { modoPruebas } from './store.js';
-import { historicos, pasarAHistoricos } from './sync.js';
+import { historicos } from './sync.js';
+import { pasarDiaFlujo } from './ui_pasar_hist.js';
 import { elegirVarios } from './util.js';
 import { barraCompacta, hojaFiltros, guardadosDe, elegirPeriodo } from './ui_filtros.js';
 import { tarjeta, etiqueta, banda, selector, boton, verDocumento, cabSub } from './ui.js';
 import { crearVentasExp } from './ui_export.js';
+import { crearCafeFruta } from './ui_cafe_fruta.js';
 import { cargarFuentes, paginasReporte, lienzoGrafico } from './draw.js';
 import { desplazar, sumarDias, FILTROS, opcionesFiltro, filtrar, suma, cajF, parseFilas, cosechasDe, ultimaFecha, armarReporte, filasExcel, celdaTxt, pctSigno, fmtFechaDMA, VISTAS, DIMENSIONES, inicioAnio, MEDIDAS, MEDIDAS_INI, AGRUPACIONES } from './rep_calc.js';
 
@@ -26,7 +28,7 @@ export function crearReportes(nav) {
   let cargando = false, errorCarga = '';
 
   const estado = h('p', { class: 'nota estado-datos' });
-  const actualizarTodo = () => { cargar(true); exp.cargar(true); };
+  const actualizarTodo = () => { cargar(true); exp.cargar(true); if (puede('todos')) cafeF.cargar(true); };
   let busqueda = '';
   const guard = guardadosDe('cafe');
   const barra = barraCompacta();
@@ -294,26 +296,7 @@ export function crearReportes(nav) {
   async function pasarDia(fecha) {
     btnPasar.disabled = true;
     try {
-      toast('Revisando recibos de Diario…');
-      const v = await pasarAHistoricos({ fecha, soloVer: true });
-      if (v.error) { toast(v.error, 7000); return; }
-      const miles = (n) => Number(n).toLocaleString('es-CR', { maximumFractionDigits: 2 });
-      let texto = `${v.lineas} línea(s) · ${miles(v.cajuelas)} cajuelas (${miles(v.cajuelas / 20)} fanegas) del ${fmtFechaDMA(fecha)}.\nUna línea por sociedad y finca, sin los recibos anulados. El tipo queda en M.`;
-      if (v.reemplaza) texto += `\n\nYa se habían pasado ${v.reemplaza} línea(s) de este día: se reemplazan (se conservan el tipo y el N° de recibo que haya escrito).`;
-      if (v.sinSociedad && v.sinSociedad.length) texto += `\n\n⚠ Sociedades que no están en la hoja «Sociedades» de Históricos:\n• ${v.sinSociedad.join('\n• ')}`;
-      if (v.sinFinca && v.sinFinca.length) texto += `\n\n⚠ Fincas sin número en la hoja «Fincas»:\n• ${v.sinFinca.join('\n• ')}`;
-      if (!await confirmar('Pasar a Históricos', texto, { si: 'Pasar al Históricos' })) return;
-      let forzar = false;
-      if (v.manuales) {
-        if (!await confirmar('Ese día ya tiene líneas', `En Históricos ya hay ${v.manuales} línea(s) del ${fmtFechaDMA(fecha)} escritas a mano. Si continúa se agregan las de Diario además de esas (podrían quedar repetidas).`, { si: 'Agregar de todos modos', peligro: true })) return;
-        forzar = true;
-      }
-      toast('Pasando a Históricos…');
-      const r = await pasarAHistoricos({ fecha, forzar });
-      if (r.error) { toast(r.error, 8000); return; }
-      toast(r.message, 6000);
-      try { localStorage.removeItem(LLAVE_CACHE); } catch { /* nada */ }
-      cargar(true);
+      if (await pasarDiaFlujo(fecha)) { try { localStorage.removeItem(LLAVE_CACHE); } catch { /* nada */ } cargar(true); }
     } finally { btnPasar.disabled = false; }
   }
   const btnPasar = { disabled: false };
@@ -344,11 +327,15 @@ export function crearReportes(nav) {
   cabDetalle.hidden = true;
   const exp = crearVentasExp({ abrir: () => ir('exp'), volver: () => ir('inicio'), alCambiar: () => { if (pantalla === 'inicio') pintarInicio(); else syncProg(); } });
   exp.cab.hidden = true;
+  const cafeF = crearCafeFruta({ abrir: () => ir('cafe'), volver: () => ir('inicio'), alCambiar: () => { if (pantalla === 'inicio') pintarInicio(); } });
+  cafeF.cab.hidden = true; cafeF.el.hidden = true;
   function ir(p) { pantalla = p; mostrar(); window.scrollTo(0, 0); }
   function mostrar() {
     const det = pantalla === 'detalle';
     const ex = pantalla === 'exp';
-    bandaInicio.hidden = det || ex; inicio.hidden = det || ex; cabDetalle.hidden = !det; detalle.hidden = !det; exp.cab.hidden = !ex; exp.el.hidden = !ex;
+    const cf = pantalla === 'cafe';
+    cafeF.cab.hidden = !cf; cafeF.el.hidden = !cf;
+    bandaInicio.hidden = det || ex || cf; inicio.hidden = det || ex || cf; cabDetalle.hidden = !det; detalle.hidden = !det; exp.cab.hidden = !ex; exp.el.hidden = !ex;
   }
   const colones = (v) => '₡ ' + Math.round(v).toLocaleString('es-CR').replace(/[  ]/g, ' ');
   function sparkline(valores) {
@@ -383,7 +370,7 @@ export function crearReportes(nav) {
   // ---- Avance de la descarga (estimado: sube hasta ~92 % y llega a 100 % al terminar) ----
   const prog = { on: false, fin: false, pct: 0, t: 0 };
   const barraProg = h('div', { class: 'barra-prog', role: 'progressbar', 'aria-label': 'Descargando datos' }, h('div', { class: 'bp-pista' }, h('i')), h('b', null, '0%'));
-  const ocupado = () => cargando || exp.ocupado();
+  const ocupado = () => cargando || exp.ocupado() || cafeF.ocupado();
   const opcHub = { alRefrescar: actualizarTodo, ocultar: () => ocultar, gira: ocupado };
   function dibujarBarra() { barraProg.querySelector('i').style.width = prog.pct.toFixed(0) + '%'; barraProg.querySelector('b').textContent = prog.pct.toFixed(0) + '%'; barraProg.setAttribute('aria-valuenow', prog.pct.toFixed(0)); }
   function syncProg() {
@@ -402,7 +389,7 @@ export function crearReportes(nav) {
     clear(inicio);
     if (prog.on) inicio.append(barraProg);
     if (!datos || !f.cos) {
-      inicio.append(exp.tarjetaHub(opcHub), tarjeta(h('p', { class: 'nota' }, cargando ? 'Descargando…' : datos ? 'El archivo Históricos no tiene datos.' : 'Para ver los reportes la app necesita leer el Google Sheet «Históricos». Revise que en la hoja Configuración del libro de Google Sheets esté el enlace en la fila «Históricos» y toque ↻.')), tarjAcciones);
+      inicio.append(exp.tarjetaHub(opcHub), ...(puede('todos') ? [cafeF.tarjetaHub(opcHub)] : []), tarjeta(h('p', { class: 'nota' }, cargando ? 'Descargando…' : datos ? 'El archivo Históricos no tiene datos.' : 'Para ver los reportes la app necesita leer el Google Sheet «Históricos». Revise que en la hoja Configuración del libro de Google Sheets esté el enlace en la fila «Históricos» y toque ↻.')), tarjAcciones);
       return;
     }
     const corte = f.corte || ref();
@@ -425,10 +412,10 @@ export function crearReportes(nav) {
         h('div', null, h('p', { class: 'hub-et' }, 'Cajuelas'), h('p', { class: 'hub-v' }, ocultar ? '*** ***' : cajF(t.caj)), h('p', { class: 'sub' }, `${cajF(t.fan)} fanegas · ${t.n} recibos`)),
         h('div', null, h('p', { class: 'hub-et' }, 'Adelantos'), h('p', { class: 'hub-v' }, ocultar ? '₡ ******' : colones(t.ade)), h('p', { class: 'sub' }, `Intereses ${ocultar ? '₡ ******' : colones(t.int)}`))),
       subeBaja, h('span', { class: 'hub-flecha', 'aria-hidden': 'true' }, '›'));
-    inicio.append(cafe, exp.tarjetaHub(opcHub), tarjAcciones);
+    inicio.append(cafe, exp.tarjetaHub(opcHub), ...(puede('todos') ? [cafeF.tarjetaHub(opcHub)] : []), tarjAcciones);
   }
 
-  raiz.append(bandaInicio, cabDetalle, exp.cab, inicio, detalle, exp.el);
+  raiz.append(bandaInicio, cabDetalle, exp.cab, cafeF.cab, inicio, detalle, exp.el, cafeF.el);
   barraFiltros.hidden = true; opPers.hidden = true; btnCompartir.hidden = true;
   pintarChips(); pintarEstado(); pintarInicio(); mostrar();
   return {
@@ -437,7 +424,7 @@ export function crearReportes(nav) {
     // Cada vez que se entra a la pestaña empieza limpia: filtros por defecto y datos al día.
     reiniciar() {
       f = nuevoF(); vista = 'comparativo'; pantalla = 'inicio'; mostrar(); busqueda = '';
-      exp.reiniciar();
+      exp.reiniciar(); if (puede('todos')) cafeF.reiniciar();
       const cache = leerCache();
       if (cache) usar(cache);
       pintarTodo();
