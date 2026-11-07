@@ -1,5 +1,8 @@
 // Novedades de cada versión (se muestran en Ajustes > Novedades de la versión).
 export const NOVEDADES = [
+  { v: '2.17.0', t: [
+    'Botón «atrás» del celular: ya no saca de la app. Retrocede un paso (cierra la ventana abierta, o vuelve a la pantalla anterior como la flecha «‹»; desde otra pestaña vuelve a Registro). Solo sale de la app desde la pantalla principal de Registro.'
+  ] },
   { v: '2.16.1', t: [
     'Intereses de Históricos: los días se calculan como en la hoja GENERAL de Excel. En meses de 30 días y febrero no se resta el día de más (un recibo del 4 de noviembre cuenta 26 días); en meses de 31 días el 30 da 0 y el 31 da 1 día. Requiere correr el SQL 26_intereses_dias.sql.',
     'Reportes: la tarjeta de Café recibido usa el ícono 🍒 y la de Café en fruta VOLCAFE muestra la misma etiqueta «Cosecha … · hasta …».'

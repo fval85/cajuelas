@@ -11,6 +11,7 @@ import { MODULOS, modulo, permitidos, distribucion } from './nav_barra.js';
 import { saldoPendienteHoy, HORA_SALDO } from './avisos.js';
 import { crearAjustes, actualizarCatalogo } from './ui_ajustes.js';
 import { icono } from './ui.js';
+import { iniciarAtras } from './atras.js';
 import { aplicarApariencia, tabInicio } from './apariencia.js';
 import { hayControl, puede, necesitaLogin, pantallaLogin, cerrarLogin, alCambiarSesion, actualizarUsuarios, sesion } from './users.js';
 
@@ -125,6 +126,8 @@ if ((tabInicio() || tabRecarga) && !necesitaLogin()) ir(tabArranque());
 actualizarUsuarios(true).then(() => revisarAcceso());
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') actualizarUsuarios().then(() => revisarAcceso()); });
 setInterval(() => actualizarUsuarios().then(() => revisarAcceso()), 5 * 60000);
+
+iniciarAtras({ pestanaActual: () => actual, pestanaPrincipal: primeraPermitida, irAPestana: (k) => ir(k), hayLogin: necesitaLogin });
 
 // ----- Recordatorio del saldo (a partir de las 7:00 pm) -----
 function revisarSaldo() { barraSaldo.hidden = necesitaLogin() || !saldoPendienteHoy(); }
