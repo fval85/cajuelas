@@ -371,7 +371,7 @@ export function crearReportes(nav) {
   const prog = { on: false, fin: false, pct: 0, t: 0 };
   const barraProg = h('div', { class: 'barra-prog', role: 'progressbar', 'aria-label': 'Descargando datos' }, h('div', { class: 'bp-pista' }, h('i')), h('b', null, '0%'));
   const ocupado = () => cargando || exp.ocupado() || cafeF.ocupado();
-  const opcHub = { alRefrescar: actualizarTodo, ocultar: () => ocultar, gira: ocupado };
+  const opcHub = { alRefrescar: actualizarTodo, ocultar: () => ocultar, gira: ocupado, etiqueta: () => (datos && f.cos ? `Cosecha ${f.cos} · hasta ${fmtFechaDMA(f.corte || ref())}` : '') };
   function dibujarBarra() { barraProg.querySelector('i').style.width = prog.pct.toFixed(0) + '%'; barraProg.querySelector('b').textContent = prog.pct.toFixed(0) + '%'; barraProg.setAttribute('aria-valuenow', prog.pct.toFixed(0)); }
   function syncProg() {
     tarjAcciones.classList.toggle('desc', ocupado());
@@ -405,7 +405,7 @@ export function crearReportes(nav) {
     const subeBaja = pill ? h('p', { class: 'vs ' + (pillNeg ? 'baja' : 'sube') }, (pillNeg ? '▼ ' : '▲ ') + pill) : null;
     const cafe = h('div', { class: 'fuente toque hub-fuente' + (ocupado() ? ' carga' : ''), role: 'button', tabindex: '0', onclick: () => ir('detalle') },
       h('button', { type: 'button', class: 'hub-ref' + (ocupado() ? ' gira' : ''), 'aria-label': 'Actualizar todo', onclick: (e) => { e.stopPropagation(); actualizarTodo(); } }, '↻'),
-      h('div', { class: 'fuente-cab' }, h('h3', null, '☕ Café recibido')),
+      h('div', { class: 'fuente-cab' }, h('h3', null, '🍒 Café recibido')),
       h('p', { class: 'hub-fecha' }, h('i'), `Cosecha ${f.cos} · hasta ${fmtFechaDMA(corte)}`),
       h('p', { class: 'hub-act' }, '↻ ' + (hace() || 'Sin actualizar') + (errorCarga ? ' · ⚠ sin conexión' : '')),
       h('div', { class: 'hub-dos' },

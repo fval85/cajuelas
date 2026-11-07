@@ -98,7 +98,8 @@ export function crearCafeFruta({ abrir, volver, alCambiar }) {
         t.maximo ? h('div', { class: 'progreso', role: 'img', 'aria-label': `${pct}% entregado` }, h('i', { style: `width:${pct}%` })) : null,
         t.maximo ? h('p', { class: 'sub' }, `Faltan ${n2(Math.max(0, t.maximo - fa))} fanegas`) : null);
     }) : [h('p', { class: 'sub' }, 'Todavía no hay recibos.')];
-    return h('div', { class: 'fuente toque hub-fuente' + (cargando ? ' carga' : ''), role: 'button', tabindex: '0', onclick: () => { ir('inicio'); abrir(); } }, refBtn, cab3, ...cuerpo,
+    const etq = opc.etiqueta ? opc.etiqueta() : '';
+    return h('div', { class: 'fuente toque hub-fuente' + (cargando ? ' carga' : ''), role: 'button', tabindex: '0', onclick: () => { ir('inicio'); abrir(); } }, refBtn, cab3, etq ? h('p', { class: 'hub-fecha' }, h('i'), etq) : null, ...cuerpo,
       h('p', { class: 'sub' }, plural(res.tipos.reduce((t, x) => t + x.recibos, 0), 'recibo', 'recibos')), h('span', { class: 'hub-flecha', 'aria-hidden': 'true' }, '›'));
   }
 

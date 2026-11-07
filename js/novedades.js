@@ -1,5 +1,9 @@
 // Novedades de cada versión (se muestran en Ajustes > Novedades de la versión).
 export const NOVEDADES = [
+  { v: '2.16.1', t: [
+    'Intereses de Históricos: los días se calculan como en la hoja GENERAL de Excel. En meses de 30 días y febrero no se resta el día de más (un recibo del 4 de noviembre cuenta 26 días); en meses de 31 días el 30 da 0 y el 31 da 1 día. Requiere correr el SQL 26_intereses_dias.sql.',
+    'Reportes: la tarjeta de Café recibido usa el ícono 🍒 y la de Café en fruta VOLCAFE muestra la misma etiqueta «Cosecha … · hasta …».'
+  ] },
   { v: '2.16.0', t: [
     'Reportes › Café en fruta VOLCAFE: «＋ Cargar» (a mano, pegar o subir archivo) y «⬇ Excel» arriba, el avance contra el máximo, un gráfico de entregas por día (toque una columna para ver sus recibos) y reportes de Avance por tipo, Fincas, Días y Recibos. Todas las fanegas con 2 decimales.',
     'Diario (administradores): «Anular» ahora permite anular un recibo de cualquier día o de otro usuario. Al anularlo ofrece actualizar Históricos de esa fecha (se restan los recibos anulados, con vista previa).',
