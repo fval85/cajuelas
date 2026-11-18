@@ -89,7 +89,8 @@ export function pintarUsuarios({ raiz, irInicio }) {
     raiz.append(cabSub(u.nombre, pintarLista));
     const rol = selRol(u.rol, esYo);
     let modo = u.permisos.length ? 'pers' : 'rol';
-    const marcados = new Set(u.permisos.length ? u.permisos : u.efectivos.filter((p) => p !== 'todos' && p !== 'todo'));
+    // Solo permisos que existen hoy: datos viejos (p. ej. «emitir») hacían que el servidor rechazara el guardado.
+    const marcados = new Set((u.permisos.length ? u.permisos : u.efectivos).filter((p) => p !== 'todos' && p !== 'todo' && ETQ[p]));
     let bloquear = !!u.bloquear;
     const zona = h('div');
     const pintarZona = () => {
@@ -113,7 +114,7 @@ export function pintarUsuarios({ raiz, irInicio }) {
     const cbBloq = h('input', { type: 'checkbox', checked: bloquear, onchange: () => { bloquear = cbBloq.checked; } });
     const guardar = h('button', { type: 'button', class: 'btn-texto primario ancho-total', onclick: async () => {
       let permisos = [];
-      if (!esYo && modo === 'pers') { permisos = [...marcados]; if (!permisos.length) return toast('Marque al menos un permiso o vuelva a «Lo del rol».'); }
+      if (!esYo && modo === 'pers') { permisos = [...marcados].filter((p) => ETQ[p]); if (!permisos.length) return toast('Marque al menos un permiso o vuelva a «Lo del rol».'); }
       guardar.disabled = true;
       const r = await usuariosAdmin('guardar', { id: u.id, rol: rol.value, permisos, bloquear });
       guardar.disabled = false;

@@ -1,5 +1,6 @@
 // Novedades de cada versión (se muestran en Ajustes > Novedades de la versión).
 export const NOVEDADES = [
+  { v: '2.18.1', t: ['Ajustes › Usuarios: corregido el mensaje «Permiso no válido: emitir» al guardar un usuario (por ejemplo al quitarle Planillas).'] },
   { v: '2.18.0', t: [
     'Planillas ahora usa el servidor nuevo (Supabase). Requiere correr 27_planillas.sql y 28_planillas_datos.sql.',
     'Estado del día por empleado: Trabajó, Incapacidad, Vacaciones, Permiso o Ausente. La incapacidad pide tipo CCSS o INS, N.º de boleta y «Hasta» (varios días); en la planilla sale INC en rojo con 0 horas. Las vacaciones se cuentan y pagan.',
