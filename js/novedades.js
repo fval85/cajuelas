@@ -1,5 +1,6 @@
 // Novedades de cada versión (se muestran en Ajustes > Novedades de la versión).
 export const NOVEDADES = [
+  { v: '2.18.2', t: ['Ajustes › Usuarios: un Administrador ya no se puede «personalizar» (al hacerlo perdía el acceso total y dejaba de ver Café en fruta VOLCAFE). Si a un administrador se le quitó, abra su usuario y guarde: queda con «Lo del rol».'] },
   { v: '2.18.1', t: ['Ajustes › Usuarios: corregido el mensaje «Permiso no válido: emitir» al guardar un usuario (por ejemplo al quitarle Planillas).'] },
   { v: '2.18.0', t: [
     'Planillas ahora usa el servidor nuevo (Supabase). Requiere correr 27_planillas.sql y 28_planillas_datos.sql.',

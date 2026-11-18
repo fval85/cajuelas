@@ -96,10 +96,12 @@ export function pintarUsuarios({ raiz, irInicio }) {
     const pintarZona = () => {
       clear(zona);
       if (esYo) { zona.append(h('p', { class: 'nota' }, 'No puede cambiar su propio rol ni sus permisos (así nunca se queda sin acceso).')); return; }
+      // Un administrador siempre es «Todo»: personalizar sus permisos le quitaba el acceso total (Café en fruta VOLCAFE, etc.).
+      if (rol.value === 'Administrador') modo = 'rol';
       const seg = h('div', { class: 'seg' },
         h('button', { type: 'button', class: modo === 'rol' ? 'on' : '', onclick: () => { modo = 'rol'; pintarZona(); } }, 'Lo del rol'),
         h('button', { type: 'button', class: modo === 'pers' ? 'on' : '', onclick: () => { modo = 'pers'; pintarZona(); } }, 'Personalizar'));
-      zona.append(h('label', { class: 'etiqueta' }, '¿Qué puede ver y hacer?'), seg);
+      zona.append(h('label', { class: 'etiqueta' }, '¿Qué puede ver y hacer?'), ...(rol.value === 'Administrador' ? [] : [seg]));
       if (modo === 'rol') {
         const ver = (u.rol === rol.value ? u.efectivos : []).filter((p) => ETQ[p] && p !== 'todos');
         zona.append(h('div', { class: 'tarjeta' }, h('b', null, `Con el rol «${rol.value}»`), h('p', { class: 'nota' }, rol.value === 'Administrador' ? 'Ve y puede todo, incluido administrar usuarios.' : ver.length ? ver.map((p) => ETQ[p]).join(' · ') : 'Cambie el rol y guarde para ver sus permisos.')));
@@ -114,7 +116,7 @@ export function pintarUsuarios({ raiz, irInicio }) {
     const cbBloq = h('input', { type: 'checkbox', checked: bloquear, onchange: () => { bloquear = cbBloq.checked; } });
     const guardar = h('button', { type: 'button', class: 'btn-texto primario ancho-total', onclick: async () => {
       let permisos = [];
-      if (!esYo && modo === 'pers') { permisos = [...marcados].filter((p) => ETQ[p]); if (!permisos.length) return toast('Marque al menos un permiso o vuelva a «Lo del rol».'); }
+      if (!esYo && modo === 'pers' && rol.value !== 'Administrador') { permisos = [...marcados].filter((p) => ETQ[p]); if (!permisos.length) return toast('Marque al menos un permiso o vuelva a «Lo del rol».'); }
       guardar.disabled = true;
       const r = await usuariosAdmin('guardar', { id: u.id, rol: rol.value, permisos, bloquear });
       guardar.disabled = false;
