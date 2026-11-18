@@ -1,5 +1,12 @@
 // Novedades de cada versión (se muestran en Ajustes > Novedades de la versión).
 export const NOVEDADES = [
+  { v: '2.18.0', t: [
+    'Planillas ahora usa el servidor nuevo (Supabase). Requiere correr 27_planillas.sql y 28_planillas_datos.sql.',
+    'Estado del día por empleado: Trabajó, Incapacidad, Vacaciones, Permiso o Ausente. La incapacidad pide tipo CCSS o INS, N.º de boleta y «Hasta» (varios días); en la planilla sale INC en rojo con 0 horas. Las vacaciones se cuentan y pagan.',
+    'Nota por empleado: sale al pie de la planilla impresa y el nombre lleva un asterisco (*).',
+    'Ajustes › Administración › Empleados de planillas (solo administradores): buscar y filtrar por sociedad, ver y editar todo (incluido salario), cambios con «vale desde» (siempre un viernes), trasladar de sociedad (el N.º no cambia), historial editable, Inactivo en lugar de borrar y crear fincas nuevas.',
+    'Montos de la semana: columnas de vacaciones e incapacidades (CCSS e INS).'
+  ] },
   { v: '2.17.0', t: [
     'Botón «atrás» del celular: ya no saca de la app. Retrocede un paso (cierra la ventana abierta, o vuelve a la pantalla anterior como la flecha «‹»; desde otra pestaña vuelve a Registro). Solo sale de la app desde la pantalla principal de Registro.'
   ] },

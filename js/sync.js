@@ -237,30 +237,24 @@ export function iniciarReintentos() {
   intentar();
 }
 
-// ---------- Planillas ----------
-const sesionActual = () => db.get('sesion', null) || {};
-const credenciales = () => { const s = sesionActual(); return { usuario: s.nombre || '', hash: s.hash || '' }; };
-/** Empleados del usuario (sin salarios), tareas por finca y lo registrado entre dos fechas. */
+// ---------- Planillas (servidor Supabase) ----------
+const errPl = (r) => (r.json && r.json.message) || r.message;
+/** Empleados vigentes (sin salarios), tareas por finca, lo registrado y las incapacidades entre dos fechas. */
 export async function planillaDatos(desde, hasta) {
-  if (!configurado()) return { error: 'Falta configurar la URL y el token en Ajustes > Administración.' };
-  const { url, token } = syncCfg();
-  const r = await postJson(url, { action: 'planillaDatos', token, desde, hasta, ...credenciales() }, 45000);
-  if (!r.ok) return { error: /desconocid/i.test(r.message) ? 'El Apps Script no está actualizado (falta la acción planillaDatos).' : r.message };
-  return { error: null, ...r.json };
+  const r = await postJson('', { action: 'planillaDatos', desde, hasta }, 45000);
+  return r.ok ? { error: null, ...r.json } : { error: errPl(r) };
 }
 export async function planillaAnular({ dia, sociedad, finca, motivo }) {
-  if (!configurado()) return { error: 'Falta configurar la URL y el token en Ajustes > Administración.' };
-  const { url, token } = syncCfg();
-  const r = await postJson(url, { action: 'planillaAnular', token, dia, sociedad, finca, motivo, ...credenciales() }, 45000);
-  return r.ok ? { error: null } : { error: (r.json && r.json.message) || r.message };
+  const r = await postJson('', { action: 'planillaAnular', dia, sociedad, finca, motivo }, 45000);
+  return r.ok ? { error: null } : { error: errPl(r) };
 }
 export async function planillaMontos(desde, hasta) {
-  if (!configurado()) return { error: 'Falta configurar la URL y el token en Ajustes > Administración.' };
-  const { url, token } = syncCfg();
-  const r = await postJson(url, { action: 'planillaMontos', token, desde, hasta, ...credenciales() }, 60000);
-  return r.ok ? { error: null, filas: r.json.filas || [] } : { error: (r.json && r.json.message) || r.message };
+  const r = await postJson('', { action: 'planillaMontos', desde, hasta }, 60000);
+  return r.ok ? { error: null, filas: r.json.filas || [] } : { error: errPl(r) };
 }
+/** Mantenimiento de empleados (solo administradores): op = lista | ficha | guardarEmpleado | cambio | traslado | quitarVigencia | nuevaFinca. */
+export async function planillasAdmin(op, datos) { return postJson('', { action: 'planillasAdmin', op, datos }, 45000); }
 /** Arma el envío de un día de planilla para la cola de pendientes. */
 export function payloadPlanilla({ reportId, dia, sociedad, finca, empleados }) {
-  return { formato: 'planilla', reportId, dia, sociedad, finca, empleados, ...credenciales() };
+  return { formato: 'planilla', reportId, dia, sociedad, finca, empleados };
 }

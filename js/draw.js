@@ -860,7 +860,9 @@ export function paginasPlanilla(d) {
   const paginas = [];
   const centrado = (c, t, x, w, y, p) => { const tt = recortar(t, p, w - 2); txt(c, tt, x + (w - medir(p, tt)) / 2, y, p); };
   const celda = (c, x, y, w, h, fondo) => { if (fondo) rectLleno(c, x, y, w, h, fondo); linea(c, x, y, x + w, y, 0.5); linea(c, x, y + h, x + w, y + h, 0.5); linea(c, x, y, x, y + h, 0.5); linea(c, x + w, y, x + w, y + h, 0.5); };
-  const porPag = Math.floor((H - 2 * MG - 72 - 34) / (2 * RH));
+  const notas = d.notas || [];
+  const reservaNotas = notas.length ? 8 * Math.min(notas.length + 2, 16) : 0;
+  const porPag = Math.floor((H - 2 * MG - 72 - 34 - reservaNotas) / (2 * RH));
   const emps = d.empleados.length ? d.empleados : [];
   const nPag = Math.max(1, Math.ceil(emps.length / porPag));
   for (let pg = 0; pg < nPag; pg++) {
@@ -888,15 +890,17 @@ export function paginasPlanilla(d) {
     y += RH * 2 + 12;
     emps.slice(pg * porPag, (pg + 1) * porPag).forEach((e, k) => {
       const nro = pg * porPag + k + 1;
-      let sumN = 0, sumE = 0;
+      let sumN = 0, sumE = 0, sumInc = 0;
       celda(c, px.n, y, cN, RH * 2, null); centrado(c, String(nro), px.n, cN, y + RH + 3, rojo);
       celda(c, px.e, y, cE, RH * 2, null); centrado(c, String(e.num), px.e, cE, y + RH + 3, normal);
-      celda(c, px.nom, y, cNom, RH * 2, null); txt(c, recortar(e.nombre, normal, cNom - 4), px.nom + 2, y + RH + 3, normal);
+      celda(c, px.nom, y, cNom, RH * 2, null); txt(c, recortar(e.nombre + (e.conNota ? ' *' : ''), normal, cNom - 4), px.nom + 2, y + RH + 3, normal);
       orden.forEach((iso, i) => {
         const v = (e.porDia || {})[iso] || {};
         const x = xDia(i);
         celda(c, x, y, cT, RH, null); celda(c, x + cT, y, cH, RH, null);
         celda(c, x, y + RH, cT, RH, '#CCFFFF'); celda(c, x + cT, y + RH, cH, RH, '#CCFFFF');
+        if (v.estado === 'INCAPACIDAD') { centrado(c, 'INC', x, cT + cH, y + 10, P(7.6, true, false, '#FF0000')); sumInc++; }
+        else if (v.estado === 'PERMISO' || v.estado === 'AUSENTE') centrado(c, v.estado === 'PERMISO' ? 'PERM' : 'AUS', x, cT + cH, y + 10, P(6.6, true, false, '#555555'));
         if (v.horas > 0) { centrado(c, v.tarea || '', x, cT, y + 10, rojo); centrado(c, fmtCant(v.horas), x + cT, cH, y + 10, normal); sumN += v.horas; }
         if (v.extras > 0) { centrado(c, v.tareaExtra || '', x, cT, y + RH + 10, rojo); centrado(c, fmtCant(v.extras), x + cT, cH, y + RH + 10, normal); sumE += v.extras; }
       });
@@ -904,6 +908,17 @@ export function paginasPlanilla(d) {
       celda(c, xO, y, cO, RH * 2, null); if (sumN) centrado(c, fmtCant(sumN), xO, cO, y + RH + 3, neg);
       y += RH * 2;
     });
+    if (pg === nPag - 1 && notas.length) {
+      y += 10;
+      txt(c, 'NOTAS:', x0, y + 6, P(6.6, true, false)); y += 8;
+      const dnom = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+      notas.slice(0, 14).forEach((n) => {
+        const f = new Date(Number(n.dia.slice(0, 4)), Number(n.dia.slice(5, 7)) - 1, Number(n.dia.slice(8, 10)), 12);
+        const ls = envolver(`* ${n.num} ${n.nombre} (${dnom[f.getDay()]} ${n.dia.slice(8, 10)}/${n.dia.slice(5, 7)}): ${n.texto}`, peq, xFin - x0);
+        ls.slice(0, 2).forEach((l) => { txt(c, l, x0, y + 6, peq); y += 8; });
+      });
+      if (notas.length > 14) { txt(c, `… y ${notas.length - 14} nota(s) más.`, x0, y + 6, peq); y += 8; }
+    }
     if (pg === nPag - 1 && d.tareas && d.tareas.length) {
       y += 10;
       const ls = envolver('TAREAS: ' + d.tareas.join('   '), peq, xFin - x0);
