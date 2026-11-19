@@ -1,5 +1,9 @@
 // Novedades de cada versión (se muestran en Ajustes > Novedades de la versión).
 export const NOVEDADES = [
+  { v: '2.19.0', t: [
+    'Ajustes › Usuarios (administradores): ahora se ve la última conexión de cada usuario, el teléfono, la versión de la app y los envíos pendientes por tipo (Registro, Diario, Boletos, Planillas). Marca 🔴 sin conexión desde hace 3 días o más, 🟠 versión anterior y ⚠ pendientes, con el filtro «Solo con problemas».',
+    'Requiere correr 29_conexiones.sql. Cada teléfono empieza a reportar cuando se actualiza a esta versión.'
+  ] },
   { v: '2.18.2', t: ['Ajustes › Usuarios: un Administrador ya no se puede «personalizar» (al hacerlo perdía el acceso total y dejaba de ver Café en fruta VOLCAFE). Si a un administrador se le quitó, abra su usuario y guarde: queda con «Lo del rol».'] },
   { v: '2.18.1', t: ['Ajustes › Usuarios: corregido el mensaje «Permiso no válido: emitir» al guardar un usuario (por ejemplo al quitarle Planillas).'] },
   { v: '2.18.0', t: [

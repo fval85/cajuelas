@@ -1,6 +1,7 @@
 // Sincronización con el Web App de Google Apps Script (misma hoja que usa la app Android).
 import { db, syncCfg, configurado } from './store.js';
 import { SUPA } from './config_supa.js';
+import { VERSION } from './util.js';
 
 let enVuelo = false;
 const oyentes = new Set();
@@ -257,4 +258,36 @@ export async function planillasAdmin(op, datos) { return postJson('', { action: 
 /** Arma el envío de un día de planilla para la cola de pendientes. */
 export function payloadPlanilla({ reportId, dia, sociedad, finca, empleados }) {
   return { formato: 'planilla', reportId, dia, sociedad, finca, empleados };
+}
+
+// ---------- Conexión del usuario (para que el administrador vea última conexión, versión y pendientes) ----------
+const tipoPend = (p) => (p.formato === 'recibo' ? 'Diario' : p.formato === 'boleto' ? 'Boletos' : p.formato === 'planilla' ? 'Planillas' : p.formato ? 'Otros' : 'Registro');
+/** Pendientes por tipo: { Registro: {n, viejo}, Boletos: {...} } (viejo = fecha del más antiguo). */
+export function resumenPendientes() {
+  const r = {};
+  pendientes().forEach((p) => {
+    const t = tipoPend(p || {}), x = r[t] || (r[t] = { n: 0, viejo: '' });
+    x.n++; if (!x.viejo) x.viejo = String(p.fechaHora || p.dia || '').slice(0, 30);
+  });
+  return r;
+}
+let ultLatido = 0, ultFirma = '', temporizador = null;
+/** Avisa al servidor, en segundo plano. Nunca molesta: sin sesión, sin red o con cualquier error simplemente no hace nada. */
+export async function latido(forzar = false) {
+  try {
+    if (!SUPA || !navigator.onLine) return;
+    const ses = db.get('sesion', null);
+    if (!ses || !ses.token) return;
+    const pend = resumenPendientes(), firma = JSON.stringify(pend);
+    if (!forzar && firma === ultFirma && Date.now() - ultLatido < 5 * 60000) return;
+    ultLatido = Date.now(); ultFirma = firma;
+    await rpcSupa('api', { p_token: ses.token, p: { action: 'latido', version: VERSION, dispositivo: db.get('device_name', '') || '', pendientes: pend } }, 15000);
+  } catch { /* nada: es solo informativo */ }
+}
+/** Cuando cambian los pendientes, espera 15 segundos (por si salen varios seguidos) y avisa una sola vez. */
+export function latidoPronto() { clearTimeout(temporizador); temporizador = setTimeout(() => latido(), 15000); }
+/** Solo administradores. */
+export async function conexionesAdmin() {
+  const r = await postJson('', { action: 'conexiones' }, 30000);
+  return r.ok ? { filas: r.json.filas || [], ahora: r.json.ahora } : { filas: null, error: r.message };
 }

@@ -267,7 +267,10 @@ details.mas-datos summary { font-weight: 700; color: var(--verde); padding: 8px 
 .fila-usuario { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .fila-usuario.inactivo { opacity: .6; }
 .chip-est { font-size: 12px; font-weight: 700; border-radius: 99px; padding: 3px 10px; border: 0; white-space: nowrap; }
-.chip-est.verde { background: #dcfce7; color: var(--verde); } .chip-est.ambar { background: #fef3c7; color: #92400e; } .chip-est.gris { background: #e5e7eb; color: #374151; }
+.chip-est.verde { background: #dcfce7; color: var(--verde); } .chip-est.ambar { background: #fef3c7; color: #92400e; } .chip-est.gris { background: #e5e7eb; color: #374151; } .chip-est.rojo { background: #fee2e2; color: #991b1b; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.fila-usuario .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; } .fila-usuario .tx { flex: 1; min-width: 0; }
+.fila-usuario.con-conex { flex-wrap: wrap; align-items: flex-start; }
 .casilla { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-weight: 600; }
 .casilla input { width: 20px; height: 20px; }
 /* En computadora, los reportes anchos se ajustan al ancho de la ventana (en el teléfono siguen con desplazamiento lateral). */

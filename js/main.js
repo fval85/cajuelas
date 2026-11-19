@@ -1,7 +1,7 @@
 import { h, VERSION, toast, clear, dialogo } from './util.js';
 import { cargarCatalogo, cargarBoletosCat, pedirAlmacenamientoPersistente, configurado, limpiarPantallas, modoPruebas } from './store.js';
 import { cargarFuentes } from './draw.js';
-import { cuantosPendientes, enviarPendientes, alCambiarPendientes, iniciarReintentos } from './sync.js';
+import { cuantosPendientes, enviarPendientes, alCambiarPendientes, iniciarReintentos, latido, latidoPronto } from './sync.js';
 import { crearRegistro } from './ui_registro.js';
 import { crearDiario } from './ui_diario.js';
 import { crearBoletos } from './ui_boletos.js';
@@ -119,7 +119,7 @@ const tabArranque = () => { const t = tabRecarga || tabInicio(); tabRecarga = nu
 ir(primeraPermitida());
 alCambiarSesion(() => {
   revisarAcceso();
-  if (sesion()) ir(tabArranque());
+  if (sesion()) { ir(tabArranque()); setTimeout(() => latido(true), 2500); }
 });
 revisarAcceso();
 if ((tabInicio() || tabRecarga) && !necesitaLogin()) ir(tabArranque());
@@ -150,6 +150,11 @@ barra.addEventListener('click', async () => {
 alCambiarPendientes(pintarBarra);
 pintarBarra();
 iniciarReintentos();
+// Aviso de conexión (versión, última vez y pendientes) para el administrador: al abrir, al volver a la app y cada 10 minutos.
+alCambiarPendientes(latidoPronto);
+setTimeout(() => latido(true), 4000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') latido(); });
+setInterval(() => latido(), 10 * 60000);
 
 // ----- Fuentes y catálogo -----
 cargarFuentes();
