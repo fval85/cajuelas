@@ -12,6 +12,7 @@ import { pintarUsuarios } from './ui_usuarios.js';
 import { pintarPersonas } from './ui_personas.js';
 import { pintarPrecios, textoPrecioHoy } from './ui_precios.js';
 import { pintarEmpleadosPlanillas } from './ui_planillas_emp.js';
+import { pintarRespaldo, textoUltimoRespaldo } from './respaldo.js';
 import { configurarAlertaGuia } from './ui_exp_admin.js';
 import { hayControl, sesion, salir, actualizarUsuarios, puede, lista as listaUsuarios, cambiarPin } from './users.js';
 import { esComputadora, anchoMm, setAnchoMm, imprimirTiquetes } from './imprimir.js';
@@ -66,6 +67,7 @@ export function crearAjustes(nav) {
     if (vista === 'novedades') return vistaNovedades();
     if (vista === 'usuarios') return pintarUsuarios({ raiz, irInicio });
     if (vista === 'personas') return pintarPersonas({ raiz, irInicio });
+    if (vista === 'respaldo') return pintarRespaldo({ raiz, irInicio });
     if (vista === 'empleadospl') return pintarEmpleadosPlanillas({ raiz, irInicio });
     if (vista === 'precios') return pintarPrecios({ raiz, irInicio, alGuardar: async () => { const r = await descargarCatalogo(deviceName()); if (r.ok && aplicarConfigHoja(r.config)) alCatalogo(); } });
     vistaInicio();
@@ -173,6 +175,7 @@ export function crearAjustes(nav) {
         tituloGrupo('Administración'), cp(grupo(
           filaAj({ ic: '👥', t: 'Usuarios', s: 'Crear, permisos, PIN y desactivar', onclick: () => { vista = 'usuarios'; pintar(); } }),
           filaAj({ ic: '💲', t: 'Precios del registro', s: textoPrecioHoy(), onclick: () => { vista = 'precios'; pintar(); } }),
+          filaAj({ ic: '💾', t: 'Respaldo de datos', s: textoUltimoRespaldo(), onclick: () => { vista = 'respaldo'; pintar(); } }),
           filaAj({ ic: '🧑‍🌾', t: 'Empleados de planillas', s: 'Salario, horas, traslado de sociedad y fincas', onclick: () => { vista = 'empleadospl'; pintar(); } }),
           filaAj({ ic: '💳', t: 'Personas con tarjeta', s: 'Agregar, pegar desde Excel o subir archivo', onclick: () => { vista = 'personas'; pintar(); } }),
           filaAj({ ic: '⏰', t: 'Alertas de exportación', s: 'Días sin guía del comprador para avisar', onclick: async () => { const x = await exportaciones(); await configurarAlertaGuia(x && x.diasAlertaGuia); } })), 'todos'),

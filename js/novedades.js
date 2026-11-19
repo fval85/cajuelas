@@ -1,5 +1,6 @@
 // Novedades de cada versión (se muestran en Ajustes > Novedades de la versión).
 export const NOVEDADES = [
+  { v: '2.20.0', t: ['Ajustes › Respaldo de datos (administradores): con un toque descarga todo en un ZIP (un archivo Excel .csv por tabla), desde el teléfono o la computadora, sin entrar a Supabase. Muestra hace cuántos días fue el último respaldo. Requiere correr 30_respaldo.sql.'] },
   { v: '2.19.0', t: [
     'Ajustes › Usuarios (administradores): ahora se ve la última conexión de cada usuario, el teléfono, la versión de la app y los envíos pendientes por tipo (Registro, Diario, Boletos, Planillas). Marca 🔴 sin conexión desde hace 3 días o más, 🟠 versión anterior y ⚠ pendientes, con el filtro «Solo con problemas».',
     'Requiere correr 29_conexiones.sql. Cada teléfono empieza a reportar cuando se actualiza a esta versión.'
