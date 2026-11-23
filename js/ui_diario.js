@@ -71,14 +71,38 @@ export function crearDiario(nav) {
     h('div', { class: 'cuadro-fila c3' }, ...['MEDIDAS', 'CAJUELAS', 'CUARTILLOS'].map((t) => celdaEnc(t))),
     h('div', { class: 'cuadro-fila c3' }, ...[5, 6, 7].map(() => celdaIn())));
 
-  const num = (i) => {
-    const v = Number(inputs[i].value.trim().replace(',', '.'));
-    const x = Number.isFinite(v) ? v : 0;
-    return i === 7 && x > 0 && x < 1 ? Math.round(x * 100) : x;
+  /** Cuartillos válidos: vacío o 0, 25, 50, 75 (también 0.25 / 0,25 / 0.5 / 0,50 / 0.75 / 0,75). Devuelve el número o NaN si no es válido. */
+  const cuartValor = (txt) => {
+    const t = String(txt ?? '').trim().replace(',', '.');
+    if (t === '') return 0;
+    if (!/^\d*\.?\d+$|^\d+\.$/.test(t)) return NaN;
+    const x = Number(t);
+    if (!Number.isFinite(x)) return NaN;
+    const y = x > 0 && x < 1 ? Math.round(x * 100) : x;
+    return [0, 25, 50, 75].includes(y) && (x >= 1 || [0, 0.25, 0.5, 0.75].includes(x)) ? y : NaN;
   };
+  const num = (i) => {
+    if (i === 7) { const c = cuartValor(inputs[7].value); return Number.isNaN(c) ? 0 : c; }
+    const v = Number(inputs[i].value.trim().replace(',', '.'));
+    return Number.isFinite(v) ? v : 0;
+  };
+  const MSG_CUART = 'Los cuartillos solo pueden ser 0, 25, 50 o 75 (o 0,25 · 0,50 · 0,75). Corríjalos para poder emitir.';
+  const avisoCuart = h('p', { class: 'estado aviso cuart-aviso', hidden: true, role: 'alert' }, MSG_CUART);
+  let btnEmitir = null;
+  const cuartOk = () => !Number.isNaN(cuartValor(inputs[7].value));
+  /** Activa o desactiva «Emitir recibo». Con marcar = true pinta el cuadro en rojo y muestra el aviso (al salir del cuadro). */
+  function revisarCuart(marcar = false) {
+    const ok = cuartOk();
+    if (btnEmitir) { btnEmitir.disabled = !ok; btnEmitir.title = ok ? '' : MSG_CUART; }
+    if (ok) { inputs[7].classList.remove('mal'); avisoCuart.hidden = true; }
+    else if (marcar) { inputs[7].classList.add('mal'); avisoCuart.hidden = false; }
+    return ok;
+  }
+  inputs[7].addEventListener('input', () => revisarCuart(false));
   inputs[7].addEventListener('blur', () => {
-    const v = num(7), txt = inputs[7].value.trim();
-    if (txt && v !== Number(txt.replace(',', '.'))) { inputs[7].value = fmtCant(v); guardarBorrador(); }
+    const txt = inputs[7].value.trim(), v = cuartValor(txt);
+    if (txt && !Number.isNaN(v) && String(v) !== txt) { inputs[7].value = v ? String(v) : '0'; guardarBorrador(); }
+    revisarCuart(true);
   });
 
   function sinDatos(t) { aviso('Sin datos', t + '\n\nEn Ajustes > Administración use «Recibir catálogo de Google Sheets».'); }
@@ -126,8 +150,8 @@ export function crearDiario(nav) {
     const f = finca.input.value.trim();
     if (!f) return toast('Escriba o seleccione la finca.');
     const l = lote.input.value.trim();
+    if (!revisarCuart(true)) { inputs[7].focus(); return toast(MSG_CUART, 5000); }
     const cuart = num(7);
-    if (cuart < 0 || cuart >= 100) return toast('Los cuartillos deben ser 25, 50 o 75 (menos de 100).');
     const muestra = num(0);
     if (num(1) + num(2) + num(3) + num(4) > 0 && muestra <= 0) return toast('Escriba la muestra TOTAL.');
     const r = {
@@ -139,7 +163,7 @@ export function crearDiario(nav) {
     recibos.agregar(r);
     encolar(payloadRecibo(r, 'REC_' + r.id, r.emitido, 'ACTIVO', '', false));
     nav.pendientes();
-    inputs.forEach((i) => { i.value = ''; }); guardarBorrador(); inputs[0].focus();
+    inputs.forEach((i) => { i.value = ''; }); guardarBorrador(); revisarCuart(); inputs[0].focus();
     mostrar([{ r, modo: MODO.NORMAL }], `Recibo ${r.numero}`, `recibo_${r.numero}.pdf`);
   }
 
@@ -250,7 +274,7 @@ export function crearDiario(nav) {
     nav.pendientes();
     if (inputs.every((i) => !i.value.trim())) {
       [a.muestraTotal, a.verdes, a.maduros, a.secos, a.broca, a.medidas, a.cajuelas, a.cuartillos].forEach((v, i) => { if (v !== 0) inputs[i].value = fmtCant(v); });
-      finca.input.value = a.finca; lote.input.value = a.lote; db.set('dia_finca', a.finca); db.set('dia_lote', a.lote); guardarBorrador();
+      finca.input.value = a.finca; lote.input.value = a.lote; db.set('dia_finca', a.finca); db.set('dia_lote', a.lote); guardarBorrador(); revisarCuart();
     }
     mostrar([{ r: a, modo: MODO.ANULACION }], `Anulación ${a.numero}`, `anulacion_${a.numero}.pdf`,
       'Recibo anulado. Las cantidades quedaron en el formulario por si desea corregirlas y emitir de nuevo.');
@@ -299,11 +323,12 @@ export function crearDiario(nav) {
     banda('Recibo de Café en Beneficio'),
     tarjeta(etiqueta('Beneficio'), pickBen, etiqueta('Buscar por finca (llena la sociedad)'), buscaFinca, etiqueta('Sociedad'), pickSoc,
       h('div', { class: 'dos-col' }, h('div', null, etiqueta('Finca'), finca), h('div', null, etiqueta('Corte/Lote'), lote))),
-    tarjeta(cuadroMuestra, h('div', { class: 'titulo-cuadro' }, 'CANTIDAD'), h('div', { class: 'cuadro-centro' }, cuadroCant)),
+    tarjeta(cuadroMuestra, h('div', { class: 'titulo-cuadro' }, 'CANTIDAD'), h('div', { class: 'cuadro-centro' }, cuadroCant), avisoCuart),
     h('div', { class: 'acciones' },
-      boton('Emitir recibo', 'emitir', 'c-verde', emitir), boton('Reimprimir', 'imprimir', 'c-teal', reimprimir, 'reimprimir'), boton('Resumen', 'resumen', 'c-azul', resumenDelDia, 'resumenes'),
+      (btnEmitir = boton('Emitir recibo', 'emitir', 'c-verde', emitir)), boton('Reimprimir', 'imprimir', 'c-teal', reimprimir, 'reimprimir'), boton('Resumen', 'resumen', 'c-azul', resumenDelDia, 'resumenes'),
       boton('Envío masivo', 'enviar', 'c-ambar', masivo, 'resumenes'), boton('Anular', 'anular', 'c-rojo', anular, 'anular'), boton('Corregir\nfecha', 'registro', 'c-azul', corregirFecha, 'todos'))
   );
   refrescar();
+  revisarCuart(true);
   return { el: raiz, refrescar };
 }

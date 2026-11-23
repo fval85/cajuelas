@@ -308,3 +308,9 @@ button.interruptor { border: 0; padding: 0; cursor: pointer; }
   .pl-faltan { background: #422006; color: #fcd34d; }
   .pl-chip.ok { background: #14532d; color: #dcfce7; } .pl-chip.pend { background: #422006; color: #fcd34d; }
 }
+
+/* ---- 2.20.1: cuartillos no válidos en Diario ---- */
+.celda-in.mal { background: #fee2e2; color: #991b1b; outline: 2px solid #dc2626; outline-offset: -2px; }
+.btn:disabled { opacity: .45; filter: grayscale(.6); cursor: not-allowed; }
+.cuart-aviso { margin: 10px 0 0; }
+@media (prefers-color-scheme: dark) { .celda-in.mal { background: #4a1d1d; color: #fecaca; } }
