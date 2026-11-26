@@ -1,5 +1,10 @@
 // Novedades de cada versión (se muestran en Ajustes > Novedades de la versión).
 export const NOVEDADES = [
+  { v: '2.25.0', t: [
+    'Ventas de exportación › Contratos: se quitó la ficha de arriba. Ahora se ven directo los botones rápidos, los totales, el gráfico, la tabla y las tarjetas de contratos (Compartir PDF y Descargar Excel siguen igual).',
+    'Café en fruta VOLCAFE: la tarjeta de Reportes muestra las CAJUELAS en grande (con fanegas y recibos) y al lado el avance de NESPRESSO AAA, su barra y lo que falta en fanegas y cajuelas.',
+    'Adentro, botones rápidos de tipo (Todos / Nespresso AAA / Maduro conv.), Finca y periodo (esta semana, este mes, toda la cosecha); tarjetas de cajuelas, avance, ritmo de los últimos 14 días y última entrega; gráfico por día (toque una columna para ver los recibos), barras por finca y lista de recibos con cajuelas y fanegas. Nuevos botones Compartir PDF y Descargar Excel.'
+  ] },
   { v: '2.24.0', t: [
     'Ventas de exportación › sobrante: cuando un contrato se entrega completo con kilos de más, el sobrante se calcula al precio del contrato y es 100 % nuestro (no pasa por el banco). Se ve en la tarjeta del contrato («▾ Ver más»), en la ficha y en el detalle, con lo que falta cobrar.',
     'Registrar pago tiene «Tipo de pago»: «Pago del contrato» o «Factura de sobrante». La factura de sobrante entra completa, sin pago total ni depósito del banco. En la pestaña Pagos hay un filtro «Sobrantes». Requiere correr 32_exp_sobrante.sql.',

@@ -270,17 +270,12 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
     dibujar();
   }
 
-  // ---- Panel: ficha del comprador (o de todo lo filtrado), tarjetas, gráfico y tabla ----
+  // ---- Panel: tarjetas de totales, gráfico y tabla (desde 2.25.0 sin la ficha de arriba) ----
   let panel = null;
   function pintarPanel() {
     const rep = reportePanel(datos, f.fl);
     panel = rep;
     if (!rep.ctx.n) return;
-    const fi = rep.ficha;
-    zona.append(h('div', { class: 'tarjeta ficha-exp' + (fi.unComp ? ' comprador' : '') },
-      h('div', { class: 'fuente-cab' }, h('h3', null, fi.titulo), h('span', { class: 'chip-fin' }, fi.fin)),
-      h('div', { class: 'ficha-pares' }, ...fi.pares.flatMap(([a, b]) => [h('small', null, a), h('b', null, b)])),
-      h('div', { class: 'progreso', role: 'img', 'aria-label': `${fi.pct}% de los sacos entregados` }, h('i', { style: `width:${fi.pct}%` }))));
     zona.append(h('div', { class: 'kpis' }, ...rep.kpis.map((k) => h('div', { class: 'kpi' }, h('small', null, k.t), h('b', null, k.v), k.s ? h('span', { class: 'kpi-sub' }, k.s) : null))));
     rep.graficos.forEach((g) => {
       const cv = lienzoGrafico(g, 360, Math.max(170, 56 + g.cats.length * 30)); cv.classList.add('grafico');

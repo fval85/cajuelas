@@ -313,3 +313,7 @@ details.mas-datos summary { font-weight: 700; color: var(--verde); padding: 8px 
 .chip-btn { font: inherit; font-size: 13px; font-weight: 700; padding: 6px 12px; border: 1.5px solid var(--borde); background: var(--tarjeta); color: var(--texto); border-radius: 99px; }
 .chip-btn.on { border-color: var(--verde); background: var(--verde-claro); color: var(--verde); }
 .progreso.grande { height: 14px; }
+
+/* 2.25.0 Café en fruta */
+.cf-ejes { display: flex; justify-content: space-between; font-size: 11px; color: var(--gris); margin-bottom: 6px; }
+.cf-finca.sel { border-color: var(--verde); border-width: 2px; }
