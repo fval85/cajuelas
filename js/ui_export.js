@@ -73,12 +73,12 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
     if (e.mesActual) fl.mes = [mesTxt(hoyIso().slice(0, 7))];
     f.fl = fl; pintarFiltros(); pintar();
   }
+  // Desde 2.24.0 «Por cobrar» y «Por entregar» son botones rápidos: se quitan una sola vez los filtros guardados que se sembraban antes (los del usuario quedan).
   function sembrar() {
     try {
-      if (db.get('exp_sembrados', false)) return;
-      guard.agregar('Por cobrar', { fl: { cob: ['Pendiente', 'Pago Parcial'] } });
-      guard.agregar('Por entregar este mes', { fl: { ent: ['Por Entregar', 'Entrega Parcial'] }, mesActual: true });
-      db.set('exp_sembrados', true);
+      if (db.get('exp_sembrados_quitados', false)) return;
+      if (db.get('exp_sembrados', false)) { guard.quitar('Por cobrar'); guard.quitar('Por entregar este mes'); }
+      db.set('exp_sembrados', true); db.set('exp_sembrados_quitados', true);
     } catch { /* nada */ }
   }
   function abrirHoja() {
@@ -182,7 +182,7 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
     const al = datos.alertas.por.get(c.id) || [];
     const abrir = () => { detalleId = c.id; redibujar(); window.scrollTo(0, 0); };
     const pctE = c.sacC ? Math.min(100, Math.round(c.sacE / c.sacC * 100)) : 0;
-    const base = c.finan ? c.monE * c.pct / 100 : c.monE;
+    const base = c.monN || 0;
     const cobrado = (c.pag || 0) + (c.cargos || 0);
     const pctC = base > 0.005 ? Math.min(100, Math.round(cobrado / base * 100)) : null;
     const favTxt = c.fav == null || Math.abs(c.fav) < 0.005 ? '' : `${c.fav > 0 ? '+' : ''}${dec2(c.fav)} kg`;
@@ -199,7 +199,8 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
       null,
       ['Monto del contrato', dinero$(c.monC)],
       ['Monto entregado', dinero$(c.monE)],
-      ...(c.finan ? [[`Nos toca (${ent0(c.pct)} %)`, dinero$(base)]] : []),
+      ...(c.finan ? [[`Nos toca (${ent0(c.pct)} %${c.sob > 0.005 ? ' + sobrante' : ''})`, dinero$(base)]] : []),
+      ...(c.sob > 0.005 ? [['Sobrante (factura aparte)', `${dec2(c.sobKg)} kg = ${dinero$(c.sob)}`], ['Sobrante pagado', c.sob - c.sobPag > 0.005 ? `${dinero$(c.sobPag)} · falta ${dinero$(c.sob - c.sobPag)}` : `${dinero$(c.sobPag)} ✓`]] : []),
       [c.cargos ? 'Pagado + intereses banco' : 'Pagado', dinero$(cobrado)],
       ['Por cobrar', dinero$(c.cobrar)]
     ];
@@ -233,7 +234,7 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
     const con = (id) => datos.contratos.find((c) => c.id === id) || null;
     if (puedeEditarExp()) zona.append(h('div', { class: 'acciones-exp' }, h('button', { type: 'button', style: 'grid-column:1 / -1', onclick: () => tras(nuevoPago(datos)) }, '💵 Registrar pago')));
     const q = h('input', { class: 'campo', type: 'search', placeholder: '🔍 Buscar contrato, comprador o referencia', value: qPag, autocomplete: 'off' });
-    const chips = h('div', { class: 'chips chicas envuelve' }, ...[['todos', 'Todos'], ['fin', 'Financiados'], ['int', 'Con intereses banco'], ['falta', '⚠ Sin pago total']].map(([k, tx]) =>
+    const chips = h('div', { class: 'chips chicas envuelve' }, ...[['todos', 'Todos'], ['fin', 'Financiados'], ['int', 'Con intereses banco'], ['sob', 'Sobrantes'], ['falta', '⚠ Sin pago total']].map(([k, tx]) =>
       h('button', { type: 'button', class: 'chip' + (fPag === k ? ' on' : ''), onclick: () => { fPag = k; redibujar(); } }, tx)));
     const lista = h('div');
     zona.append(q, chips, lista);
@@ -245,21 +246,22 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
         if (c && !ids.has(p.id)) return false;
         if (fPag === 'fin' && !(c && c.finan)) return false;
         if (fPag === 'int' && !(p.cargo > 0)) return false;
-        if (fPag === 'falta' && !(c && c.finan && p.total == null)) return false;
+        if (fPag === 'sob' && !p.sob) return false;
+        if (fPag === 'falta' && !(c && c.finan && p.total == null && !p.sob)) return false;
         const tx = normalizar(`${p.id} ${c ? c.comp : ''} ${p.nota} ${fechaCorta(p.fecha)}`);
         return toks.every((k) => tx.includes(k));
       }).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)) || (b.dbId || 0) - (a.dbId || 0));
-      const nFalta = datos.pagos.filter((p) => { const c = con(p.id); return c && c.finan && p.total == null; }).length;
+      const nFalta = datos.pagos.filter((p) => { const c = con(p.id); return c && c.finan && p.total == null && !p.sob; }).length;
       if (nFalta && fPag !== 'falta') lista.append(h('div', { class: 'alerta' }, h('span', { 'aria-hidden': 'true' }, '⚠'), h('span', null, h('b', null, `${nFalta} ${nFalta === 1 ? 'pago financiado' : 'pagos financiados'} sin el pago total`), 'Se registraron antes de esta versión: ábralos con ✎ y complete el pago total del comprador para que se calculen los intereses del banco.')));
       lista.append(h('p', { class: 'nota' }, `${ps.length} ${ps.length === 1 ? 'pago' : 'pagos'} · depositado ${dinero$(ps.reduce((s, p) => s + p.monto, 0))} · intereses banco ${dinero$(ps.reduce((s, p) => s + (p.cargo || 0), 0))}`));
       if (!ps.length) lista.append(h('p', { class: 'estado aviso' }, 'No hay pagos con esa búsqueda o filtro.'));
       ps.slice(0, 300).forEach((p) => {
         const c = con(p.id), fin = !!(c && c.finan), editable = puedeEditarExp() && p.dbId != null;
-        const det = fin ? (p.total == null ? '⚠ falta el pago total (registrado antes del cambio)' : `Total ${dinero$(p.total)} · nos toca ${dinero$(Math.round(p.total * c.pct) / 100)} · intereses banco ${dinero$(p.cargo || 0)}`) : '';
+        const det = p.sob ? 'Factura de sobrante · entra completa (no pasa por el banco)' : fin ? (p.total == null ? '⚠ falta el pago total (registrado antes del cambio)' : `Total ${dinero$(p.total)} · nos toca ${dinero$(Math.round(p.total * c.pct) / 100)} · intereses banco ${dinero$(p.cargo || 0)}`) : '';
         lista.append(h('div', { class: 'tarj-contrato', role: editable ? 'button' : null, tabindex: editable ? '0' : null, onclick: editable ? () => tras(nuevoPago(datos, p.id, p)) : null },
           h('h3', null, h('span', null, `${fechaCorta(p.fecha)} · ${p.id}`), h('span', { class: 'der' }, dinero$(p.monto) + (editable ? '  ✎' : ''))),
           h('p', { class: 'sub' }, `${c ? c.comp : '¿Contrato?'}${fin ? ' · financiado ' + ent0(c.pct) + ' %' : ''}`),
-          det ? h('p', { class: 'sub' + (p.total == null ? ' alerta-txt' : '') }, det) : null,
+          det ? h('p', { class: 'sub' + (p.total == null && !p.sob ? ' alerta-txt' : '') }, det) : null,
           p.nota ? h('p', { class: 'sub' }, p.nota) : null));
       });
       if (ps.length > 300) lista.append(h('p', { class: 'nota' }, `Se muestran 300 de ${ps.length}. Escriba para buscar.`));
@@ -504,7 +506,7 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
       h('p', { class: 'sub sem-resumen' }, ...['rojo', 'ambar', 'gris', 'verde'].filter((k) => nSem(k)).map((k) => h('span', null, punto(k), `${nSem(k)} `)), nAl ? `· ${nAl} ${nAl === 1 ? 'alerta' : 'alertas'}` : ''),
       h('span', { class: 'hub-flecha', 'aria-hidden': 'true' }, '›'));
   }
-  pintarTabs(); pintarChips(); pintarOpciones(); pintarFiltros(); pintarEstado(); sembrar();
+  sembrar(); pintarTabs(); pintarChips(); pintarOpciones(); pintarFiltros(); pintarEstado();
   return {
     cab, el, tarjetaHub, cargar, ocupado: () => cargando,
     reiniciar() { f = { fl: {}, dims: ['comp'], med: [...MEDIDAS_INI], graf: grafIni() }; vista = 'contratos'; tab = 'contratos'; sub = 'entregar'; detalleId = null; sembrar(); const c = leerCache(); if (c) usar(c); redibujar(); cargar(false); },

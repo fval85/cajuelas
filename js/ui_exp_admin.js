@@ -200,20 +200,29 @@ export function nuevoPago(datos, contratoId = '', p = null) {
   const con = (id) => datos.contratos.find((x) => x.id === id) || null;
   const esFin = (id) => { const c = con(id); return !!(c && c.finan); };
   const resumen = (id) => { const c = con(id); return c ? `Entregado ${dinero(c.monE)} · pagado ${dinero(c.pag)}${c.cargos > 0 ? ' · intereses banco ' + dinero(c.cargos) : ''} · por cobrar ${dinero(c.cobrar)}` : ''; };
-  const finP = p ? esFin(p.id) : false;
+  const TIPOS = ['Pago del contrato', 'Factura de sobrante'];
+  const esSob = (x) => x.tipo === TIPOS[1];
+  const finP = p ? esFin(p.id) && !p.sob : false;
   const txt = (v) => (v == null || v === '' ? '' : String(v).replace('.', ','));
   return hoja({
-    titulo: p ? 'Editar pago' : 'Registrar pago', listas: { __c: ops.map((c) => c.id) },
+    titulo: p ? 'Editar pago' : 'Registrar pago', listas: { __c: ops.map((c) => c.id), __t: TIPOS },
     campos: [
       { k: 'contrato', etiqueta: 'Contrato', tipo: 'lista', lista: '__c', obligatorio: true, valor: p ? p.id : contratoId || (ops[0] || {}).id || '' },
+      { k: 'tipo', etiqueta: 'Tipo de pago', tipo: 'lista', lista: '__t', obligatorio: true, valor: p && p.sob ? TIPOS[1] : TIPOS[0] },
       { k: 'fecha', etiqueta: 'Fecha del pago', tipo: 'fecha', valor: p ? p.fecha.slice(0, 10) : diaHoy() },
-      { k: 'total', etiqueta: 'Pago total del comprador $', tipo: 'num', valor: finP ? txt(p.total) : '', visibleSi: (x) => esFin(x.contrato) },
-      { k: 'deposito', etiqueta: 'Depositado por el banco $', tipo: 'num', valor: finP ? txt(p.monto) : '', visibleSi: (x) => esFin(x.contrato) },
-      { k: 'monto', etiqueta: 'Monto pagado $', tipo: 'num', valor: p && !finP ? txt(p.monto) : '', visibleSi: (x) => !esFin(x.contrato) },
+      { k: 'total', etiqueta: 'Pago total del comprador $', tipo: 'num', valor: finP ? txt(p.total) : '', visibleSi: (x) => esFin(x.contrato) && !esSob(x) },
+      { k: 'deposito', etiqueta: 'Depositado por el banco $', tipo: 'num', valor: finP ? txt(p.monto) : '', visibleSi: (x) => esFin(x.contrato) && !esSob(x) },
+      { k: 'monto', etiqueta: 'Monto pagado $', tipo: 'num', valor: p && !finP ? txt(p.monto) : '', visibleSi: (x) => !esFin(x.contrato) || esSob(x) },
       { k: 'referencia', etiqueta: 'Referencia / nota', tipo: 'texto', valor: p ? p.nota : '' }
     ],
     nota: (x) => {
       const c = con(x.contrato);
+      if (c && esSob(x)) {
+        const fal = (c.sob || 0) - (c.sobPag || 0);
+        return 'Factura de sobrante: entra completa a nosotros (no pasa por el banco).\n' + (c.sob > 0.005
+          ? `Sobrante del contrato: ${miles(c.sobKg, 2)} kg = ${dinero(c.sob)} · ${fal > 0.005 ? 'falta ' + dinero(fal) : 'ya está pagado'}`
+          : '⚠ Este contrato todavía no tiene kilos de sobrante (se calcula cuando está entregado completo).');
+      }
       if (!c || !c.finan) return resumen(x.contrato);
       const { nos, cargo } = calcPagoFin(c.pct, num(x.total), num(x.deposito));
       let t = `Contrato financiado · nos toca el ${miles(c.pct, c.pct % 1 ? 1 : 0)} %`;
@@ -224,6 +233,7 @@ export function nuevoPago(datos, contratoId = '', p = null) {
     ok: p ? 'Guardar cambios' : 'Registrar pago',
     guardar: async (x) => {
       const c = con(x.contrato);
+      if (esSob(x)) return expAdmin('pago', { contrato: x.contrato, fecha: x.fecha, referencia: x.referencia, monto: x.monto, sobrante: true, id: p ? p.dbId : null });
       if (c && c.finan) {
         const tot = num(x.total), dep = num(x.deposito);
         if (!(tot > 0)) return { ok: false, message: 'Escriba el pago total del comprador.' };

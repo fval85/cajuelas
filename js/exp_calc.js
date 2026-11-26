@@ -37,7 +37,8 @@ export function parseExp(resp) {
       efe: numN(o['efecto kilos a favor / contra $']), pag: num(o['monto pagado $']), cargos: num(o['cargos banco $']), cobrar: num(o['monto por cobrar $']), con: 1,
       // Financiado: el banco recibe todo y nos devuelve solo nuestro % (30 por defecto). «Por cobrar» ya viene calculado sobre ese %.
       finan: o['financiado'] === true, pct: o['financiado'] === true ? (numN(o['pct nuestro']) ?? 30) : 100, pctC: numN(c['pct nuestro']),
-      monN: num(o['monto entregado nuestro $']), monB: num(o['monto entregado banco $'])
+      monN: num(o['monto entregado nuestro $']), monB: num(o['monto entregado banco $']),
+      sobKg: num(o['sobrante kg']), sob: num(o['sobrante $']), sobPag: num(o['sobrante pagado $'])
     };
   });
   const entregas = objetos(resp.entregas).map((o) => ({
@@ -47,7 +48,7 @@ export function parseExp(resp) {
     tot: numN(o['total $']), real: numN(o['monto real $']), guia: txt(o['estado de guia']), est: txt(o['confirmacion de salida']),
     dbId: o['id'] ?? null, boletaN: txt(o['boleta nuestra']), guiaC: txt(o['guia comprador']), obs: txt(o['observaciones'])
   }));
-  const pagos = objetos(resp.pagos).map((o) => ({ dbId: o['id'] ?? null, id: txt(o['no. contrato']), fecha: txt(o['fecha pago']), monto: num(o['monto pagado $']), nota: txt(o['referencia / nota']), cargo: num(o['cargo banco $']), total: numN(o['pago total $']) }));
+  const pagos = objetos(resp.pagos).map((o) => ({ dbId: o['id'] ?? null, id: txt(o['no. contrato']), fecha: txt(o['fecha pago']), monto: num(o['monto pagado $']), nota: txt(o['referencia / nota']), cargo: num(o['cargo banco $']), total: numN(o['pago total $']), sob: o['sobrante'] === true || o['sobrante'] === 'true' }));
   const d = { contratos, entregas, pagos, listas: resp.listas || {}, diasGuia: Number.isFinite(Number(resp.diasAlertaGuia)) ? Number(resp.diasAlertaGuia) : 3 };
   d.alertas = alertasDe(d);
   contratos.forEach((c) => { c.sem = semaforo(c, d.alertas.por.get(c.id) || []); c.semTxt = SEM_TXT[c.sem]; });
@@ -312,9 +313,10 @@ export function reporteContrato(d, c) {
   if (c.fav != null) datos.push(`Kilos a favor / contra: ${dec2(c.fav)} kg${c.efe != null ? ' (efecto ' + dinero$(c.efe) + ')' : ''}.`);
   if (c.finan) datos.push(`Financiado: nos toca el ${dec2(c.pct)} % (${dinero$(c.monC * c.pct / 100)} del contrato); el resto (${dinero$(c.monC * (100 - c.pct) / 100)}) es del banco. De lo entregado nos tocan ${dinero$(c.monN)}.`);
   if (c.sug != null || c.prom != null) datos.push(`Para cerrar el contrato: ${c.sug == null ? '—' : ent0(c.sug) + ' sacos sugeridos'}${c.prom != null ? ' · promedio ' + dec2(c.prom) + ' kg por saco' : ''}.`);
-  if (pagos.length) datos.push('Pagos: ' + pagos.map((p) => `${p.fecha ? p.fecha.slice(8, 10) + '/' + p.fecha.slice(5, 7) + '/' + p.fecha.slice(0, 4) : 's/f'} ${dinero$(p.monto)}${p.cargo > 0 ? ' + intereses banco ' + dinero$(p.cargo) : ''}${p.nota ? ' (' + p.nota + ')' : ''}`).join(' · ') + '.');
-  if (c.cargos > 0) datos.push(`Intereses / cargos cobrados por el banco: ${dinero$(c.cargos)} (ya descontados del por cobrar).`);
+  if (c.sob > 0.005) datos.push(`Sobrante: ${dec2(c.sobKg)} kg = ${dinero$(c.sob)} (factura aparte, 100 % nuestro) · ${c.sob - c.sobPag > 0.005 ? 'falta cobrar ' + dinero$(c.sob - c.sobPag) : 'pagado ✓'}.`);
+  if (pagos.length) datos.push('Pagos: ' + pagos.map((p) => `${p.fecha ? p.fecha.slice(8, 10) + '/' + p.fecha.slice(5, 7) + '/' + p.fecha.slice(0, 4) : 's/f'} ${dinero$(p.monto)}${p.sob ? ' (factura de sobrante)' : ''}${p.cargo > 0 ? ' + intereses banco ' + dinero$(p.cargo) : ''}${p.nota ? ' (' + p.nota + ')' : ''}`).join(' · ') + '.');
   else datos.push('Pagos: todavía no hay pagos registrados.');
+  if (c.cargos > 0) datos.push(`Intereses / cargos cobrados por el banco: ${dinero$(c.cargos)} (ya descontados del por cobrar).`);
   ((d.alertas.por.get(c.id)) || []).forEach((a) => datos.push('⚠ ' + a.t + '.'));
   rep.datos = datos; rep.unaHoja = true; rep.graficos = [];
   rep.kpis = [{ t: 'Sacos', v: `${ent0(c.sacE)} de ${ent0(c.sacC)}` }, { t: 'Entregado', v: dinero$(c.monE) }, { t: 'Pagado', v: dinero$(c.pag) }, { t: 'Por cobrar', v: dinero$(c.cobrar) }];
@@ -335,7 +337,7 @@ export function estadoCuenta(d, comp) {
   const fr = filas.map((c) => ({ v: [c.id, c.semTxt, c.sacE, c.sacP, c.monE, c.pag, c.cobrar], fondo: COLOR_SEM[c.sem] }));
   if (filas.length > 1) fr.push({ negrita: true, fondo: '#E8F1EB', v: ['TOTAL', '', S('sacE'), S('sacP'), S('monE'), S('pag'), S('cobrar')] });
   const datos = [`Saldo por cobrar: ${dinero$(S('cobrar'))} (entregado ${dinero$(S('monE'))} menos pagado ${dinero$(S('pag'))}${S('cargos') > 0 ? ' e intereses del banco ' + dinero$(S('cargos')) : ''}).`];
-  if (pagos.length) datos.push('Pagos recibidos: ' + pagos.map((p) => `${p.fecha ? p.fecha.slice(8, 10) + '/' + p.fecha.slice(5, 7) + '/' + p.fecha.slice(0, 4) : 's/f'} ${p.id} ${dinero$(p.monto)}${p.cargo > 0 ? ' + intereses ' + dinero$(p.cargo) : ''}`).join(' · ') + '.');
+  if (pagos.length) datos.push('Pagos recibidos: ' + pagos.map((p) => `${p.fecha ? p.fecha.slice(8, 10) + '/' + p.fecha.slice(5, 7) + '/' + p.fecha.slice(0, 4) : 's/f'} ${p.id} ${dinero$(p.monto)}${p.sob ? ' (sobrante)' : ''}${p.cargo > 0 ? ' + intereses ' + dinero$(p.cargo) : ''}`).join(' · ') + '.');
   else datos.push('Todavía no hay pagos registrados.');
   return {
     vista: 'estado', titulo: `Estado de cuenta · ${comp}`, subtitulos: [`Fecha: ${hoyIso().slice(8, 10)}/${hoyIso().slice(5, 7)}/${hoyIso().slice(0, 4)} · ${filas.length} ${filas.length === 1 ? 'contrato' : 'contratos'}`],
@@ -355,7 +357,7 @@ export function reportePanel(d, fl) {
   const unComp = (fl.comp || []).length === 1 && comps.length === 1 ? comps[0] : null;
   const pctE = S('sacC') ? Math.min(100, Math.round(S('sacE') / S('sacC') * 100)) : 0;
   const fin = filas.filter((r) => r.finan);
-  const nosToca = filas.reduce((t, r) => t + r.monE * r.pct / 100, 0);
+  const nosToca = S('monN');
   const cobrado = S('pag') + S('cargos');
   const abiertos = filas.filter((r) => ABIERTOS.includes(normalizar(r.ent)));
   const prox = abiertos.filter((r) => r.fent).sort((a, b) => a.fent.localeCompare(b.fent))[0] || null;
@@ -374,6 +376,7 @@ export function reportePanel(d, fl) {
     ['Kilos a favor / contra', fav == null ? '—' : `${fav > 0 ? '+' : ''}${dec2(fav)} kg${efe != null ? ' = ' + dinero$(efe) : ''}`],
     ['Próxima entrega', prox ? `${mesCorto(prox.fent)} · ${ent0(prox.sacP)} sacos (${prox.id})` : abiertos.length ? 'sin fecha' : 'nada pendiente']
   ];
+  if (S('sob') > 0.005) { const fal = S('sob') - S('sobPag'); pares.push(['Sobrante (factura aparte)', `${dec2(S('sobKg'))} kg = ${dinero$(S('sob'))} · ${fal > 0.005 ? 'falta ' + dinero$(fal) : 'pagado ✓'}`]); }
   const cert = unicos('cert'), cal = unicos('cal'), prep = unicos('prep');
   if (cal.length) pares.push(['Calidad', cal.join(', ')]);
   if (prep.length) pares.push(['Preparación', prep.join(', ')]);
