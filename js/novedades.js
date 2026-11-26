@@ -1,5 +1,20 @@
 // Novedades de cada versión (se muestran en Ajustes > Novedades de la versión).
 export const NOVEDADES = [
+  { v: '2.23.1', t: ['Ventas de exportación: la tarjeta de cada contrato (con «▾ Ver más») y la ficha de arriba ahora muestran también la calidad y la preparación.'] },
+  { v: '2.23.0', t: [
+    'Ventas de exportación › Contratos: cada tarjeta muestra dos barras, entrega (sacos entregados) y cobro (lo pagado contra lo que nos toca).',
+    'Con «▾ Ver más» la tarjeta se despliega con sacos y quintales, precio riel, fecha de entrega, kilos a favor, calidad, preparación, monto del contrato, monto entregado, nos toca, pagado + intereses del banco y por cobrar. «Ver detalle completo ›» abre el contrato como antes.'
+  ] },
+  { v: '2.22.0', t: [
+    'Ventas de exportación › Contratos: botones rápidos a la vista (Por cobrar, Por entregar, Financiados, Este mes y Comprador). Un toque filtra y otro toque quita el filtro.',
+    'Arriba de la lista ahora hay una ficha con lo que se ocupa a mano: si es financiado, contratos, sacos y quintales, precio riel, cuánto se ha entregado, kilos a favor, próxima entrega, calidad y preparación. Al elegir un comprador, la ficha es de ese comprador.',
+    'Debajo: tarjetas de totales, gráfico de sacos por contrato y tabla (financiado, entrega, sacos, quintales, precio riel, % entregado, monto y por cobrar), con botones Compartir PDF y Descargar Excel.'
+  ] },
+  { v: '2.21.0', t: [
+    'Ventas de exportación › pagos de contratos financiados: se escribe el pago total del comprador y lo que depositó el banco; la app calcula lo que nos toca y los intereses / cargos del banco. Esos intereses también bajan el «por cobrar», así el contrato cierra en cero. Requiere correr 31_exp_intereses_banco.sql.',
+    'Nueva pestaña «Pagos» en Ventas de exportación: todos los pagos con buscador y filtros (financiados, con intereses del banco, sin pago total). Toque uno para corregirlo o anularlo.',
+    'El detalle del contrato, el PDF y el estado de cuenta muestran los intereses del banco; en Tablas hay una medida nueva «Intereses / Cargos Banco $». Los contratos no financiados siguen igual.'
+  ] },
   { v: '2.20.1', t: ['Diario: los cuartillos solo aceptan 0, 25, 50 o 75 (también 0,25 · 0,50 · 0,75, que se convierten solos). Si se escribe otro número, el cuadro se pone en rojo, aparece un aviso y «Emitir recibo» queda desactivado hasta corregirlo.'] },
   { v: '2.20.0', t: ['Ajustes › Respaldo de datos (administradores): con un toque descarga todo en un ZIP (un archivo Excel .csv por tabla), desde el teléfono o la computadora, sin entrar a Supabase. Muestra hace cuántos días fue el último respaldo. Requiere correr 30_respaldo.sql.'] },
   { v: '2.19.0', t: [

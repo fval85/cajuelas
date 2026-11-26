@@ -189,19 +189,50 @@ export function anotarGuia(datos, e) {
   });
 }
 
+/** Contrato financiado: el comprador paga el total al banco; nos toca el % y el banco deposita eso menos sus intereses. */
+export const calcPagoFin = (pct, total, deposito) => {
+  const nos = Number.isFinite(total) ? Math.round(total * pct) / 100 : NaN;
+  return { nos, cargo: Number.isFinite(nos) && Number.isFinite(deposito) ? Math.round((nos - deposito) * 100) / 100 : NaN };
+};
+
 export function nuevoPago(datos, contratoId = '', p = null) {
   const ops = opcionesContrato(datos);
-  const resumen = (id) => { const c = datos.contratos.find((x) => x.id === id); return c ? `Entregado ${dinero(c.monE)} · pagado ${dinero(c.pag)} · por cobrar ${dinero(c.cobrar)}` : ''; };
+  const con = (id) => datos.contratos.find((x) => x.id === id) || null;
+  const esFin = (id) => { const c = con(id); return !!(c && c.finan); };
+  const resumen = (id) => { const c = con(id); return c ? `Entregado ${dinero(c.monE)} · pagado ${dinero(c.pag)}${c.cargos > 0 ? ' · intereses banco ' + dinero(c.cargos) : ''} · por cobrar ${dinero(c.cobrar)}` : ''; };
+  const finP = p ? esFin(p.id) : false;
+  const txt = (v) => (v == null || v === '' ? '' : String(v).replace('.', ','));
   return hoja({
     titulo: p ? 'Editar pago' : 'Registrar pago', listas: { __c: ops.map((c) => c.id) },
     campos: [
       { k: 'contrato', etiqueta: 'Contrato', tipo: 'lista', lista: '__c', obligatorio: true, valor: p ? p.id : contratoId || (ops[0] || {}).id || '' },
       { k: 'fecha', etiqueta: 'Fecha del pago', tipo: 'fecha', valor: p ? p.fecha.slice(0, 10) : diaHoy() },
-      { k: 'monto', etiqueta: 'Monto pagado $', tipo: 'num', valor: p ? String(p.monto).replace('.', ',') : '' },
+      { k: 'total', etiqueta: 'Pago total del comprador $', tipo: 'num', valor: finP ? txt(p.total) : '', visibleSi: (x) => esFin(x.contrato) },
+      { k: 'deposito', etiqueta: 'Depositado por el banco $', tipo: 'num', valor: finP ? txt(p.monto) : '', visibleSi: (x) => esFin(x.contrato) },
+      { k: 'monto', etiqueta: 'Monto pagado $', tipo: 'num', valor: p && !finP ? txt(p.monto) : '', visibleSi: (x) => !esFin(x.contrato) },
       { k: 'referencia', etiqueta: 'Referencia / nota', tipo: 'texto', valor: p ? p.nota : '' }
     ],
-    nota: (x) => resumen(x.contrato), ok: p ? 'Guardar cambios' : 'Registrar pago',
-    guardar: (x) => expAdmin('pago', { ...x, id: p ? p.dbId : null }),
+    nota: (x) => {
+      const c = con(x.contrato);
+      if (!c || !c.finan) return resumen(x.contrato);
+      const { nos, cargo } = calcPagoFin(c.pct, num(x.total), num(x.deposito));
+      let t = `Contrato financiado · nos toca el ${miles(c.pct, c.pct % 1 ? 1 : 0)} %`;
+      if (Number.isFinite(nos)) t += `\nNos toca: ${dinero(nos)}`;
+      if (Number.isFinite(cargo)) t += cargo < -0.004 ? '\n⚠ Lo depositado no puede ser mayor que lo que nos toca.' : `\nIntereses / cargos del banco: ${dinero(Math.max(cargo, 0))}`;
+      return t + '\n' + resumen(x.contrato);
+    },
+    ok: p ? 'Guardar cambios' : 'Registrar pago',
+    guardar: async (x) => {
+      const c = con(x.contrato);
+      if (c && c.finan) {
+        const tot = num(x.total), dep = num(x.deposito);
+        if (!(tot > 0)) return { ok: false, message: 'Escriba el pago total del comprador.' };
+        if (!(dep > 0)) return { ok: false, message: 'Escriba lo que depositó el banco.' };
+        if (calcPagoFin(c.pct, tot, dep).cargo < -0.004) return { ok: false, message: 'Lo depositado por el banco no puede ser mayor que lo que nos toca.' };
+        return expAdmin('pago', { contrato: x.contrato, fecha: x.fecha, referencia: x.referencia, monto: String(dep), pago_total: String(tot), id: p ? p.dbId : null });
+      }
+      return expAdmin('pago', { contrato: x.contrato, fecha: x.fecha, referencia: x.referencia, monto: x.monto, id: p ? p.dbId : null });
+    },
     botonesExtra: p ? [{ texto: 'Anular pago', clase: 'peligro', onclick: async () => {
       if (!(await confirmar('Anular pago', `Se anula el pago de ${dinero(p.monto)} del ${fechaCorta((p.fecha || '').slice(0, 10))}. Queda en la auditoría.`, { si: 'Anular', peligro: true }))) return false;
       const r = await expAdmin('anularPago', { id: p.dbId, motivo: 'Anulado desde la app' });

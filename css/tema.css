@@ -314,3 +314,27 @@ button.interruptor { border: 0; padding: 0; cursor: pointer; }
 .btn:disabled { opacity: .45; filter: grayscale(.6); cursor: not-allowed; }
 .cuart-aviso { margin: 10px 0 0; }
 @media (prefers-color-scheme: dark) { .celda-in.mal { background: #4a1d1d; color: #fecaca; } }
+
+/* 2.22.0 · Ventas de exportación: botones rápidos, ficha del comprador y botones del panel */
+.rapidos-exp { margin: 6px 0 2px; }
+.ficha-exp .fuente-cab { gap: 8px; flex-wrap: wrap; }
+.ficha-exp.comprador { border: 1.5px solid var(--verde); }
+.chip-fin { font-size: 12px; font-weight: 800; padding: 3px 10px; border-radius: 12px; background: #fef3c7; color: #92400e; white-space: nowrap; }
+.ficha-pares { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin-top: 8px; font-size: 13.5px; align-items: baseline; }
+.ficha-pares small { color: var(--gris); font-weight: 700; }
+.ficha-pares b { font-weight: 700; overflow-wrap: anywhere; }
+.kpi .kpi-sub { color: var(--gris); font-weight: 700; font-size: 12px; }
+.botones-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0 14px; }
+.botones-panel .btn { flex-direction: row; min-height: 52px; gap: 8px; }
+.btn.btn-excel { background: var(--tarjeta); color: var(--texto); border: 1.5px solid var(--borde); }
+/* 2.23.0 · Tarjeta de contrato: barras de entrega y cobro y «Ver más» */
+.lb-exp { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--gris); font-weight: 700; margin-top: 6px; }
+.lb-exp b { color: var(--texto); }
+.tarj-contrato .progreso { margin: 4px 0 2px; }
+.progreso.p-cobro i { background: var(--azul); }
+.chip-fin.chico { font-size: 11px; padding: 1px 8px; margin-left: 6px; }
+.tarj-pares { border-top: 1px solid var(--borde); padding-top: 8px; margin-top: 10px; }
+.tarj-pares b { text-align: right; }
+.tarj-pares .sep { grid-column: 1 / -1; border-top: 1px dashed var(--borde); margin: 2px 0; }
+.pie-tarj { display: flex; justify-content: space-between; margin: 6px -14px -8px; }
+.pie-tarj .btn-texto { font-size: 14px; }

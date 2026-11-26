@@ -8,11 +8,12 @@ import { tarjeta, etiqueta, boton, verDocumento } from './ui.js';
 import { barraCompacta, hojaFiltros, guardadosDe } from './ui_filtros.js';
 import { cargarFuentes, paginasReporte, lienzoGrafico } from './draw.js';
 import { celdaTxt } from './rep_calc.js';
-import { parseExp, FILTROS, filtrar, opcionesFiltro, armarReporte, reporteContrato, estadoCuenta, VISTAS, DIMENSIONES, MEDIDAS, MEDIDAS_INI, GRAFICOS, grafIni, dinero$, dec2, ent0, SEM_TXT, mesTxt, mesCorto, hoyIso } from './exp_calc.js';
+import { xlsx, descargar } from './files.js';
+import { parseExp, FILTROS, filtrar, opcionesFiltro, armarReporte, reportePanel, excelPanel, reporteContrato, estadoCuenta, VISTAS, DIMENSIONES, MEDIDAS, MEDIDAS_INI, GRAFICOS, grafIni, dinero$, dec2, ent0, SEM_TXT, mesTxt, mesCorto, hoyIso } from './exp_calc.js';
 
 const LLAVE = 'cajuelas_exp' + (modoPruebas ? '_t' : '');
 const MIN_REFRESCO = 30;
-const leerCache = () => { try { const o = JSON.parse(localStorage.getItem(LLAVE) || 'null'); return o && o.v === 3 ? o : null; } catch { return null; } };
+const leerCache = () => { try { const o = JSON.parse(localStorage.getItem(LLAVE) || 'null'); return o && o.v === 4 ? o : null; } catch { return null; } };
 const guardarCache = (o) => { try { localStorage.setItem(LLAVE, JSON.stringify(o)); } catch { /* sin espacio: se pedirá de nuevo */ } };
 const fechaCorta = (x) => (x ? `${x.slice(8, 10)}/${x.slice(5, 7)}/${x.slice(0, 4)}` : 's/f');
 const ORDEN_SEM = { rojo: 0, ambar: 1, gris: 2, verde: 3 };
@@ -21,6 +22,7 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
   let crudo = null, datos = null, error = '', cargando = false;
   let f = { fl: {}, dims: ['comp'], med: [...MEDIDAS_INI], graf: grafIni() };
   let vista = 'contratos', tab = 'contratos', sub = 'entregar', detalleId = null, ultimo = null;
+  let qPag = '', fPag = 'todos';
   const guard = guardadosDe('exp');
 
   // ---- Cabecera: «‹ Ventas de exportación» o «‹ Contrato X» ----
@@ -31,7 +33,25 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
   const estado = h('p', { class: 'nota estado-datos' });
   const barra = barraCompacta();
   const tabs = h('div', { class: 'seg seg-tabs', role: 'tablist' });
-  const barraFiltros = h('div', { class: 'barra-filtros' }, barra.el);
+  const rapidos = h('div', { class: 'chips chicas envuelve rapidos-exp' });
+  const barraFiltros = h('div', { class: 'barra-filtros' }, barra.el, rapidos);
+  // Botones rápidos: un toque filtra, otro toque quita el filtro.
+  const RAPIDOS = [
+    { t: 'Por cobrar', k: 'cob', v: () => ['Pendiente', 'Pago Parcial'] },
+    { t: 'Por entregar', k: 'ent', v: () => ['Por Entregar', 'Entrega Parcial'] },
+    { t: 'Financiados', k: 'fin', v: () => ['SI'] },
+    { t: 'Este mes', k: 'mes', v: () => [mesTxt(hoyIso().slice(0, 7))] }
+  ];
+  const mismo = (a, b) => a.length === b.length && a.every((x) => b.some((y) => normalizar(x) === normalizar(y)));
+  function pintarRapidos() {
+    clear(rapidos);
+    RAPIDOS.forEach((r) => {
+      const on = mismo(f.fl[r.k] || [], r.v());
+      rapidos.append(h('button', { type: 'button', class: 'chip' + (on ? ' on' : ''), 'aria-pressed': String(on), onclick: () => { if (on) delete f.fl[r.k]; else f.fl[r.k] = r.v(); pintarFiltros(); pintar(); } }, r.t));
+    });
+    const cs = f.fl.comp || [];
+    rapidos.append(h('button', { type: 'button', class: 'chip' + (cs.length ? ' on' : ''), onclick: () => abrirFiltro('comp') }, (cs.length === 1 ? cs[0] : cs.length ? `Compradores: ${cs.length}` : 'Comprador') + ' ▾'));
+  }
 
   // ---------- Filtros ----------
   async function abrirFiltro(k) {
@@ -84,10 +104,11 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
     const activos = act.map((x) => ({ t: textoFiltro(x), abrir: () => abrirFiltro(x.k), quitar: () => { delete f.fl[x.k]; pintarFiltros(); pintar(); } }));
     const gs = guard.lista().map((g) => ({ n: g.n, on: !g.est.mesActual && JSON.stringify(g.est.fl || {}) === JSON.stringify(f.fl), click: () => aplicarGuardado(g.est) }));
     barra.pintar({ nFiltros: act.length, onFiltros: abrirHoja, segmento: segmento(), guardados: gs, activos, onLimpiar: () => { f.fl = {}; pintarFiltros(); pintar(); } });
+    pintarRapidos();
   }
   function pintarTabs() {
     clear(tabs);
-    [['contratos', 'Contratos'], ['seguimiento', 'Seguimiento'], ['tablas', 'Tablas']].forEach(([k, t]) => tabs.append(h('button', { type: 'button', role: 'tab', 'aria-selected': String(tab === k), class: tab === k ? 'on' : '', onclick: () => { tab = k; detalleId = null; redibujar(); } },
+    [['contratos', 'Contratos'], ['seguimiento', 'Seguimiento'], ['tablas', 'Tablas'], ['pagos', 'Pagos']].forEach(([k, t]) => tabs.append(h('button', { type: 'button', role: 'tab', 'aria-selected': String(tab === k), class: tab === k ? 'on' : '', onclick: () => { tab = k; detalleId = null; redibujar(); } },
       t, k === 'seguimiento' && datos && datos.alertas.lista.length ? h('span', { class: 'punto-alerta' }, String(datos.alertas.lista.length)) : null)));
     tabs.hidden = !datos || !!detalleId;
   }
@@ -156,15 +177,47 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
   };
   const ordenar = (l) => l.slice().sort((a, b) => ORDEN_SEM[a.sem] - ORDEN_SEM[b.sem] || a.id.localeCompare(b.id, 'es', { numeric: true }));
 
+  const abiertas = new Set();
   function tarjetaContrato(c) {
     const al = datos.alertas.por.get(c.id) || [];
-    return h('div', { class: 'tarj-contrato', role: 'button', tabindex: '0', onclick: () => { detalleId = c.id; redibujar(); window.scrollTo(0, 0); } },
+    const abrir = () => { detalleId = c.id; redibujar(); window.scrollTo(0, 0); };
+    const pctE = c.sacC ? Math.min(100, Math.round(c.sacE / c.sacC * 100)) : 0;
+    const base = c.finan ? c.monE * c.pct / 100 : c.monE;
+    const cobrado = (c.pag || 0) + (c.cargos || 0);
+    const pctC = base > 0.005 ? Math.min(100, Math.round(cobrado / base * 100)) : null;
+    const favTxt = c.fav == null || Math.abs(c.fav) < 0.005 ? '' : `${c.fav > 0 ? '+' : ''}${dec2(c.fav)} kg`;
+    const linea = (txt, pct) => h('div', { class: 'lb-exp' }, h('span', null, txt), h('b', null, pct == null ? '—' : pct + ' %'));
+    const barra = (pct, cls) => h('div', { class: 'progreso ' + cls, role: 'img', 'aria-label': (pct || 0) + ' %' }, h('i', { style: `width:${pct || 0}%` }));
+    const abierta = abiertas.has(c.id);
+    const pares = [
+      ['Sacos / quintales', `${ent0(c.sacC)} / ${dec2(c.qqC)} qq`],
+      ['Precio riel', c.precio ? dinero$(c.precio) : '—'],
+      ['Calidad', c.cal || '—'],
+      ['Preparación', c.prep || '—'],
+      ['Fecha de entrega', c.fent ? mesCorto(c.fent) : '—'],
+      ['Kilos a favor / contra', favTxt ? `${favTxt}${c.efe != null ? ' = ' + dinero$(c.efe) : ''}` : '—'],
+      null,
+      ['Monto del contrato', dinero$(c.monC)],
+      ['Monto entregado', dinero$(c.monE)],
+      ...(c.finan ? [[`Nos toca (${ent0(c.pct)} %)`, dinero$(base)]] : []),
+      [c.cargos ? 'Pagado + intereses banco' : 'Pagado', dinero$(cobrado)],
+      ['Por cobrar', dinero$(c.cobrar)]
+    ];
+    const det = abierta ? h('div', { class: 'ficha-pares tarj-pares' }, ...pares.flatMap((x) => (x ? [h('small', null, x[0]), h('b', null, x[1])] : [h('i', { class: 'sep' })]))) : null;
+    const toggle = (e) => { e.stopPropagation(); if (abiertas.has(c.id)) abiertas.delete(c.id); else abiertas.add(c.id); card.replaceWith(tarjetaContrato(c)); };
+    const card = h('div', { class: 'tarj-contrato', role: 'button', tabindex: '0', onclick: abrir },
       h('h3', null, h('span', null, punto(c.sem), c.id), chipSem(c.sem)),
-      h('p', { class: 'sub' }, `${c.comp} · ${c.tipo} · ${c.cos}${c.finan ? ' · Financiado ' + ent0(c.pct) + ' %' : ''}`),
-      barraProg(c),
-      h('p', { class: 'sub' }, `${ent0(c.sacE)} de ${ent0(c.sacC)} sacos entregados · faltan ${ent0(c.sacP)}`),
-      h('p', { class: 'sub' }, `Entregado ${dinero$(c.monE)} · Pagado ${dinero$(c.pag)} · Por cobrar ${dinero$(c.cobrar)}`),
-      al.length ? h('p', { class: 'sub alerta-txt' }, '⚠ ' + al.map((a) => a.t).join(' · ')) : null);
+      h('p', { class: 'sub' }, `${c.comp} · ${c.tipo} · ${c.cos}`, c.finan ? h('span', { class: 'chip-fin chico' }, `Financiado ${ent0(c.pct)} %`) : null),
+      linea(`Entrega · ${ent0(c.sacE)} de ${ent0(c.sacC)} sacos${favTxt ? ' · ' + favTxt : ''}`, pctE),
+      barra(pctE, 'p-entrega'),
+      linea(pctC == null ? 'Cobro · sin entregas todavía' : `Cobro · ${dinero$(cobrado)} de ${dinero$(base)}`, pctC),
+      barra(pctC, 'p-cobro'),
+      det,
+      al.length ? h('p', { class: 'sub alerta-txt' }, '⚠ ' + al.map((a) => a.t).join(' · ')) : null,
+      h('div', { class: 'pie-tarj' },
+        h('button', { type: 'button', class: 'btn-texto', 'aria-expanded': String(abierta), onclick: toggle }, abierta ? '▴ Ver menos' : '▾ Ver más'),
+        h('button', { type: 'button', class: 'btn-texto', onclick: (e) => { e.stopPropagation(); abrir(); } }, 'Ver detalle completo ›')));
+    return card;
   }
   async function tras(p) { if (await p) { await cargar(true, true); redibujar(); } }
   function barraRegistrar(idContrato = '') {
@@ -174,11 +227,90 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
       h('button', { type: 'button', onclick: () => tras(nuevaSalida(datos, idContrato)) }, '🚚 Salida'),
       h('button', { type: 'button', onclick: () => tras(nuevoPago(datos, idContrato)) }, '💵 Pago'));
   }
+  // ---- Pagos: todos los pagos, para buscar, revisar y corregir ----
+  function pintarPagos() {
+    const ids = new Set(filtrar(datos.contratos, f.fl).map((c) => c.id));
+    const con = (id) => datos.contratos.find((c) => c.id === id) || null;
+    if (puedeEditarExp()) zona.append(h('div', { class: 'acciones-exp' }, h('button', { type: 'button', style: 'grid-column:1 / -1', onclick: () => tras(nuevoPago(datos)) }, '💵 Registrar pago')));
+    const q = h('input', { class: 'campo', type: 'search', placeholder: '🔍 Buscar contrato, comprador o referencia', value: qPag, autocomplete: 'off' });
+    const chips = h('div', { class: 'chips chicas envuelve' }, ...[['todos', 'Todos'], ['fin', 'Financiados'], ['int', 'Con intereses banco'], ['falta', '⚠ Sin pago total']].map(([k, tx]) =>
+      h('button', { type: 'button', class: 'chip' + (fPag === k ? ' on' : ''), onclick: () => { fPag = k; redibujar(); } }, tx)));
+    const lista = h('div');
+    zona.append(q, chips, lista);
+    const dibujar = () => {
+      clear(lista);
+      const toks = normalizar(qPag).split(' ').filter(Boolean);
+      const ps = datos.pagos.filter((p) => {
+        const c = con(p.id);
+        if (c && !ids.has(p.id)) return false;
+        if (fPag === 'fin' && !(c && c.finan)) return false;
+        if (fPag === 'int' && !(p.cargo > 0)) return false;
+        if (fPag === 'falta' && !(c && c.finan && p.total == null)) return false;
+        const tx = normalizar(`${p.id} ${c ? c.comp : ''} ${p.nota} ${fechaCorta(p.fecha)}`);
+        return toks.every((k) => tx.includes(k));
+      }).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)) || (b.dbId || 0) - (a.dbId || 0));
+      const nFalta = datos.pagos.filter((p) => { const c = con(p.id); return c && c.finan && p.total == null; }).length;
+      if (nFalta && fPag !== 'falta') lista.append(h('div', { class: 'alerta' }, h('span', { 'aria-hidden': 'true' }, '⚠'), h('span', null, h('b', null, `${nFalta} ${nFalta === 1 ? 'pago financiado' : 'pagos financiados'} sin el pago total`), 'Se registraron antes de esta versión: ábralos con ✎ y complete el pago total del comprador para que se calculen los intereses del banco.')));
+      lista.append(h('p', { class: 'nota' }, `${ps.length} ${ps.length === 1 ? 'pago' : 'pagos'} · depositado ${dinero$(ps.reduce((s, p) => s + p.monto, 0))} · intereses banco ${dinero$(ps.reduce((s, p) => s + (p.cargo || 0), 0))}`));
+      if (!ps.length) lista.append(h('p', { class: 'estado aviso' }, 'No hay pagos con esa búsqueda o filtro.'));
+      ps.slice(0, 300).forEach((p) => {
+        const c = con(p.id), fin = !!(c && c.finan), editable = puedeEditarExp() && p.dbId != null;
+        const det = fin ? (p.total == null ? '⚠ falta el pago total (registrado antes del cambio)' : `Total ${dinero$(p.total)} · nos toca ${dinero$(Math.round(p.total * c.pct) / 100)} · intereses banco ${dinero$(p.cargo || 0)}`) : '';
+        lista.append(h('div', { class: 'tarj-contrato', role: editable ? 'button' : null, tabindex: editable ? '0' : null, onclick: editable ? () => tras(nuevoPago(datos, p.id, p)) : null },
+          h('h3', null, h('span', null, `${fechaCorta(p.fecha)} · ${p.id}`), h('span', { class: 'der' }, dinero$(p.monto) + (editable ? '  ✎' : ''))),
+          h('p', { class: 'sub' }, `${c ? c.comp : '¿Contrato?'}${fin ? ' · financiado ' + ent0(c.pct) + ' %' : ''}`),
+          det ? h('p', { class: 'sub' + (p.total == null ? ' alerta-txt' : '') }, det) : null,
+          p.nota ? h('p', { class: 'sub' }, p.nota) : null));
+      });
+      if (ps.length > 300) lista.append(h('p', { class: 'nota' }, `Se muestran 300 de ${ps.length}. Escriba para buscar.`));
+    };
+    q.addEventListener('input', () => { qPag = q.value; dibujar(); });
+    dibujar();
+  }
+
+  // ---- Panel: ficha del comprador (o de todo lo filtrado), tarjetas, gráfico y tabla ----
+  let panel = null;
+  function pintarPanel() {
+    const rep = reportePanel(datos, f.fl);
+    panel = rep;
+    if (!rep.ctx.n) return;
+    const fi = rep.ficha;
+    zona.append(h('div', { class: 'tarjeta ficha-exp' + (fi.unComp ? ' comprador' : '') },
+      h('div', { class: 'fuente-cab' }, h('h3', null, fi.titulo), h('span', { class: 'chip-fin' }, fi.fin)),
+      h('div', { class: 'ficha-pares' }, ...fi.pares.flatMap(([a, b]) => [h('small', null, a), h('b', null, b)])),
+      h('div', { class: 'progreso', role: 'img', 'aria-label': `${fi.pct}% de los sacos entregados` }, h('i', { style: `width:${fi.pct}%` }))));
+    zona.append(h('div', { class: 'kpis' }, ...rep.kpis.map((k) => h('div', { class: 'kpi' }, h('small', null, k.t), h('b', null, k.v), k.s ? h('span', { class: 'kpi-sub' }, k.s) : null))));
+    rep.graficos.forEach((g) => {
+      const cv = lienzoGrafico(g, 360, Math.max(170, 56 + g.cats.length * 30)); cv.classList.add('grafico');
+      zona.append(h('div', { class: 'tarjeta grafico-caja' }, cv));
+    });
+    if (rep.recortado) zona.append(h('p', { class: 'nota centrado' }, 'El gráfico muestra los 14 contratos con entrega más próxima; la tabla los tiene todos.'));
+    zona.append(tablaHtml(rep));
+  }
+  const nombreArchivo = () => (panel.ficha.unComp ? panel.ficha.titulo : 'Exportaciones').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  async function compartirPanel() {
+    if (!panel || !panel.ctx.n) return;
+    await cargarFuentes();
+    const pie = `Generado ${ahoraTxt()} · Fuente: Exportaciones${crudo && crudo.actualizado ? ' (' + crudo.actualizado + ')' : ''}`;
+    const nombre = nombreArchivo();
+    verDocumento({ titulo: panel.titulo, paginas: paginasReporte(panel, pie), nombrePdf: `${nombre}_${diaHoy().replace(/-/g, '')}.pdf`, ancho: true, maxPaginas: 4, textoBoton: 'Compartir PDF', intro: panel.subtitulos[0], textoCompartir: panel.titulo });
+  }
+  function excelPanelDescargar() {
+    if (!panel || !panel.ctx.n) return;
+    const nombre = nombreArchivo();
+    const bytes = xlsx('Exportaciones', excelPanel(panel));
+    descargar(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `${nombre}_${diaHoy().replace(/-/g, '')}.xlsx`);
+    toast('Se descargó el Excel.');
+  }
   function pintarContratos() {
     const filas = ordenar(filtrar(datos.contratos, f.fl));
     const br = barraRegistrar(); if (br) zona.append(br);
-    zona.append(h('p', { class: 'nota' }, `${filas.length} ${filas.length === 1 ? 'contrato' : 'contratos'}${Object.keys(f.fl).length ? ' con los filtros elegidos' : ''}. Toque uno para ver su detalle.`));
-    if (!filas.length) zona.append(h('p', { class: 'estado aviso' }, 'No hay contratos con estos filtros.'));
+    if (!filas.length) { zona.append(h('p', { class: 'estado aviso' }, 'No hay contratos con estos filtros.')); return; }
+    pintarPanel();
+    zona.append(h('div', { class: 'botones-panel' },
+      boton('Compartir PDF', 'compartir', 'c-azul', () => compartirPanel()),
+      h('button', { type: 'button', class: 'btn btn-excel', onclick: () => excelPanelDescargar() }, '⬇ Descargar Excel')));
+    zona.append(h('div', { class: 'titulo-grupo' }, `Contratos (${filas.length}) · toque uno para ver su detalle`));
     filas.forEach((c) => zona.append(tarjetaContrato(c)));
   }
 
@@ -266,7 +398,7 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
           par('Monto del contrato', dinero$(c.monC)), par(`Nuestro ${dec2(c.pct)} %`, dinero$(c.monC * c.pct / 100)),
           par(`Del banco ${dec2(100 - c.pct)} %`, dinero$(c.monC * (100 - c.pct) / 100)), par('Entregado · nos toca', dinero$(c.monN)),
           par('Entregado · del banco', dinero$(c.monB)), par('Devuelto por el banco', dinero$(c.pag)),
-          par('Por cobrar real', dinero$(c.cobrar)))) : null,
+          par('Intereses / cargos banco', dinero$(c.cargos)), par('Por cobrar real', dinero$(c.cobrar)))) : null,
       h('div', { class: 'tarjeta' }, h('b', null, 'Para cerrar el contrato'),
         h('div', { class: 'pares' }, par('Sacos sugeridos', c.sug == null ? '—' : ent0(c.sug)), par('Promedio kg por saco', c.prom == null ? '—' : dec2(c.prom)))),
       h('div', { class: 'titulo-grupo' }, `Entregas (${ents.length})`));
@@ -284,7 +416,7 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
     }))));
     zona.append(h('div', { class: 'titulo-grupo' }, `Pagos (${pagos.length})`));
     if (!pagos.length) zona.append(h('p', { class: 'nota' }, 'Todavía no hay pagos registrados.'));
-    else zona.append(h('div', { class: 'tarjeta' }, ...pagos.map((p) => h('p', { class: 'fila-pago' }, `${fechaCorta(p.fecha)} · ${dinero$(p.monto)}${p.nota ? ' · ' + p.nota : ''}`, puedeEditarExp() && p.dbId != null ? h('button', { type: 'button', class: 'btn-mini', onclick: () => tras(nuevoPago(datos, c.id, p)) }, ' ✎') : null))));
+    else zona.append(h('div', { class: 'tarjeta' }, ...pagos.map((p) => h('p', { class: 'fila-pago' }, `${fechaCorta(p.fecha)} · ${c.finan ? 'depositado ' : ''}${dinero$(p.monto)}${p.cargo > 0 ? ' · intereses banco ' + dinero$(p.cargo) : ''}${c.finan && p.total == null ? ' · ⚠ falta el pago total' : ''}${p.nota ? ' · ' + p.nota : ''}`, puedeEditarExp() && p.dbId != null ? h('button', { type: 'button', class: 'btn-mini', onclick: () => tras(nuevoPago(datos, c.id, p)) }, ' ✎') : null))));
   }
 
   // ---- Tablas (reportes con gráficos y PDF) ----
@@ -312,6 +444,7 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
     if (detalleId) { pintarDetalle(); const c = datos.contratos.find((x) => x.id === detalleId); if (c) zona.append(boton('Compartir PDF del contrato', 'compartir', 'c-azul ancho-total', () => compartirContrato(c))); return; }
     if (tab === 'contratos') pintarContratos();
     else if (tab === 'seguimiento') pintarSeguimiento();
+    else if (tab === 'pagos') pintarPagos();
     else pintarTablas();
   }
   async function compartir() {
@@ -338,7 +471,7 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
       if (cache && !datos) usar(cache);
       if (forzar && !silencio) toast('Exportaciones: ' + r.error + (datos ? '\nSe muestran los últimos datos guardados.' : ''), 7000);
     } else {
-      const o = { v: 3, t: Date.now(), resumen: r.resumen, contratos: r.contratos, entregas: r.entregas, pagos: r.pagos, actualizado: r.actualizado, listas: r.listas, diasAlertaGuia: r.diasAlertaGuia };
+      const o = { v: 4, t: Date.now(), resumen: r.resumen, contratos: r.contratos, entregas: r.entregas, pagos: r.pagos, actualizado: r.actualizado, listas: r.listas, diasAlertaGuia: r.diasAlertaGuia };
       guardarCache(o); usar(o);
       if (forzar && !silencio) toast('Datos de Exportaciones actualizados.');
     }
