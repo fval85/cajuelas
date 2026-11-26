@@ -46,6 +46,50 @@ export function crearPlanillas(nav) {
     return dr;
   }
   const guardarEntrada = (num, e) => { const d = draftAll(); (d[key()] = d[key()] || {})[num] = e; db.set(uk('draft'), d); };
+  // Cambios hechos en la fila (tarea, horas, extras) que todavía NO están marcados como «Listo».
+  const wipAll = () => db.get(uk('wip'), {});
+  const wipDia = () => wipAll()[key()] || {};
+  const guardarWip = (num, e) => { const d = wipAll(); (d[key()] = d[key()] || {})[num] = e; db.set(uk('wip'), d); };
+  const quitarWip = (num) => { const d = wipAll(); if (d[key()]) { delete d[key()][num]; db.set(uk('wip'), d); } };
+  const quitarEntrada = (num) => { const d = draftAll(); if (d[key()]) { delete d[key()][num]; db.set(uk('draft'), d); } };
+  const copia = (x) => JSON.parse(JSON.stringify(x));
+  const tareasAct = () => D.tareasDeFinca(datos.tareasFinca, soc, fin);
+  /** Tarea de siempre de esta persona (si no existe en la finca de hoy, queda vacía). */
+  function tareaDeSiempre(emp) {
+    const u = (db.get(uk('ult_tarea'), {}) || {})[emp.num] || '';
+    return tareasAct().includes(u) ? u : '';
+  }
+  /** Fila del día cargada de entrada: tarea de siempre, horas sugeridas y extras en 0. */
+  const baseEntrada = (emp) => ({ estadoDia: 'TRABAJO', lineas: [{ tarea: tareaDeSiempre(emp), horas: D.horasSugeridas(emp.horas) }], extras: 0, tareaExtra: '', nota: '', inc: null });
+  function filaActual(emp, dr) {
+    if (dr[emp.num]) return { en: dr[emp.num], listo: true, auto: !!dr[emp.num].auto };
+    return { en: wipDia()[emp.num] || baseEntrada(emp), listo: false, auto: false };
+  }
+  /** Aplica un cambio a la fila; si estaba en «Listo» vuelve a pendiente para que se confirme otra vez. */
+  function cambiar(emp, fn) {
+    const dr = borradorConInc([emp]); const cur = filaActual(emp, dr);
+    if (cur.auto) return;
+    const en = copia(cur.en); fn(en);
+    if (cur.listo) quitarEntrada(emp.num);
+    guardarWip(emp.num, en); pintar();
+  }
+  /** Marca la fila como «Listo» (la valida igual que antes). */
+  function marcarListo(emp) {
+    const dr = borradorConInc([emp]); const cur = filaActual(emp, dr);
+    if (cur.listo) { if (cur.auto) return toast('Tiene una incapacidad registrada. Toque el nombre para cambiarla.', 4000); quitarEntrada(emp.num); guardarWip(emp.num, copia(cur.en)); return pintar(); }
+    const en = copia(cur.en); en.inc = en.inc || null;
+    if (D.conHoras(D.estadoDeEntrada(en))) {
+      if (!en.lineas.some((l) => Number(l.horas) > 0) && !(Number(en.extras) > 0)) { /* día sin labor: permitido, como antes */ }
+      if (Number(en.extras) > 0 && !en.tareaExtra) en.tareaExtra = (en.lineas.find((l) => l.tarea) || {}).tarea || '';
+      else if (!(Number(en.extras) > 0)) en.tareaExtra = '';
+    }
+    const err = D.validarEntrada(en);
+    if (err) return toast(`${emp.nombre}: ${err}`, 5000);
+    en.lineas = en.lineas.filter((l, i) => l.horas > 0 || (i === 0 && en.lineas.length === 1));
+    guardarEntrada(emp.num, en); quitarWip(emp.num);
+    const ut = db.get(uk('ult_tarea'), {}) || {}; const t1 = D.estadoDeEntrada(en) === 'TRABAJO' && en.lineas.find((l) => l.horas > 0); if (t1) { ut[emp.num] = t1.tarea; db.set(uk('ult_tarea'), ut); }
+    pintar();
+  }
   const enviadosLocal = () => db.get(uk('enviados'), {});
   const colaTiene = (k) => pendientes().some((p) => p.formato === 'planilla' && D.claveDia(p.dia, p.sociedad, p.finca) === k);
   const regsDe = (d, s, f) => (datos ? datos.registros : []).filter((r) => r.dia === d && norm(r.sociedad) === norm(s) && norm(r.finca) === norm(f) && r.estado !== 'ANULADO');
@@ -112,16 +156,52 @@ export function crearPlanillas(nav) {
     const listos = emps.filter((e) => dr[e.num]).length;
     raiz.append(h('div', { class: 'resumen' }, `${D.semanaTexto(sem)}\n${listos} de ${emps.length} empleados listos`));
     if (!D.tareasDeFinca(datos.tareasFinca, soc, fin).length) raiz.append(h('p', { class: 'estado aviso' }, 'Esta finca no tiene tareas en la hoja «Tareas por finca». Avise al administrador.'));
-    emps.forEach((e) => {
-      const en = dr[e.num];
-      raiz.append(h('button', { type: 'button', class: 'pl-fila ' + (en ? 'ok' : 'pend'), onclick: () => editar(e, dr[e.num]) },
-        h('div', { class: 'pl-tx' }, h('b', null, `${e.num} · ${e.nombre}${en && en.nota ? ' *' : ''}`), h('small', null, D.resumenEntrada(en))), chip(!!en)));
-    });
+    emps.forEach((e) => raiz.append(filaRapida(e, dr)));
     raiz.append(h('div', { class: 'pl-pie' },
       h('div', { class: 'pl-prog' }, h('span', null, `${listos} de ${emps.length} listos`), h('span', null, listos === emps.length ? 'Todo completo' : `Faltan ${emps.length - listos}`)),
       h('div', { class: 'pl-barra' }, h('div', { style: { width: (emps.length ? 100 * listos / emps.length : 0) + '%' } })),
       h('button', { type: 'button', class: 'btn c-verde ancho-total' + (listos === emps.length ? '' : ' casi'), onclick: () => enviar(emps) }, h('span', null, 'Enviar el día'))));
     pieSemanal(true);
+  }
+  /** Un número con − y + (la cajita también se puede escribir). */
+  function stepper(valor, paso, aria, onCambio) {
+    const v = Number(valor) || 0;
+    const inp = h('input', { class: 'pl-num', type: 'text', inputmode: 'decimal', value: String(v), 'aria-label': aria });
+    inp.addEventListener('focus', () => inp.select());
+    inp.addEventListener('change', () => { const x = D.numTxt(inp.value); if (Number.isNaN(x) || x < 0 || x > 24) { toast('Escriba solo un número entre 0 y 24.'); inp.value = String(v); return; } onCambio(x); });
+    return h('div', { class: 'pl-st' },
+      h('button', { type: 'button', class: 'pl-pm', 'aria-label': 'Menos ' + aria, onclick: () => onCambio(Math.max(0, Math.round((v - paso) * 10) / 10)) }, '−'), inp,
+      h('button', { type: 'button', class: 'pl-pm', 'aria-label': 'Más ' + aria, onclick: () => onCambio(Math.min(24, Math.round((v + paso) * 10) / 10)) }, '+'));
+  }
+  const celda = (titulo, ctl) => h('div', { class: 'pl-c' }, h('span', null, titulo), ctl);
+  async function pedirTarea(actual) {
+    const v = await elegir('Tarea', tareasAct().map((t) => ({ etiqueta: t, valor: t })), { vacio: 'Esta finca no tiene tareas en la hoja.' });
+    return v === undefined ? actual : v;
+  }
+  /** Fila de un empleado: tarea, horas y horas extra a la vista; «Listo» a la derecha; estado y nota adentro. */
+  function filaRapida(emp, dr) {
+    const cur = filaActual(emp, dr), en = cur.en, est = D.estadoDeEntrada(en);
+    const listoBtn = h('button', { type: 'button', class: 'pl-ok' + (cur.listo ? ' on' : ''), 'aria-pressed': String(cur.listo), onclick: () => marcarListo(emp) }, cur.listo ? '✓ Listo' : 'Listo');
+    const caja = h('div', { class: 'pl-f ' + (cur.listo ? 'ok' : 'pend') },
+      h('button', { type: 'button', class: 'pl-f-cab', onclick: () => editar(emp, en) }, h('b', null, `${emp.num} · ${emp.nombre}${en.nota ? ' *' : ''}`), h('small', null, 'Estado y nota ›')));
+    if (!D.conHoras(est)) {
+      caja.append(h('div', { class: 'pl-ctl' }, h('span', { class: 'pl-estado' }, detalleEntrada(en).split('\n')[0]), listoBtn));
+      return caja;
+    }
+    const lin = en.lineas;
+    const selTarea = (i) => h('button', { type: 'button', class: 'pl-sel' + (lin[i].tarea ? '' : ' vacio'), title: lin[i].tarea || '', onclick: async () => { const t = await pedirTarea(lin[i].tarea); if (t !== lin[i].tarea) cambiar(emp, (x) => { const viejo = x.lineas[i].tarea; x.lineas[i].tarea = t; if (i === 0 && x.tareaExtra === viejo) x.tareaExtra = t; }); } }, (lin[i].tarea || 'Elija tarea') + ' ▾');
+    caja.append(h('div', { class: 'pl-ctl' },
+      celda('Tarea', selTarea(0)),
+      celda('Horas', stepper(lin[0].horas, 1, 'horas', (v) => cambiar(emp, (x) => { x.lineas[0].horas = v; }))),
+      celda('Horas extra', stepper(en.extras, 0.5, 'horas extra', (v) => cambiar(emp, (x) => { x.extras = v; if (v > 0 && !x.tareaExtra) x.tareaExtra = x.lineas[0].tarea; }))),
+      listoBtn));
+    for (let i = 1; i < lin.length; i++) {
+      caja.append(h('div', { class: 'pl-ctl pl-ctl2' }, celda('Otra tarea', selTarea(i)),
+        celda('Horas', stepper(lin[i].horas, 1, 'horas', (v) => cambiar(emp, (x) => { x.lineas[i].horas = v; }))),
+        h('button', { type: 'button', class: 'pl-quitar', 'aria-label': 'Quitar tarea', onclick: () => cambiar(emp, (x) => { x.lineas.splice(i, 1); }) }, '✕')));
+    }
+    caja.append(h('button', { type: 'button', class: 'pl-mastarea', onclick: () => cambiar(emp, (x) => { x.lineas.push({ tarea: x.lineas[x.lineas.length - 1].tarea, horas: 0 }); }) }, '+ tarea'));
+    return caja;
   }
   function pieSemanal(hay) {
     const bs = [];
@@ -164,31 +244,23 @@ export function crearPlanillas(nav) {
     pintar();
   }
 
-  // ---------- Un empleado ----------
+  // ---------- Un empleado: adentro solo el estado del día y la nota ----------
   function editar(emp, previoEnt) {
-    const tareas = D.tareasDeFinca(datos.tareasFinca, soc, fin);
-    const previo = previoEnt || draftDia()[emp.num] || null;
-    const ultima = (db.get(uk('ult_tarea'), {}) || {})[emp.num] || '';
+    const tareas = tareasAct();
+    const previo = previoEnt || filaActual(emp, borradorConInc([emp])).en;
     const sug = D.horasSugeridas(emp.horas);
     const tVac = tareas.find((t) => D.codigoTarea(t) === '22') || '';
-    let estado = previo ? D.estadoDeEntrada(previo) : 'TRABAJO';
-    const lineas = previo && previo.lineas.length ? previo.lineas.map((l) => ({ ...l })) : [{ tarea: ultima, horas: sug }];
-    let extras = previo ? previo.extras : 0, tareaExtra = previo ? previo.tareaExtra : '';
-    let nota = previo ? previo.nota || '' : '';
-    const ic = previo && previo.inc ? { ...previo.inc } : { tipo: '', boleta: '', hasta: dia };
+    const estado0 = D.estadoDeEntrada(previo);
+    let estado = estado0;
+    let nota = previo.nota || '';
+    const ic = previo.inc ? { ...previo.inc } : { tipo: '', boleta: '', hasta: dia };
     if (!ic.hasta) ic.hasta = dia;
     const cont = h('div');
-    const elegirTarea = async (actual) => { const v = await elegir('Tarea', tareas.map((t) => ({ etiqueta: t, valor: t })), { vacio: 'Esta finca no tiene tareas en la hoja.' }); return v === undefined ? actual : v; };
-    function cambiarEstado(nuevo) {
-      estado = nuevo;
-      if (nuevo === 'VACACIONES' && tVac) { lineas.splice(0, lineas.length, { tarea: tVac, horas: sug }); extras = 0; tareaExtra = ''; }
-      else if (nuevo === 'TRABAJO' && lineas.length === 1 && D.codigoTarea(lineas[0].tarea) === '22') lineas[0].tarea = ultima;
-    }
     function pintarForm() {
       clear(cont);
       const selEs = selector('Estado del día', async () => {
         const v = await elegir('Estado del día', D.ESTADOS.map((x) => ({ etiqueta: `${x.ic} ${x.t}`, valor: x.v })), { buscar: false });
-        if (v !== undefined) { cambiarEstado(v); pintarForm(); }
+        if (v !== undefined) { estado = v; pintarForm(); }
       });
       const es = D.ESTADOS.find((x) => x.v === estado); selEs.poner(`${es.ic} ${es.t}`);
       cont.append(etiqueta('Estado del día'), selEs);
@@ -203,24 +275,10 @@ export function crearPlanillas(nav) {
         hasta.addEventListener('input', () => { ic.hasta = hasta.value || dia; });
         cont.append(etiqueta('Tipo'), selTipo, etiqueta('Boleta'), bol, etiqueta('Hasta (último día de la incapacidad)'), hasta,
           h('p', { class: 'nota' }, 'Si dura varios días, indique el último: los días siguientes quedan llenos solos. Se imprime INC en rojo con 0 horas.'));
-      } else if (D.conHoras(estado)) {
-        lineas.forEach((l, i) => {
-          const s = selector('Elija la tarea', async () => { l.tarea = await elegirTarea(l.tarea); pintarForm(); }); s.poner(l.tarea);
-          const inp = h('input', { class: 'campo num', type: 'text', inputmode: 'decimal', value: String(l.horas), 'aria-label': 'Horas' });
-          inp.addEventListener('focus', () => inp.select());
-          inp.addEventListener('input', () => { const v = D.numTxt(inp.value); l.horas = Number.isNaN(v) ? inp.value : v; });
-          cont.append(h('div', { class: 'pl-linea' }, h('div', { class: 'pl-tarea' }, etiqueta('Tarea'), s), h('div', { class: 'pl-horas' }, etiqueta('Horas'), inp),
-            lineas.length > 1 ? h('button', { type: 'button', class: 'pl-quitar', 'aria-label': 'Quitar tarea', onclick: () => { lineas.splice(i, 1); pintarForm(); } }, '✕') : null));
-        });
-        cont.append(h('button', { type: 'button', class: 'btn-texto', onclick: () => { lineas.push({ tarea: lineas[lineas.length - 1].tarea, horas: 0 }); pintarForm(); } }, '+ Otra tarea'));
-        const ex = h('input', { class: 'campo num', type: 'text', inputmode: 'decimal', value: String(extras || 0), 'aria-label': 'Horas extra' });
-        ex.addEventListener('focus', () => ex.select());
-        const selEx = selector('Tarea de las extras', async () => { tareaExtra = await elegirTarea(tareaExtra); pintarForm(); }); selEx.poner(tareaExtra);
-        const boxEx = h('div', { hidden: !(Number(extras) > 0) }, etiqueta('Tarea de las horas extra'), selEx);
-        ex.addEventListener('input', () => { const v = D.numTxt(ex.value); extras = Number.isNaN(v) ? ex.value : v; boxEx.hidden = !(Number(extras) > 0); if (!boxEx.hidden && !tareaExtra) { tareaExtra = lineas[0].tarea; selEx.poner(tareaExtra); } });
-        cont.append(h('div', { class: 'pl-extras' }, etiqueta('Horas extra'), ex), boxEx);
-      } else {
+      } else if (!D.conHoras(estado)) {
         cont.append(h('p', { class: 'nota' }, `${D.estadoTxt(estado)}: el día queda con 0 horas.`));
+      } else {
+        cont.append(h('p', { class: 'nota' }, 'La tarea, las horas y las horas extra se cambian afuera, en la fila del empleado.'));
       }
       const nt = h('textarea', { class: 'campo', rows: '2', maxlength: '200', placeholder: 'Nota de este empleado (opcional). Sale al pie de la planilla.', 'aria-label': 'Nota' });
       nt.value = nota;
@@ -230,21 +288,21 @@ export function crearPlanillas(nav) {
     pintarForm();
     dialogo({
       titulo: `${emp.num} · ${emp.nombre}`,
-      cuerpo: [h('p', { class: 'nota' }, `Horas sugeridas: ${sug} por día (${emp.horas} a la semana). Para un día sin trabajo deje 0 horas.`), cont,
-        h('p', { class: 'nota' }, 'Al guardar queda «Listo». Puede volver a abrirlo y corregirlo hasta que envíe el día.')],
+      cuerpo: [cont, h('p', { class: 'nota' }, 'Al guardar queda «Listo». Puede volver a abrirlo y corregirlo hasta que envíe el día.')],
       botones: [{ texto: 'Cancelar' }, { texto: 'Guardar', clase: 'primario', onclick: () => {
         const en = { estadoDia: estado, lineas: [], extras: 0, tareaExtra: '', nota: nota.trim().replace(/\s+/g, ' '), inc: null };
         if (estado === 'INCAPACIDAD') en.inc = { tipo: ic.tipo, boleta: ic.boleta || '', hasta: ic.hasta || dia, dia };
         if (D.conHoras(estado)) {
-          if (lineas.some((l) => !Number.isFinite(Number(l.horas))) || !Number.isFinite(Number(extras))) { toast('Revise las horas: solo números.'); return false; }
-          en.lineas = lineas.map((l) => ({ tarea: l.tarea, horas: Number(l.horas) }));
-          en.extras = Number(extras) || 0; en.tareaExtra = en.extras > 0 ? tareaExtra : '';
+          if (estado === estado0 && previo.lineas && previo.lineas.length) { en.lineas = previo.lineas.map((l) => ({ ...l })); en.extras = Number(previo.extras) || 0; en.tareaExtra = previo.tareaExtra || ''; }
+          else if (estado === 'VACACIONES' && tVac) en.lineas = [{ tarea: tVac, horas: sug }];
+          else en.lineas = [{ tarea: tareaDeSiempre(emp), horas: sug }];
+          if (en.extras > 0 && !en.tareaExtra) en.tareaExtra = (en.lineas[0] || {}).tarea || '';
         }
         const err = D.validarEntrada(en);
         if (err) { toast(err, 5000); return false; }
         if (en.inc) delete en.inc.dia;
         en.lineas = en.lineas.filter((l, i) => l.horas > 0 || (i === 0 && en.lineas.length === 1));
-        guardarEntrada(emp.num, en);
+        guardarEntrada(emp.num, en); quitarWip(emp.num);
         const ut = db.get(uk('ult_tarea'), {}) || {}; const t1 = estado === 'TRABAJO' && en.lineas.find((l) => l.horas > 0); if (t1) { ut[emp.num] = t1.tarea; db.set(uk('ult_tarea'), ut); }
         pintar();
         return true;
@@ -276,6 +334,7 @@ export function crearPlanillas(nav) {
       encolar(payloadPlanilla({ reportId: `PLA|${k}|${Date.now()}`, dia, sociedad: soc, finca: fin, empleados }));
       const env = enviadosLocal(); env[k] = { t: Date.now(), entradas: dr, usuario: nombreUsuario() }; db.set(uk('enviados'), env);
       const d = draftAll(); delete d[k]; db.set(uk('draft'), d);
+      const w = wipAll(); delete w[k]; db.set(uk('wip'), w);
       toast('Día enviado. Queda bloqueado.', 4000);
       pintar();
     } }] });

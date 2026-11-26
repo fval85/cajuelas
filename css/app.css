@@ -317,3 +317,32 @@ details.mas-datos summary { font-weight: 700; color: var(--verde); padding: 8px 
 /* 2.25.0 Café en fruta */
 .cf-ejes { display: flex; justify-content: space-between; font-size: 11px; color: var(--gris); margin-bottom: 6px; }
 .cf-finca.sel { border-color: var(--verde); border-width: 2px; }
+
+/* 2.26.0 Planillas: filas rápidas (todo en una línea: tarea, horas, horas extra, Listo) */
+.pl-f { background: #fff; border: 1px solid #fcd34d; border-left: 6px solid #f59e0b; border-radius: 12px; padding: 10px 10px 8px 12px; margin-bottom: 8px; color: var(--texto); }
+.pl-f.ok { background: #f0fdf4; border-color: #bbf7d0; border-left-color: var(--verde); }
+.pl-f-cab { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; background: transparent; border: 0; padding: 0 0 4px; font: inherit; text-align: left; color: inherit; cursor: pointer; }
+.pl-f-cab b { color: var(--verde); font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-f-cab small { color: #6b7280; font-size: 12px; white-space: nowrap; }
+.pl-ctl { display: flex; flex-wrap: nowrap; align-items: flex-end; gap: 5px; }
+.pl-ctl2 { margin-top: 6px; }
+.pl-c { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; flex: 0 0 auto; }
+.pl-c:first-child { flex: 0 1 auto; align-items: stretch; }
+.pl-c > span { font-size: 11px; color: #4b5563; font-weight: 700; text-align: center; width: 100%; white-space: nowrap; }
+.pl-sel { height: 40px; width: 100%; max-width: 160px; padding: 0 6px; border: 1px solid #9ca3af; border-radius: 10px; background: #fff; color: var(--texto); font: inherit; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.pl-sel.vacio { color: #b45309; border-color: #f59e0b; }
+.pl-st { display: flex; align-items: center; height: 40px; border: 1px solid #9ca3af; border-radius: 10px; background: #fff; overflow: hidden; }
+.pl-pm { width: 25px; height: 40px; padding: 0; border: 0; background: transparent; color: var(--verde); font-size: 20px; font-weight: 700; cursor: pointer; }
+.pl-st .pl-num { width: 28px; min-height: 0; height: 38px; padding: 0; border: 0; background: transparent; color: var(--texto); font: inherit; font-size: 14px; font-weight: 800; text-align: center; }
+.pl-ok { flex: 0 0 auto; margin-left: auto; height: 40px; padding: 0 8px; border: 1px solid #9ca3af; border-radius: 10px; background: #fff; color: #4b5563; font: inherit; font-size: 13px; font-weight: 800; white-space: nowrap; cursor: pointer; }
+.pl-ok.on { background: var(--verde); border-color: var(--verde); color: #fff; }
+.pl-estado { font-weight: 700; color: #4b5563; align-self: center; flex: 1; }
+.pl-mastarea { margin-top: 4px; border: 0; background: transparent; color: var(--verde); font: inherit; font-size: 13px; font-weight: 700; padding: 4px 0; cursor: pointer; }
+.pl-ctl2 .pl-quitar { height: 40px; flex: 0 0 auto; }
+@media (prefers-color-scheme: dark) {
+  .pl-f { background-color: var(--tarjeta); }
+  .pl-f.ok { background-color: rgba(34, 197, 94, .14); border-color: #166534; }
+  .pl-f-cab small, .pl-c > span, .pl-estado { color: #9ca3af; }
+  .pl-sel, .pl-st, .pl-ok { background: transparent; border-color: #4b5563; }
+  .pl-ok { color: #d1d5db; } .pl-ok.on { background: var(--verde); color: #fff; }
+}

@@ -40,9 +40,10 @@ function resumenConex(filas, nombre, vigente) {
   if (!mias.length) return { mias, sinDato: true, problemas: false, chips: [['Sin dato de conexión', 'gris']] };
   const u = mias[0], chips = [];
   const dias = diasSin(u.ultima), pend = mias.reduce((t, f) => t + totalPend(f.pendientes), 0);
-  const vieja = mias.some((f) => f.version && verMenor(f.version, vigente));
+  const viejas = mias.filter((f) => f.version && verMenor(f.version, vigente));
+  const vieja = viejas.length > 0;
   if (dias >= DIAS_ALERTA) chips.push([`🔴 Sin conexión ${dias} días`, 'rojo']);
-  if (vieja) chips.push([`🟠 Versión anterior (${vigente})`, 'ambar']);
+  if (vieja) chips.push([`🟠 Versión anterior: ${viejas.map((f) => `${f.dispositivo || 'Teléfono sin nombre'} v${f.version}`).join(' · ')} (vigente ${vigente})`, 'ambar']);
   if (pend) chips.push([`⚠ ${pend} envío${pend === 1 ? '' : 's'} pendiente${pend === 1 ? '' : 's'}: ${mias.map((f) => textoPend(f.pendientes)).filter(Boolean).join(' · ')}`, 'ambar']);
   const problemas = chips.length > 0;
   if (!problemas) chips.push(['✅ Al día', 'verde']);

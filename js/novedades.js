@@ -1,5 +1,11 @@
 // Novedades de cada versión (se muestran en Ajustes > Novedades de la versión).
 export const NOVEDADES = [
+  { v: '2.26.0', t: [
+    'Planillas: cada empleado ya sale con su fila completa (tarea de siempre, horas sugeridas y horas extra en 0). Tarea, Horas y Horas extra se cambian ahí mismo con − / +, y el botón «Listo» de la derecha marca a cada uno sin tener que abrirlo.',
+    'Adentro (toque en el nombre) quedan solo el estado del día y la nota. Si alguien hizo dos tareas, use «+ tarea» en su fila. Las horas extra se anotan en la primera tarea de la fila.',
+    'Igual que antes: no se puede enviar el día hasta que todos tengan ✓ Listo. Si cambia algo en una fila que ya estaba lista, vuelve a pendiente para confirmarla otra vez.',
+    'Ajustes › Usuarios: el aviso «Versión anterior» ahora dice cuál equipo es y qué versión tiene (por ejemplo, un segundo teléfono sin actualizar).'
+  ] },
   { v: '2.25.0', t: [
     'Ventas de exportación › Contratos: se quitó la ficha de arriba. Ahora se ven directo los botones rápidos, los totales, el gráfico, la tabla y las tarjetas de contratos (Compartir PDF y Descargar Excel siguen igual).',
     'Café en fruta VOLCAFE: la tarjeta de Reportes muestra las CAJUELAS en grande (con fanegas y recibos) y al lado el avance de NESPRESSO AAA, su barra y lo que falta en fanegas y cajuelas.',
