@@ -145,7 +145,6 @@ export function pintarUsuarios({ raiz, irInicio }) {
     let modo = u.permisos.length ? 'pers' : 'rol';
     // Solo permisos que existen hoy: datos viejos (p. ej. «emitir») hacían que el servidor rechazara el guardado.
     const marcados = new Set((u.permisos.length ? u.permisos : u.efectivos).filter((p) => p !== 'todos' && p !== 'todo' && ETQ[p]));
-    let bloquear = !!u.bloquear;
     const zona = h('div');
     const pintarZona = () => {
       clear(zona);
@@ -167,17 +166,16 @@ export function pintarUsuarios({ raiz, irInicio }) {
       }
     };
     rol.addEventListener('change', pintarZona);
-    const cbBloq = h('input', { type: 'checkbox', checked: bloquear, onchange: () => { bloquear = cbBloq.checked; } });
     const guardar = h('button', { type: 'button', class: 'btn-texto primario ancho-total', onclick: async () => {
       let permisos = [];
       if (!esYo && modo === 'pers' && rol.value !== 'Administrador') { permisos = [...marcados].filter((p) => ETQ[p]); if (!permisos.length) return toast('Marque al menos un permiso o vuelva a «Lo del rol».'); }
       guardar.disabled = true;
-      const r = await usuariosAdmin('guardar', { id: u.id, rol: rol.value, permisos, bloquear });
+      const r = await usuariosAdmin('guardar', { id: u.id, rol: rol.value, permisos });
       guardar.disabled = false;
       if (!r.ok) return toast(r.message, 5000);
       toast(r.message + ' Le llega al teléfono de la persona cuando sincronice.', 4500); await cargar();
     } }, 'Guardar cambios');
-    raiz.append(h('label', { class: 'etiqueta' }, 'Rol'), rol, zona, h('label', { class: 'casilla' }, cbBloq, ' Barra de abajo bloqueada (el usuario no puede cambiarla)'), guardar,
+    raiz.append(h('label', { class: 'etiqueta' }, 'Rol'), rol, zona, guardar,
       h('button', { type: 'button', class: 'btn-texto ancho-total', onclick: () => restablecerPin(u) }, '🔑 Restablecer PIN'),
       esYo ? null : u.activo
         ? h('button', { type: 'button', class: 'btn-texto peligro ancho-total', onclick: async () => {

@@ -17,7 +17,6 @@ import { configurarAlertaGuia } from './ui_exp_admin.js';
 import { hayControl, sesion, salir, actualizarUsuarios, puede, lista as listaUsuarios, cambiarPin } from './users.js';
 import { esComputadora, anchoMm, setAnchoMm, imprimirTiquetes } from './imprimir.js';
 import { crearPagina } from './draw.js';
-import { MODULOS, modulo, permitidos, listaExplicita, guardarBarraPersonal, borrarBarraPersonal, barraBloqueada, barraDelAdmin, distribucion } from './nav_barra.js';
 import { icono } from './ui.js';
 import { pendientesAdmin } from './avisos.js';
 
@@ -63,7 +62,6 @@ export function crearAjustes(nav) {
     if (vista === 'impresion') return vistaImpresion();
     if (vista === 'conexiones') return vistaConexiones();
     if (vista === 'apariencia') return vistaApariencia();
-    if (vista === 'mibarra') return vistaMiBarra();
     if (vista === 'novedades') return vistaNovedades();
     if (vista === 'usuarios') return pintarUsuarios({ raiz, irInicio });
     if (vista === 'personas') return pintarPersonas({ raiz, irInicio });
@@ -150,15 +148,14 @@ export function crearAjustes(nav) {
       } });
       if (v) toast('Listo: su PIN se cambió. Úselo la próxima vez que entre.', 5000);
     } }) : null;
-    const fApar = filaAj({ ic: '🎨', t: 'Apariencia', s: 'Tema, tamaño de texto y pantalla de inicio', onclick: () => { vista = 'apariencia'; pintar(); } });
-    const fBarra = filaAj({ ic: '🧭', t: 'Mi barra de abajo', s: barraBloqueada() ? '🔒 Definida por el administrador' : 'Elija qué módulos ver y en qué orden', onclick: () => { vista = 'mibarra'; pintar(); } });
+    const fApar = filaAj({ ic: '🎨', t: 'Apariencia', s: 'Tema y tamaño de texto', onclick: () => { vista = 'apariencia'; pintar(); } });
     const fNov = filaAj({ ic: '✨', t: 'Novedades de la versión', s: `Qué hay de nuevo en ${VERSION}`, onclick: () => { vista = 'novedades'; pintar(); } });
     const fBuscar = filaAj({ ic: '⬆', t: 'Buscar actualización de la app', onclick: () => window.__buscarActualizacion && window.__buscarActualizacion() });
     const fDiag = filaAj({ ic: '📋', t: 'Copiar diagnóstico', s: 'Para enviarlo a quien da soporte', onclick: copiarDiagnostico });
     const head = [banda('Ajustes')];
     if (!esAdmin) {
       // Lista simple para quien no administra.
-      raiz.append(...head, grupo(fCuenta, fPin, fAct, fPend), grupo(fApar, fBarra, fNov, fBuscar, fAlm));
+      raiz.append(...head, grupo(fCuenta, fPin, fAct, fPend), grupo(fApar, fNov, fBuscar, fAlm));
       infoAlmacenamiento(fAlm);
     } else {
       const datos = [fAct, fPend, filaAj({ ic: '📚', t: 'Catálogo recibido', s: 'Cosechas, sociedades y fincas', onclick: () => { vista = 'catalogo'; pintar(); } }),
@@ -166,7 +163,7 @@ export function crearAjustes(nav) {
       const conexion = [
         filaAj({ ic: '🔌', t: 'Estado de conexiones', s: 'Probar el servidor, usuarios, catálogo y reportes', onclick: () => { vista = 'conexiones'; pintar(); } })
       ];
-      const dispositivo = [fApar, fBarra, esComputadora() ? filaAj({ ic: '🖨', t: 'Impresora de 80 mm', s: `Ancho ${anchoMm()} mm`, onclick: () => { vista = 'impresion'; pintar(); } }) : null, fNov, fBuscar, fDiag, fAlm];
+      const dispositivo = [fApar, esComputadora() ? filaAj({ ic: '🖨', t: 'Impresora de 80 mm', s: `Ancho ${anchoMm()} mm`, onclick: () => { vista = 'impresion'; pintar(); } }) : null, fNov, fBuscar, fDiag, fAlm];
       const pend = pendientesAdmin();
       const tarjetaPend = pend.length ? h('section', { class: 'tarjeta pl-pendientes' }, h('b', null, `Pendientes (${pend.length})`),
         ...pend.map((p) => h('button', { type: 'button', class: 'pend-fila', onclick: () => { if (p.accion === 'enviar') enviarAhora(); else if (p.accion === 'actualizar') window.__buscarActualizacion && window.__buscarActualizacion(); else if (p.accion === 'catalogo') actualizarTodo(); } },
@@ -227,46 +224,6 @@ export function crearAjustes(nav) {
     raiz.append(resumen, lista, btn);
   }
 
-  // ----- Mi barra -----
-  function vistaMiBarra() {
-    raiz.append(cabSub('Mi barra', irInicio));
-    const perm = permitidos().map((m) => m.k);
-    const bloqueada = barraBloqueada();
-    const exp = listaExplicita();
-    const dist = distribucion();
-    let orden = exp ? [...new Set(exp)].filter((k) => perm.includes(k)) : [...dist.barra, ...dist.mas];
-    const en = new Set(exp ? orden : perm);
-    const resto = perm.filter((k) => !orden.includes(k));
-    orden = [...orden, ...resto];
-    const lista = h('div', { class: 'mibarra' });
-    const nota = h('p', { class: 'nota' });
-    const pintarLista = () => {
-      clear(lista);
-      const act = orden.filter((k) => en.has(k)), inact = orden.filter((k) => !en.has(k));
-      const vis = [...act, ...inact];
-      vis.forEach((k) => {
-        const m = modulo(k), on = en.has(k), pos = act.indexOf(k);
-        const mover = (d) => { const i = orden.indexOf(k); const j = i + d; if (j < 0 || j >= orden.length) return; [orden[i], orden[j]] = [orden[j], orden[i]]; pintarLista(); };
-        lista.append(h('div', { class: 'mb-fila' + (on ? '' : ' off') },
-          h('span', { class: 'mb-n' }, on ? String(pos + 1) : '–'), icono(m.ic, 22), h('span', { class: 'mb-t' }, m.n),
-          bloqueada ? null : h('span', { class: 'mb-mv' }, on ? h('button', { type: 'button', 'aria-label': 'Subir', disabled: pos === 0, onclick: () => { const i = orden.indexOf(act[pos - 1]); const a = orden.indexOf(k); [orden[a], orden[i]] = [orden[i], orden[a]]; pintarLista(); } }, '▲') : null,
-            on ? h('button', { type: 'button', 'aria-label': 'Bajar', disabled: pos === act.length - 1, onclick: () => { const i = orden.indexOf(act[pos + 1]); const a = orden.indexOf(k); [orden[a], orden[i]] = [orden[i], orden[a]]; pintarLista(); } }, '▼') : null),
-          bloqueada ? null : h('button', { type: 'button', class: 'interruptor' + (on ? ' on' : ''), role: 'switch', 'aria-checked': String(on), onclick: () => { if (on && act.length <= 1) return toast('Deje al menos un módulo en la barra.'); if (on) en.delete(k); else en.add(k); pintarLista(); } })));
-      });
-      const n = act.length;
-      nota.textContent = n > 5 || (n < perm.length && n > 4) ? 'En la barra caben 4 módulos; los demás quedan dentro de «Más».' : n < perm.length ? 'Los módulos apagados quedan dentro de «Más».' : 'Todos los módulos caben en la barra.';
-    };
-    pintarLista();
-    raiz.append(
-      bloqueada ? h('p', { class: 'estado aviso' }, '🔒 Su barra fue definida por el administrador y no se puede cambiar.') : h('p', { class: 'nota' }, 'Active los módulos que quiere ver abajo y ordénelos con ▲ ▼. Solo aparecen los módulos que usted tiene permitidos.'),
-      lista, nota);
-    if (!bloqueada) {
-      raiz.append(h('div', { class: 'acciones-g' },
-        h('button', { type: 'button', class: 'btn-texto primario', onclick: () => { guardarBarraPersonal(orden.filter((k) => en.has(k))); nav.barraCambio && nav.barraCambio(); toast('Barra guardada.'); irInicio(); } }, 'Guardar'),
-        h('button', { type: 'button', class: 'btn-texto', onclick: () => { borrarBarraPersonal(); nav.barraCambio && nav.barraCambio(); toast(barraDelAdmin().length ? 'Volvió al orden del administrador.' : 'Volvió al orden original.'); irInicio(); } }, 'Volver al orden original')));
-    }
-  }
-
   // ----- Apariencia -----
   function vistaApariencia() {
     raiz.append(cabSub('Apariencia', irInicio));
@@ -280,16 +237,12 @@ export function crearAjustes(nav) {
       const v = await elegir('Tamaño de texto', TEXTOS.map(([k, t]) => ({ etiqueta: t, valor: k })), { buscar: false });
       if (v === undefined) return; guardarAjuste('texto', v); aplicarApariencia(); pintar();
     } });
-    const fTab = filaAj({ ic: '🏠', t: 'Pestaña de inicio', s: etq(TABS, 'tab_inicio'), onclick: async () => {
-      const v = await elegir('Pestaña de inicio', TABS.map(([k, t]) => ({ etiqueta: t, valor: k })), { buscar: false });
-      if (v === undefined) return; guardarAjuste('tab_inicio', v); pintar();
-    } });
     const fSoc = filaAj({ ic: '🏢', t: 'Sociedad por defecto', s: ajuste('soc', '') || 'Ninguna (la elijo cada vez)', onclick: async () => {
       const ops = [{ etiqueta: 'Ninguna (la elijo cada vez)', valor: '' }, ...sociedades().map((n) => ({ etiqueta: n, valor: n }))];
       const v = await elegir('Sociedad por defecto', ops);
       if (v === undefined) return; guardarAjuste('soc', v); pintar();
     } });
-    raiz.append(grupo(fTema, fTexto), grupo(fTab, fSoc),
+    raiz.append(grupo(fTema, fTexto), grupo(fSoc),
       h('p', { class: 'nota' }, 'La sociedad por defecto se llena sola en Registro y Diario cuando todavía no ha elegido ninguna. Estos ajustes solo afectan a este dispositivo.'));
   }
 

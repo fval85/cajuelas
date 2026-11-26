@@ -7,12 +7,11 @@ import { crearDiario } from './ui_diario.js';
 import { crearBoletos } from './ui_boletos.js';
 import { crearReportes } from './ui_reportes.js';
 import { crearPlanillas } from './ui_planillas.js';
-import { MODULOS, modulo, permitidos, distribucion } from './nav_barra.js';
-import { saldoPendienteHoy, HORA_SALDO } from './avisos.js';
+import { modulo } from './nav_barra.js';
+import { crearInicio } from './ui_inicio.js';
 import { crearAjustes, actualizarCatalogo } from './ui_ajustes.js';
-import { icono } from './ui.js';
 import { iniciarAtras } from './atras.js';
-import { aplicarApariencia, tabInicio } from './apariencia.js';
+import { aplicarApariencia } from './apariencia.js';
 import { hayControl, puede, necesitaLogin, pantallaLogin, cerrarLogin, alCambiarSesion, actualizarUsuarios, sesion } from './users.js';
 
 window.addEventListener('cajuelas-sesion-invalida', () => { toast('La sesión venció. Vuelva a entrar.', 4000); setTimeout(() => location.reload(), 1200); });
@@ -40,60 +39,39 @@ pedirAlmacenamientoPersistente();
 aplicarApariencia(); window.addEventListener('load', aplicarApariencia);
 const app = document.getElementById('app');
 const barra = h('div', { id: 'barra-estado', hidden: true });
-const barraSaldo = h('div', { id: 'barra-saldo', hidden: true, role: 'button' }, `🎟 Ya pasaron las ${HORA_SALDO - 12}:00 pm y falta registrar el saldo de boletos de hoy. Toque para hacerlo.`);
-barraSaldo.addEventListener('click', () => { barraSaldo.hidden = true; ir('boletos'); });
 const contenido = h('main', { id: 'contenido' });
-const tabs = h('nav', { id: 'tabs', role: 'tablist' });
-app.append(barra, barraSaldo, contenido, tabs);
+app.append(barra, contenido);
 if (modoPruebas) app.prepend(h('div', { id: 'banner-pruebas' }, '🧪 MODO DE PRUEBAS · los datos no son reales'));
 
 // Sin zoom con los dedos (solo se puede ampliar dentro de los reportes y PDF).
 ['gesturestart', 'gesturechange'].forEach((ev) => document.addEventListener(ev, (e) => e.preventDefault(), { passive: false }));
 document.addEventListener('touchmove', (e) => { if (e.touches && e.touches.length > 1 && !e.target.closest('.visor')) e.preventDefault(); }, { passive: false });
 const nav = {
-  pendientes() { pintarBarra(); },
+  pendientes() { pintarBarra(); if (actual === 'inicio') paginas.inicio.refrescar(); },
   catalogoCambio() { Object.values(paginas).forEach((p) => p.refrescar && p.refrescar()); },
-  barraCambio() { pintarTabs(true); },
   ir(k) { ir(k); }
 };
 const paginas = {
-  registro: crearRegistro(nav), diario: crearDiario(nav), boletos: crearBoletos(nav), reportes: crearReportes(nav),
+  inicio: crearInicio(nav), registro: crearRegistro(nav), diario: crearDiario(nav), boletos: crearBoletos(nav), reportes: crearReportes(nav),
   planillas: crearPlanillas(nav), ajustes: crearAjustes(nav)
 };
-let actual = 'registro';
-const moduloPermitido = (k) => { const m = modulo(k); return !!m && (!m.permiso || puede(m.permiso)); };
-function primeraPermitida() { const d = distribucion(); const k = d.barra[0] || (permitidos()[0] || {}).k; return k || 'ajustes'; }
+let actual = 'inicio';
+const moduloPermitido = (k) => { if (k === 'inicio') return true; const m = modulo(k); return !!m && (!m.permiso || puede(m.permiso)); };
+const primeraPermitida = () => 'inicio';
 function ir(k) {
   const actualAntes = actual;
   if (!moduloPermitido(k)) k = primeraPermitida();
   actual = k;
   Object.entries(paginas).forEach(([kk, p]) => { p.el.hidden = kk !== k; });
-  pintarTabs();
   const pg = paginas[k];
   if (pg.reiniciar && k !== actualAntes) pg.reiniciar(); else if (pg.refrescar) pg.refrescar();
   window.scrollTo(0, 0);
   aplicarPermisos();
   if (!hayControl() || sesion()) { try { localStorage.setItem('cajuelas.tab', k); } catch { /* nada */ } }
 }
-// ----- Barra inferior: módulos de «distribucion()» (4 + «Más» cuando no caben) -----
-let firmaTabs = '';
-function abrirMas(claves) {
-  const caja = h('div', { class: 'mas-grid' }, ...claves.map((k) => { const m = modulo(k); return h('button', { type: 'button', class: 'mas-item' + (k === actual ? ' on' : ''), onclick: () => { api.cerrar(); ir(k); } }, icono(m.ic, 30), h('span', null, m.n)); }));
-  const api = dialogo({ titulo: 'Más', cuerpo: [caja], botones: [{ texto: 'Cerrar' }] });
-}
-function pintarTabs(forzar = false) {
-  const d = distribucion();
-  const firma = d.barra.join(',') + '|' + d.mas.join(',') + '|' + actual;
-  if (!forzar && firma === firmaTabs) return;
-  firmaTabs = firma;
-  clear(tabs);
-  d.barra.forEach((k) => { const m = modulo(k); tabs.append(h('button', { type: 'button', role: 'tab', class: 'tab' + (k === actual ? ' on' : ''), 'aria-selected': String(k === actual), onclick: () => ir(k) }, icono(m.ic, 24), h('span', null, m.n))); });
-  if (d.mas.length) tabs.append(h('button', { type: 'button', role: 'tab', class: 'tab' + (d.mas.includes(actual) ? ' on' : ''), onclick: () => abrirMas(d.mas) }, icono('mas', 24), h('span', null, 'Más')));
-}
 Object.values(paginas).forEach((p) => contenido.append(p.el));
 /** Muestra u oculta botones según los permisos del usuario que entró. */
 function aplicarPermisos() {
-  pintarTabs();
   document.querySelectorAll('[data-permiso]').forEach((el) => { el.hidden = !puede(el.dataset.permiso); });
   document.querySelectorAll('.fila-botones').forEach((f) => {
     const vis = [...f.children].filter((x) => !x.hidden).length;
@@ -115,26 +93,26 @@ new MutationObserver(() => {
   programado = true;
   requestAnimationFrame(() => { programado = false; aplicarPermisos(); });
 }).observe(contenido, { childList: true, subtree: true });
-const tabArranque = () => { const t = tabRecarga || tabInicio(); tabRecarga = null; return t && moduloPermitido(t) ? t : primeraPermitida(); };
+const tabArranque = () => { const t = tabRecarga; tabRecarga = null; return t && moduloPermitido(t) ? t : primeraPermitida(); };
 ir(primeraPermitida());
 alCambiarSesion(() => {
   revisarAcceso();
   if (sesion()) { ir(tabArranque()); setTimeout(() => latido(true), 2500); }
 });
 revisarAcceso();
-if ((tabInicio() || tabRecarga) && !necesitaLogin()) ir(tabArranque());
+if (tabRecarga && !necesitaLogin()) ir(tabArranque());
 actualizarUsuarios(true).then(() => revisarAcceso());
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') actualizarUsuarios().then(() => revisarAcceso()); });
 setInterval(() => actualizarUsuarios().then(() => revisarAcceso()), 5 * 60000);
 
 iniciarAtras({ pestanaActual: () => actual, pestanaPrincipal: primeraPermitida, irAPestana: (k) => ir(k), hayLogin: necesitaLogin });
 
-// ----- Recordatorio del saldo (a partir de las 7:00 pm) -----
-function revisarSaldo() { barraSaldo.hidden = necesitaLogin() || !saldoPendienteHoy(); }
-revisarSaldo();
-setInterval(revisarSaldo, 5 * 60000);
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') revisarSaldo(); });
-alCambiarSesion(revisarSaldo);
+// ----- Inicio: botón de casa de cada módulo y avisos del día (saldo de boletos y planilla pendiente) -----
+window.addEventListener('cajuelas-inicio', () => ir('inicio'));
+const refrescarInicio = () => { if (actual === 'inicio') paginas.inicio.refrescar(); };
+setInterval(refrescarInicio, 5 * 60000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refrescarInicio(); });
+alCambiarSesion(refrescarInicio);
 
 // ----- Barra de estado: envíos pendientes -----
 function pintarBarra() {

@@ -18,7 +18,10 @@ export const ICONOS = {
   borrar: 'M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z',
   reportes: 'M5 9.2h3V19H5V9.2zM10.6 5h2.8v14h-2.8V5zm5.6 8H19v6h-2.8v-6z',
   planillas: 'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z',
-  mas: 'M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z'
+  mas: 'M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z',
+  flecha: 'M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z',
+  casa: 'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z',
+  candado: 'M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zM9 8V6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9z'
 };
 export function icono(nombre, tam = 22) {
   const ns = 'http://www.w3.org/2000/svg';
@@ -31,14 +34,15 @@ export function icono(nombre, tam = 22) {
 
 export const tarjeta = (...hijos) => h('section', { class: 'tarjeta' }, ...hijos);
 export const etiqueta = (t) => h('label', { class: 'etiqueta' }, t);
-export function banda(titulo) {
+export function banda(titulo, opc) {
   const el = h('header', { class: 'banda' });
   const chip = h('button', { type: 'button', class: 'user-chip', hidden: true, onclick: async () => {
     const s = sesion(); if (!s) return;
     if (await confirmar('Cerrar sesión', `Sesión de ${s.nombre} (${s.rol}).\n\n¿Cerrar la sesión?`, { si: 'Cerrar sesión' })) salir();
   } });
   el.pintarUsuario = () => { const s = hayControl() ? sesion() : null; chip.hidden = !s; const t = s ? '👤 ' + s.nombre : ''; if (chip.textContent !== t) chip.textContent = t; };
-  el.append(chip, h('h1', null, titulo));
+  const casa = (opc && opc.sinCasa) ? null : h('button', { type: 'button', class: 'casa-btn', 'aria-label': 'Ir al inicio', onclick: () => window.dispatchEvent(new Event('cajuelas-inicio')) }, icono('flecha', 18), ' Inicio');
+  el.append(...(casa ? [casa] : []), chip, h('h1', null, titulo));
   el.classList.add('con-usuario');
   el.pintarUsuario();
   return el;

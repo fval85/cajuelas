@@ -1,5 +1,19 @@
 // Novedades de cada versión (se muestran en Ajustes > Novedades de la versión).
 export const NOVEDADES = [
+  { v: '2.27.1', t: [
+    'Inicio: para administradores también se ven 2 iconos por fila, grandes y con su estado.',
+    'El botón para volver al Inicio ahora dice «← Inicio» (flecha y palabra) en el encabezado de cada pantalla.',
+    'Entrar: el teléfono recuerda al último usuario y solo pide el PIN. «No soy yo» muestra los usuarios anteriores y la búsqueda. En teléfonos donde ya entró un administrador, cada usuario anterior tiene una ✕ para quitarlo de la lista de ese teléfono.',
+    'El aviso de saldo de boletos ahora sale a partir de las 3:00 pm (igual que el de planillas).'
+  ] },
+  { v: '2.27.0', t: [
+    'Nueva pantalla de Inicio con un icono por módulo (Registro, Diario, Boletos, Reportes, Planillas y Ajustes). Ya no hay barra de abajo. En cada pantalla, el icono de casa 🏠 de arriba lleva al Inicio y el botón «atrás» del teléfono también.',
+    'Todos ven todos los iconos, pero solo entran a los que tienen permiso; los bloqueados salen con candado 🔒 al final y avisan que se pida el permiso a un administrador. Ajustes va de último.',
+    'Avisos en el Inicio: saldo de boletos (después de las 3:00 pm) y planilla del día sin enviar (después de las 3:00 pm). Cada icono muestra cuántos envíos tiene sin enviar.',
+    'Se quitó «Mi barra de abajo» y la opción de bloquearla en Usuarios, porque ya no hace falta.',
+    'Entrar: ahora aparecen como botones los usuarios que ya usaron este teléfono. Si es otra persona, «No soy yo · buscar otro usuario» permite buscar escribiendo las primeras letras (ya no hay una lista larga).',
+    'Planillas: «Estado y nota ›» de cada empleado ahora se ve como un botón para que se note que ahí se cambia el estado del día y la nota.'
+  ] },
   { v: '2.26.0', t: [
     'Planillas: cada empleado ya sale con su fila completa (tarea de siempre, horas sugeridas y horas extra en 0). Tarea, Horas y Horas extra se cambian ahí mismo con − / +, y el botón «Listo» de la derecha marca a cada uno sin tener que abrirlo.',
     'Adentro (toque en el nombre) quedan solo el estado del día y la nota. Si alguien hizo dos tareas, use «+ tarea» en su fila. Las horas extra se anotan en la primera tarea de la fila.',

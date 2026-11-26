@@ -1,6 +1,6 @@
 // Usuarios y permisos. La lista viene de la hoja «Usuarios» de Google Sheets (con el PIN ya convertido en huella
 // por el Web App) y se guarda en el dispositivo para poder entrar sin conexión.
-import { h, clear } from './util.js';
+import { h, clear, normalizar, confirmar } from './util.js';
 import { db, syncCfg, configurado } from './store.js';
 import { postJson, rpcSupa } from './sync.js';
 import { SUPA } from './config_supa.js';
@@ -158,7 +158,9 @@ let velo = null;
 export function pantallaLogin() {
   if (velo) return;
   const lblEstado = h('p', { class: 'nota' });
-  const selUsuario = h('select', { class: 'campo', 'aria-label': 'Usuario' });
+  let elegido = '';
+  let buscando = false;
+  let auto = true;
   const pin = h('input', { class: 'campo', type: 'password', inputmode: 'numeric', autocomplete: 'off', placeholder: 'PIN', maxlength: '12' });
   const cuerpo = h('div', { class: 'login-caja' });
   velo = h('div', { id: 'login' }, cuerpo);
@@ -173,12 +175,40 @@ export function pantallaLogin() {
         h('button', { type: 'button', class: 'btn-texto primario', onclick: reintentar }, 'Reintentar'));
       return;
     }
-    clear(selUsuario);
-    selUsuario.append(h('option', { value: '' }, 'Seleccione su usuario'), ...l.map((u) => h('option', { value: u.nombre }, u.nombre)));
     pin.value = '';
-    cuerpo.append(h('p', { class: 'nota' }, 'Elija su usuario e ingrese su PIN.'), selUsuario, pin, lblEstado,
-      h('button', { type: 'button', class: 'btn-texto primario', onclick: ingresar }, 'Entrar'),
-      h('button', { type: 'button', class: 'btn-texto', onclick: reintentar }, 'Actualizar lista de usuarios'));
+    const existe = (n) => l.some((u) => u.nombre === n);
+    const recientes = db.get('login_recientes', []).filter(existe);
+    if (elegido && !existe(elegido)) elegido = '';
+    if (auto && !elegido && recientes.length) elegido = recientes[0];
+    auto = false;
+    const esAdm = db.get('login_admin', false) === true;
+    const quitar = async (n) => { if (await confirmar(`¿Quitar a ${n} de este teléfono?`, 'Solo se quita de la lista de este teléfono; el usuario sigue existiendo.')) { db.set('login_recientes', db.get('login_recientes', []).filter((x) => x !== n)); pintar(); } };
+    const filaUser = (n) => h('div', { class: 'lg-fila' }, h('button', { type: 'button', class: 'lg-user', onclick: () => { elegido = n; buscando = false; pintar(); } }, n), esAdm ? h('button', { type: 'button', class: 'lg-x', 'aria-label': `Quitar a ${n}`, onclick: () => quitar(n) }, '✕') : null);
+    if (elegido) {
+      // Paso 2: usuario elegido, solo falta el PIN
+      cuerpo.append(h('div', { class: 'lg-elegido' }, h('span', null, 'Entra como'), h('b', null, elegido)), pin, lblEstado,
+        h('button', { type: 'button', class: 'btn-texto primario', onclick: ingresar }, 'Entrar'),
+        h('button', { type: 'button', class: 'btn-texto', onclick: () => { elegido = ''; buscando = true; pintar(); } }, 'No soy yo · buscar otro usuario'));
+      setTimeout(() => pin.focus(), 50);
+      return;
+    }
+    {
+      const q = h('input', { class: 'campo', type: 'search', placeholder: 'Escriba las primeras letras de su nombre', autocomplete: 'off', 'aria-label': 'Buscar usuario' });
+      const res = h('div', { class: 'lg-res' });
+      const filtrar = () => {
+        clear(res);
+        const t = normalizar(q.value.trim());
+        if (t.length < 2) { res.append(h('p', { class: 'nota' }, 'Escriba al menos 2 letras.')); return; }
+        const hit = l.filter((u) => normalizar(u.nombre).includes(t)).slice(0, 8);
+        if (!hit.length) { res.append(h('p', { class: 'nota' }, 'No se encontró ese nombre.')); return; }
+        hit.forEach((u) => res.append(h('button', { type: 'button', class: 'lg-user', onclick: () => { elegido = u.nombre; buscando = false; pintar(); } }, u.nombre)));
+      };
+      q.addEventListener('input', filtrar);
+      cuerpo.append(h('p', { class: 'nota' }, recientes.length ? '¿Quién entra?' : 'Busque su nombre para entrar.'), ...(recientes.length ? [h('div', { class: 'lg-lista' }, ...recientes.map(filaUser)), h('p', { class: 'nota' }, 'O busque a otra persona:')] : []), q, res, lblEstado);
+      cuerpo.append(h('button', { type: 'button', class: 'btn-texto', onclick: reintentar }, 'Actualizar lista de usuarios'));
+      filtrar();
+      return;
+    }
   };
   async function reintentar() {
     lblEstado.textContent = 'Buscando…';
@@ -188,9 +218,9 @@ export function pantallaLogin() {
     if (!hayControl()) cerrarLogin();
   }
   async function ingresar() {
-    if (!selUsuario.value) { lblEstado.textContent = 'Seleccione su usuario.'; return; }
-    const r = await entrar(selUsuario.value, pin.value);
-    if (r.ok) return;
+    if (!elegido) { lblEstado.textContent = 'Seleccione su usuario.'; return; }
+    const r = await entrar(elegido, pin.value);
+    if (r.ok) { if (puede('config')) db.set('login_admin', true); db.set('login_recientes', [elegido, ...db.get('login_recientes', []).filter((n) => n !== elegido)].slice(0, 3)); return; }
     lblEstado.textContent = r.espera ? `Demasiados intentos. Espere ${Math.ceil(r.espera / 60)} min.` : (r.sinRed ? 'Sin conexión: solo pueden entrar sin Internet quienes ya entraron antes en este teléfono.' : 'Usuario o PIN incorrecto.');
     pin.value = '';
   }

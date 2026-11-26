@@ -346,3 +346,47 @@ details.mas-datos summary { font-weight: 700; color: var(--verde); padding: 8px 
   .pl-sel, .pl-st, .pl-ok { background: transparent; border-color: #4b5563; }
   .pl-ok { color: #d1d5db; } .pl-ok.on { background: var(--verde); color: #fff; }
 }
+
+/* 2.27.0 Inicio con iconos (sin barra de abajo) */
+#contenido { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+#toast { bottom: calc(18px + env(safe-area-inset-bottom)); }
+.casa-btn { order: 0; flex: none; border: 0; background: transparent; color: #fff; width: 40px; height: 40px; margin: -6px 0 -6px -8px; border-radius: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.casa-btn:active { background: rgba(255,255,255,.2); }
+.banda h1 { order: 1; } .banda .user-chip { order: 2; }
+.ini-aviso { display: block; width: 100%; text-align: left; font: inherit; font-size: 14px; font-weight: 600; background: #fff7e0; color: #7a4b00; border: 1.5px solid #f0c36a; border-radius: 12px; padding: 11px 13px; margin: 0 0 10px; cursor: pointer; }
+.ini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 4px; }
+.ini-grid.c3 { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.ini-tile { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 128px; padding: 14px 8px; border: 1.5px solid var(--borde, #d8dee4); border-radius: 18px; background: #fff; color: var(--texto); font: inherit; cursor: pointer; text-align: center; }
+.ini-tile.chico { min-height: 92px; border-radius: 14px; padding: 10px 4px; }
+.ini-tile:active { transform: scale(.97); }
+.ini-tile .ini-ic { color: var(--verde); display: flex; }
+.ini-tile b { font-size: 16px; }
+.ini-tile.chico b { font-size: 14px; }
+.ini-tile small { font-size: 12px; color: #b45309; font-weight: 600; }
+.ini-tile.bloq { background: #f1f3f5; color: #8a929a; border-style: dashed; }
+.ini-tile.bloq .ini-ic { color: #aab1b8; }
+.ini-cand { position: absolute; top: 8px; right: 8px; color: #8a929a; display: flex; }
+.ini-ver { text-align: center; font-size: 12px; color: var(--gris); margin: 18px 0 0; }
+/* Login: usuarios recientes y búsqueda */
+.lg-lista, .lg-res { display: flex; flex-direction: column; gap: 8px; }
+.lg-user { font: inherit; font-size: 18px; font-weight: 700; padding: 14px; border-radius: 12px; border: 1.5px solid var(--verde); background: #fff; color: var(--verde); cursor: pointer; }
+.lg-elegido { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0; }
+.lg-elegido span { font-size: 13px; color: var(--gris); }
+.lg-elegido b { font-size: 22px; color: var(--verde); }
+/* 2.27.0 Planillas: «Estado y nota» como botón */
+.pl-f-cab small { display: inline-block; font-weight: 700; font-size: 12px; color: var(--verde); background: #e8f3ec; border: 1.5px solid var(--verde); border-radius: 14px; padding: 3px 10px; }
+@media (prefers-color-scheme: dark) {
+  .ini-aviso { background: #3a2f12; color: #f5d68a; border-color: #8a6a1f; }
+  .ini-tile { background: var(--tarjeta); }
+  .ini-tile.bloq { background: #1d2126; color: #7d858d; }
+  .lg-user { background: var(--tarjeta); }
+  .pl-f-cab small { background: #1f3a2a; color: #9fd9b3; border-color: #4a8a62; }
+}
+
+/* 2.27.1 */
+.lg-fila { display: flex; gap: 8px; }
+.lg-fila .lg-user { flex: 1; }
+.lg-x { flex: none; width: 46px; border: 1.5px solid var(--linea, #cfd6dc); border-radius: 12px; background: transparent; color: var(--gris); font: inherit; font-size: 16px; cursor: pointer; }
+.casa-btn { width: auto; height: 34px; padding: 0 12px; gap: 5px; border: 1px solid rgba(255,255,255,.7); border-radius: 17px; font: inherit; font-size: 14px; font-weight: 600; margin: 0 4px 0 -4px; }
+.casa-btn svg { flex: none; }
+body > .velo { z-index: 120; }

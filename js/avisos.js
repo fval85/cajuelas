@@ -1,22 +1,42 @@
-// Avisos y pendientes: recordatorio de saldo (7:00 pm) para quien usa Boletos y panel «Pendientes» para administradores.
+// Avisos y pendientes: recordatorio de saldo (3:00 pm) para quien usa Boletos y panel «Pendientes» para administradores.
 import { db, deviceName, cat } from './store.js';
 import { normalizar, diaHoy } from './util.js';
-import { puede } from './users.js';
+import { puede, nombreUsuario } from './users.js';
+import * as D from './planillas_data.js';
 import { boletos, destinoMov, BOL_SALDO } from './data.js';
-import { cuantosPendientes } from './sync.js';
+import { cuantosPendientes, pendientes } from './sync.js';
 
-export const HORA_SALDO = 19;
+export const HORA_SALDO = 15;
 const eq = (a, b) => normalizar(a) === normalizar(b);
 const pasoLaHora = () => new Date().getHours() >= HORA_SALDO;
 const hace = (dia, n) => { const d = new Date(); d.setDate(d.getDate() - n); return dia >= `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
-/** Dispositivo propio sin saldo de hoy (después de las 7 pm), siempre que haya usado Boletos en los últimos 10 días. */
+/** Dispositivo propio sin saldo de hoy (después de las 3 pm), siempre que haya usado Boletos en los últimos 10 días. */
 export function saldoPendienteHoy() {
   if (!puede('boletos') || puede('config') || !pasoLaHora()) return false;
   const yo = deviceName(), hoy = diaHoy();
   const mios = boletos.items().filter((m) => !m.anulado && eq(m.dispositivo, yo));
   if (!mios.some((m) => hace(m.dia, 10))) return false;
   return !mios.some((m) => m.tipo === BOL_SALDO && m.dia === hoy);
+}
+
+export const HORA_PLANILLA = 15;
+/** Fincas del encargado cuya planilla de HOY todavía no se ha enviado (a partir de las 3:00 pm; usa lo último que se descargó en Planillas). */
+export function planillasPendientesHoy() {
+  if (!puede('planillas') || puede('config') || new Date().getHours() < HORA_PLANILLA) return [];
+  const u = normalizar(nombreUsuario() || '_');
+  const datos = db.get('pl_datos_' + u, null);
+  if (!datos || !Array.isArray(datos.empleados) || !datos.empleados.length) return [];
+  const hoy = diaHoy(), env = db.get('pl_enviados_' + u, {}) || {}, cola = pendientes();
+  const out = [];
+  D.sociedadesDe(datos.empleados, hoy).forEach((s) => D.fincasDe(datos.empleados, s, hoy).forEach((f) => {
+    if (!D.empleadosDeFinca(datos.empleados, s, f, hoy).length) return;
+    const k = D.claveDia(hoy, s, f);
+    const enviada = (datos.registros || []).some((r) => r.dia === hoy && eq(r.sociedad, s) && eq(r.finca, f) && r.estado !== 'ANULADO') || !!env[k]
+      || cola.some((p) => p.formato === 'planilla' && D.claveDia(p.dia, p.sociedad, p.finca) === k);
+    if (!enviada) out.push(f);
+  }));
+  return out;
 }
 
 /** Para administradores: dispositivos con movimientos recientes que no han registrado el saldo de hoy (según lo último que se descargó en Boletos). */
