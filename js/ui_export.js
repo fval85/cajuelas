@@ -22,6 +22,8 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
   let crudo = null, datos = null, error = '', cargando = false;
   let f = { fl: {}, dims: ['comp'], med: [...MEDIDAS_INI], graf: grafIni() };
   let vista = 'contratos', tab = 'contratos', sub = 'entregar', detalleId = null, ultimo = null;
+  let verRep = false; // «Ver reporte»: gráfico, tabla y botones de PDF/Excel salen solo al pedirlos (2.28.0)
+  const conReporte = () => !detalleId && (tab === 'contratos' || tab === 'tablas');
   let qPag = '', fPag = 'todos';
   const guard = guardadosDe('exp');
 
@@ -103,12 +105,12 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
     const act = FILTROS.filter((x) => (f.fl[x.k] || []).length);
     const activos = act.map((x) => ({ t: textoFiltro(x), abrir: () => abrirFiltro(x.k), quitar: () => { delete f.fl[x.k]; pintarFiltros(); pintar(); } }));
     const gs = guard.lista().map((g) => ({ n: g.n, on: !g.est.mesActual && JSON.stringify(g.est.fl || {}) === JSON.stringify(f.fl), click: () => aplicarGuardado(g.est) }));
-    barra.pintar({ nFiltros: act.length, onFiltros: abrirHoja, segmento: segmento(), guardados: gs, activos, onLimpiar: () => { f.fl = {}; pintarFiltros(); pintar(); } });
+    barra.pintar({ nFiltros: act.length, onFiltros: abrirHoja, segmento: segmento(), extra: conReporte() ? { t: '📊 Ver reporte', on: verRep, click: () => { verRep = !verRep; pintarFiltros(); pintar(); } } : null, guardados: gs, activos, onLimpiar: () => { f.fl = {}; pintarFiltros(); pintar(); } });
     pintarRapidos();
   }
   function pintarTabs() {
     clear(tabs);
-    [['contratos', 'Contratos'], ['seguimiento', 'Seguimiento'], ['tablas', 'Tablas'], ['pagos', 'Pagos']].forEach(([k, t]) => tabs.append(h('button', { type: 'button', role: 'tab', 'aria-selected': String(tab === k), class: tab === k ? 'on' : '', onclick: () => { tab = k; detalleId = null; redibujar(); } },
+    [['contratos', 'Contratos'], ['seguimiento', 'Seguimiento'], ['tablas', 'Tablas'], ['pagos', 'Pagos']].forEach(([k, t]) => tabs.append(h('button', { type: 'button', role: 'tab', 'aria-selected': String(tab === k), class: tab === k ? 'on' : '', onclick: () => { tab = k; detalleId = null; verRep = false; redibujar(); } },
       t, k === 'seguimiento' && datos && datos.alertas.lista.length ? h('span', { class: 'punto-alerta' }, String(datos.alertas.lista.length)) : null)));
     tabs.hidden = !datos || !!detalleId;
   }
@@ -277,6 +279,7 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
     panel = rep;
     if (!rep.ctx.n) return;
     zona.append(h('div', { class: 'kpis' }, ...rep.kpis.map((k) => h('div', { class: 'kpi' }, h('small', null, k.t), h('b', null, k.v), k.s ? h('span', { class: 'kpi-sub' }, k.s) : null))));
+    if (!verRep) return;
     rep.graficos.forEach((g) => {
       const cv = lienzoGrafico(g, 360, Math.max(170, 56 + g.cats.length * 30)); cv.classList.add('grafico');
       zona.append(h('div', { class: 'tarjeta grafico-caja' }, cv));
@@ -304,7 +307,7 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
     const br = barraRegistrar(); if (br) zona.append(br);
     if (!filas.length) { zona.append(h('p', { class: 'estado aviso' }, 'No hay contratos con estos filtros.')); return; }
     pintarPanel();
-    zona.append(h('div', { class: 'botones-panel' },
+    if (verRep) zona.append(h('div', { class: 'botones-panel' },
       boton('Compartir PDF', 'compartir', 'c-azul', () => compartirPanel()),
       h('button', { type: 'button', class: 'btn btn-excel', onclick: () => excelPanelDescargar() }, '⬇ Descargar Excel')));
     zona.append(h('div', { class: 'titulo-grupo' }, `Contratos (${filas.length}) · toque uno para ver su detalle`));
@@ -413,7 +416,7 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
     }))));
     zona.append(h('div', { class: 'titulo-grupo' }, `Pagos (${pagos.length})`));
     if (!pagos.length) zona.append(h('p', { class: 'nota' }, 'Todavía no hay pagos registrados.'));
-    else zona.append(h('div', { class: 'tarjeta' }, ...pagos.map((p) => h('p', { class: 'fila-pago' }, `${fechaCorta(p.fecha)} · ${c.finan ? 'depositado ' : ''}${dinero$(p.monto)}${p.cargo > 0 ? ' · intereses banco ' + dinero$(p.cargo) : ''}${c.finan && p.total == null ? ' · ⚠ falta el pago total' : ''}${p.nota ? ' · ' + p.nota : ''}`, puedeEditarExp() && p.dbId != null ? h('button', { type: 'button', class: 'btn-mini', onclick: () => tras(nuevoPago(datos, c.id, p)) }, ' ✎') : null))));
+    else zona.append(h('div', { class: 'tarjeta' }, ...pagos.map((p) => h('p', { class: 'fila-pago' }, `${fechaCorta(p.fecha)} · ${c.finan ? 'depositado ' : ''}${dinero$(p.monto)}${p.cargo > 0 ? ' · intereses banco ' + dinero$(p.cargo) : ''}${p.sob ? ' · factura de sobrante (entra completa)' : c.finan && p.total == null ? ' · ⚠ falta el pago total' : ''}${p.nota ? ' · ' + p.nota : ''}`, puedeEditarExp() && p.dbId != null ? h('button', { type: 'button', class: 'btn-mini', onclick: () => tras(nuevoPago(datos, c.id, p)) }, ' ✎') : null))));
   }
 
   // ---- Tablas (reportes con gráficos y PDF) ----
@@ -424,6 +427,7 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
     if (!rep.ctx.n) { zona.append(h('p', { class: 'estado aviso' }, 'No hay contratos con estos filtros.')); return; }
     zona.append(h('div', { class: 'kpis centrada' }, ...rep.kpis.map((k) => h('div', { class: 'kpi' }, h('small', null, k.t), h('b', null, k.v)))));
     if (rep.datos.length) zona.append(h('div', { class: 'tarjeta rep-datos' }, h('b', null, 'Datos de interés'), ...rep.datos.map((t) => h('p', null, t))));
+    if (!verRep) return;
     rep.graficos.forEach((g) => {
       const alto = Math.max(200, 56 + g.cats.length * (g.series.length > 2 ? 40 : g.series.length > 1 ? 30 : 22));
       const cv = lienzoGrafico(g, 360, alto); cv.classList.add('grafico');
@@ -491,7 +495,7 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
     const cosechas = [...new Set(rows.map((r) => r.cos).filter(Boolean))].sort().reverse();
     const nSem = (k) => rows.filter((r) => r.sem === k).length;
     const nAl = datos.alertas.lista.length;
-    const ir = (t, v) => { tab = t; if (v) vista = v; detalleId = null; pintarChips(); redibujar(); abrir(); };
+    const ir = (t, v) => { tab = t; if (v) vista = v; detalleId = null; verRep = false; pintarChips(); redibujar(); abrir(); };
     return h('div', { class: 'fuente toque hub-fuente' + (opc.gira && opc.gira() ? ' carga' : ''), role: 'button', tabindex: '0', onclick: () => ir('contratos') }, refBtn(), cab3(),
       h('p', { class: 'sub' }, `${rows.length} ${rows.length === 1 ? 'contrato' : 'contratos'}${cosechas.length ? ' · cosecha ' + cosechas.join(', ') : ''}`),
       h('div', { class: 'hub-dos' },
@@ -504,7 +508,7 @@ export function crearVentasExp({ abrir, volver, alCambiar }) {
   sembrar(); pintarTabs(); pintarChips(); pintarOpciones(); pintarFiltros(); pintarEstado();
   return {
     cab, el, tarjetaHub, cargar, ocupado: () => cargando,
-    reiniciar() { f = { fl: {}, dims: ['comp'], med: [...MEDIDAS_INI], graf: grafIni() }; vista = 'contratos'; tab = 'contratos'; sub = 'entregar'; detalleId = null; sembrar(); const c = leerCache(); if (c) usar(c); redibujar(); cargar(false); },
+    reiniciar() { f = { fl: {}, dims: ['comp'], med: [...MEDIDAS_INI], graf: grafIni() }; vista = 'contratos'; tab = 'contratos'; sub = 'entregar'; detalleId = null; verRep = false; sembrar(); const c = leerCache(); if (c) usar(c); redibujar(); cargar(false); },
     estado,
     estadoDatos() { return { ok: !!datos, contratos: datos ? datos.contratos.length : 0, entregas: datos ? datos.entregas.length : 0, pagos: datos ? datos.pagos.length : 0, alertas: datos ? datos.alertas.lista.length : 0, error, t: crudo ? crudo.t : 0 }; }
   };

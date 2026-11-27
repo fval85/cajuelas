@@ -390,3 +390,7 @@ details.mas-datos summary { font-weight: 700; color: var(--verde); padding: 8px 
 .casa-btn { width: auto; height: 34px; padding: 0 12px; gap: 5px; border: 1px solid rgba(255,255,255,.7); border-radius: 17px; font: inherit; font-size: 14px; font-weight: 600; margin: 0 4px 0 -4px; }
 .casa-btn svg { flex: none; }
 body > .velo { z-index: 120; }
+
+/* 2.28.0 */
+.bc-fila.dos .bc-btn { flex: 1; }
+.bc-btn.activo { background: var(--verde); color: #fff; }

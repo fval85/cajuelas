@@ -1,5 +1,9 @@
 // Novedades de cada versión (se muestran en Ajustes > Novedades de la versión).
 export const NOVEDADES = [
+  { v: '2.28.0', t: [
+    'Ventas de exportación (Contratos y Tablas): junto a «Filtros» hay un botón «Ver reporte». El gráfico, la tabla resumen y los botones de PDF y Excel quedan escondidos y salen solo al tocarlo.',
+    'Detalle del contrato: la factura de sobrante ya no muestra «falta el pago total»; ahora dice «factura de sobrante (entra completa)».'
+  ] },
   { v: '2.27.1', t: [
     'Inicio: para administradores también se ven 2 iconos por fila, grandes y con su estado.',
     'El botón para volver al Inicio ahora dice «← Inicio» (flecha y palabra) en el encabezado de cada pantalla.',

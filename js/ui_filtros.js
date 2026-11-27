@@ -22,9 +22,10 @@ export function barraCompacta() {
     el,
     pintar(c) {
       clear(el);
-      const fila = h('div', { class: 'bc-fila' },
+      const fila = h('div', { class: 'bc-fila' + (c.extra ? ' dos' : '') },
         c.onPeriodo ? h('button', { type: 'button', class: 'bc-btn', onclick: c.onPeriodo }, '📅 ', h('span', null, c.periodo), ' ▾') : null,
-        h('button', { type: 'button', class: 'bc-btn' + (c.nFiltros ? ' on' : ''), onclick: c.onFiltros }, '⚙ Filtros' + (c.nFiltros ? ` (${c.nFiltros})` : '')));
+        h('button', { type: 'button', class: 'bc-btn' + (c.nFiltros ? ' on' : ''), onclick: c.onFiltros }, '⚙ Filtros' + (c.nFiltros ? ` (${c.nFiltros})` : '')),
+        c.extra ? h('button', { type: 'button', class: 'bc-btn' + (c.extra.on ? ' on activo' : ''), 'aria-expanded': String(!!c.extra.on), onclick: c.extra.click }, c.extra.t + (c.extra.on ? ' ▴' : ' ▾')) : null);
       el.append(fila);
       if (c.segmento) el.append(h('div', { class: 'seg', role: 'group' }, ...c.segmento.opciones.map((o) => h('button', { type: 'button', class: o.on ? 'on' : '', onclick: o.click }, o.t))));
       if (c.guardados && c.guardados.length) el.append(h('div', { class: 'chips chicas guardados' }, ...c.guardados.map((g) => h('button', { type: 'button', class: 'chip' + (g.on ? ' on' : ''), onclick: g.click }, '★ ' + g.n))));
