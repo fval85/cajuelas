@@ -24,6 +24,7 @@ export function crearReportes(nav) {
   const nuevoF = () => ({ cos: '', desde: '', corte: '', per: 'cosecha', fl: {}, dim: 'Mes', solo: false, dims: ['soc'], med: [...MEDIDAS_INI], comp: [], compFor: '', modo: 'fecha', graf: true });
   let f = nuevoF();
   let vista = 'comparativo';
+  let verGraf = false;           // «Ver gráficos»: entra cerrado (2.29.0)
   let pantalla = 'inicio';       // 'inicio' (tarjetas por fuente) o 'detalle' (un reporte)
   let cargando = false, errorCarga = '';
 
@@ -172,7 +173,7 @@ export function crearReportes(nav) {
     const activos = act.map((x) => ({ t: textoFiltro(x), abrir: () => abrirFiltro(x.k), quitar: () => { delete f.fl[x.k]; pintarFiltros(); pintar(); } }));
     if (!pers && f.solo) activos.push({ t: 'Sin comparar', abrir: elegirComparar, quitar: () => { f.solo = false; pintarFiltros(); pintar(); } });
     const gs = guard.lista().map((g) => ({ n: g.n, on: JSON.stringify(g.est.fl || {}) === JSON.stringify(f.fl) && (g.est.per || 'cosecha') === f.per && !!g.est.solo === !!f.solo, click: () => aplicarGuardado(g.est) }));
-    barra.pintar({ periodo: textoPeriodo(), nFiltros: nActivos(), onPeriodo: pedirPer, onFiltros: abrirHoja, segmento: segmento(), guardados: gs, activos,
+    barra.pintar({ periodo: textoPeriodo(), nFiltros: nActivos(), onPeriodo: pedirPer, onFiltros: abrirHoja, segmento: segmento(), extra: { t: '📊 Ver gráficos', on: verGraf, click: () => { verGraf = !verGraf; pintarFiltros(); pintar(); } }, guardados: gs, activos,
       onLimpiar: () => { f.fl = {}; f.solo = false; pintarFiltros(); pintar(); } });
   }
   function pintarChips() {
@@ -257,7 +258,7 @@ export function crearReportes(nav) {
         k.d != null ? h('span', { class: k.d < -0.0005 ? 'neg' : 'pos' }, `${pctSigno(k.d)} ${k.ref}`) : h('span', null, ' ')))));
     }
     if (rep.datos && rep.datos.length) zona.append(h('div', { class: 'tarjeta rep-datos' }, h('b', null, 'Datos de interés'), ...rep.datos.map((t) => h('p', null, t))));
-    (rep.graficos || []).forEach((g) => {
+    (verGraf ? (rep.graficos || []) : []).forEach((g) => {
       const alto = g.tipo === 'barrasH' ? Math.max(200, 56 + g.cats.length * (g.series.length > 2 ? 40 : g.series.length > 1 ? 30 : 22)) : 250;
       const cv = lienzoGrafico(g, 360, alto);
       cv.classList.add('grafico');
@@ -283,7 +284,13 @@ export function crearReportes(nav) {
     const extra = [`Periodo: ${textoPeriodo()}`, ...(vista === 'personalizado' ? [] : [f.solo ? 'Sin comparar con otras cosechas' : 'Comparado con cosechas anteriores a la misma fecha'])];
     const gn = guard.lista().find((g) => JSON.stringify(g.est.fl || {}) === JSON.stringify(f.fl) && (g.est.per || 'cosecha') === f.per && !!g.est.solo === !!f.solo);
     if (gn) extra.push('Filtro guardado: ' + gn.n);
-    const paginas = paginasReporte({ ...ultimo, subtitulos: [...ultimo.subtitulos, extra.join(' · ')] }, pie);
+    let conGraficos = true;
+    if (ultimo.graficos && ultimo.graficos.length) {
+      const op = await elegir('Reporte en PDF', [{ etiqueta: '📊 Con gráficos', valor: 'con' }, { etiqueta: '📄 Solo el resumen y la tabla (sin gráficos)', valor: 'sin' }], { buscar: false });
+      if (!op) return;
+      conGraficos = op === 'con';
+    }
+    const paginas = paginasReporte({ ...ultimo, subtitulos: [...ultimo.subtitulos, extra.join(' · ')] }, pie, { graficos: conGraficos });
     const sello = `${ultimo.vista}_${f.cos}_${f.desde ? f.desde.replace(/-/g, '') + '_' : ''}${(f.corte || diaHoy()).replace(/-/g, '')}`;
     verDocumento({
       titulo: ultimo.titulo, paginas, nombrePdf: `Reporte_${sello}.pdf`, ancho: true, maxPaginas: 4,
@@ -329,7 +336,7 @@ export function crearReportes(nav) {
   exp.cab.hidden = true;
   const cafeF = crearCafeFruta({ abrir: () => ir('cafe'), volver: () => ir('inicio'), alCambiar: () => { if (pantalla === 'inicio') pintarInicio(); } });
   cafeF.cab.hidden = true; cafeF.el.hidden = true;
-  function ir(p) { pantalla = p; mostrar(); window.scrollTo(0, 0); }
+  function ir(p) { pantalla = p; if (p === 'inicio') verGraf = false; mostrar(); window.scrollTo(0, 0); }
   function mostrar() {
     const det = pantalla === 'detalle';
     const ex = pantalla === 'exp';
@@ -423,7 +430,7 @@ export function crearReportes(nav) {
     refrescar() { /* no hace falta: los datos se leen al abrir la pestaña */ },
     // Cada vez que se entra a la pestaña empieza limpia: filtros por defecto y datos al día.
     reiniciar() {
-      f = nuevoF(); vista = 'comparativo'; pantalla = 'inicio'; mostrar(); busqueda = '';
+      f = nuevoF(); vista = 'comparativo'; pantalla = 'inicio'; verGraf = false; mostrar(); busqueda = '';
       exp.reiniciar(); if (puede('todos')) cafeF.reiniciar();
       const cache = leerCache();
       if (cache) usar(cache);

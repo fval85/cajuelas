@@ -1,5 +1,10 @@
 // Novedades de cada versión (se muestran en Ajustes > Novedades de la versión).
 export const NOVEDADES = [
+  { v: '2.29.0', t: [
+    'Reportes › Café recibido: junto a «Toda la cosecha» y «Filtros» hay un botón «Ver gráficos». Los gráficos quedan escondidos hasta tocarlo; el resumen y la tabla siempre se ven.',
+    'El botón «Compartir PDF» ya no flota sobre la pantalla: queda al final del reporte (también en Ventas de exportación).',
+    'PDF de Café recibido: antes de generarlo pregunta si lleva gráficos o solo el resumen y la tabla. Si lleva gráficos, salen completos (todos los nombres y barras), a todo lo ancho y pasan a otra hoja si no caben.'
+  ] },
   { v: '2.28.0', t: [
     'Ventas de exportación (Contratos y Tablas): junto a «Filtros» hay un botón «Ver reporte». El gráfico, la tabla resumen y los botones de PDF y Excel quedan escondidos y salen solo al tocarlo.',
     'Detalle del contrato: la factura de sobrante ya no muestra «falta el pago total»; ahora dice «factura de sobrante (entra completa)».'

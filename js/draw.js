@@ -733,7 +733,7 @@ export function lienzoGrafico(g, ancho = 640, alto = 300) {
 }
 const COLORES_PDF_KPI = { pos: '#166534', neg: '#B91C1C' };
 /** Reporte completo para PDF: primera hoja con resumen y gráficos, luego la tabla. Apaisado. */
-export function paginasReporte(rep, pie = '') {
+export function paginasReporte(rep, pie = '', opc = {}) {
   const MG = 24;
   // 1) Ancho natural de cada columna según su contenido (nombres completos, APC angosto...).
   const tTxt = P(8.2, false, false), tNeg = P(8.2, true, false), tCab = P(7.2, true, false, '#fff');
@@ -774,14 +774,30 @@ export function paginasReporte(rep, pie = '') {
     rep.datos.forEach((t) => envolver('•  ' + t, pd, W - 2 * MG).forEach((l, i) => { txt(c, i ? '    ' + l : l, MG, y + 8, pd); y += 11.5; }));
     y += 8;
   }
-  const gs = (rep.graficos || []).slice(0, 3);
+  const gs = opc.graficos === false ? [] : (rep.graficos || []).slice(0, 3);
+  const paginasExtra = [];
+  const necesidad = (g) => { const ns = g.series.length, top = 18 + (ns > 1 ? 14 : 0); return top + (g.tipo === 'barrasH' ? g.cats.length * Math.max(12, ns * 9.5) + 6 : 190); };
   if (gs.length) {
-    if (vertical) {
-      const gh = (H - y - MG - 12 - 14 * (gs.length - 1)) / gs.length;
-      gs.forEach((g, i) => dibujarGrafico(c, MG, y + i * (gh + 14), W - 2 * MG, gh, g));
+    const peqE = P(7.5, false, false);
+    const etqAncha = (g, w) => g.tipo === 'barrasH' && Math.max(...g.cats.map((t) => medir(peqE, String(t)))) + 4 > w * 0.36;
+    const gh = vertical ? (H - y - MG - 12 - 14 * (gs.length - 1)) / gs.length : H - y - MG - 12;
+    const gw = vertical ? W - 2 * MG : (W - 2 * MG - 16 * (gs.length - 1)) / gs.length;
+    const caben = gs.every((g) => necesidad(g) <= gh && !etqAncha(g, gw));
+    if (caben) {
+      if (vertical) gs.forEach((g, i) => dibujarGrafico(c, MG, y + i * (gh + 14), W - 2 * MG, gh, g));
+      else gs.forEach((g, i) => dibujarGrafico(c, MG + i * (gw + 16), y, gw, gh, g));
     } else {
-      const cols = gs.length, gw = (W - 2 * MG - 16 * (cols - 1)) / cols;
-      gs.forEach((g, i) => dibujarGrafico(c, MG + i * (gw + 16), y, gw, H - y - MG - 12, g));
+      // No caben en columnas: cada gráfico va a todo lo ancho y con el alto que necesita; si no cabe en la hoja, pasa a la siguiente.
+      let cc = c, yy = y;
+      gs.forEach((g) => {
+        const hg = Math.min(necesidad(g), H - 2 * MG - 12);
+        if (yy + hg > H - MG - 12) {
+          const np = crearPagina(W, H, 2.2); cc = np.c; yy = MG;
+          txt(cc, pie, MG, H - 10, P(7, false, false, '#6B7280'));
+          paginasExtra.push({ ...np, ancho: W, alto: H });
+        }
+        dibujarGrafico(cc, MG, yy, W - 2 * MG, hg, g); yy += hg + 14;
+      });
     }
   }
   // Una sola hoja: si el reporte no tiene gráficos y la tabla cabe debajo, se dibuja en la misma página.
@@ -821,7 +837,7 @@ export function paginasReporte(rep, pie = '') {
     if (rep.nota) { const np = P(7.5, false, false, '#6B7280'); y += 6; envolver(rep.nota, np, der - MG).forEach((l) => { if (y + 12 < H - MG - 14) { txt(c, l, MG, y + 8, np); y += 11; } }); }
   }
   txt(c, pie, MG, H - 10, P(7, false, false, '#6B7280'));
-  const paginas = [{ ...pg, ancho: W, alto: H }];
+  const paginas = [{ ...pg, ancho: W, alto: H }, ...paginasExtra];
   if (rep.filas && rep.filas.length && !enHoja) {
     // 2) La tabla ocupa el ancho que necesita (más ancha que la hoja si hay muchas columnas) y reparte lo que sobre.
     const avail = W - 2 * MG;
